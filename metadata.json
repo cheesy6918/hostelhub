@@ -1,0 +1,6 @@
+{
+  "name": "HostelHub - Nền Tảng Thuê Trọ Sinh Viên",
+  "description": "Nền tảng kết nối tìm kiếm, đặt phòng và quản lý phòng trọ sinh viên tiện lợi, an toàn, chuẩn xác.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
