@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface NguoiDung {
   Id: string;
@@ -129,12 +133,25 @@ export interface DatabaseSchema {
   favorites: FavoriteItem[];
 }
 
+// Determine candidate paths for database file to support both local dev and Vercel Serverless
+const CANDIDATE_DB_FILES = [
+  path.join('/tmp', 'database.json'),
+  path.resolve(__dirname, '../data/database.json'),
+  path.resolve(process.cwd(), 'data/database.json'),
+  path.resolve(process.cwd(), '../data/database.json'),
+  path.resolve(__dirname, '../../data/database.json'),
+];
+
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Ensure data directory exists if filesystem is writable
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch {
+  // Read-only filesystem in serverless environments (e.g. Vercel)
 }
 
 export function getInitialData(): DatabaseSchema {
@@ -1040,27 +1057,93 @@ export function getInitialData(): DatabaseSchema {
   return { users, rooms, inquiries, appointments, deposits, notifications, favorites };
 }
 
+// In-memory cache for ultra-fast access and serverless warm container persistence
+let memoryDbCache: DatabaseSchema | null = null;
+
+function locateExistingDbFile(): string | null {
+  for (const candidate of CANDIDATE_DB_FILES) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // Continue searching
+    }
+  }
+  return null;
+}
+
 export function readDb(): DatabaseSchema {
-  if (!fs.existsSync(DB_FILE)) {
-    const initial = getInitialData();
-    writeDb(initial);
-    return initial;
-  }
+  // 1. If /tmp/database.json exists, prefer it as it holds latest serverless writes
+  const tmpFile = path.join('/tmp', 'database.json');
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed: DatabaseSchema = JSON.parse(raw);
-    if (!parsed.appointments) parsed.appointments = [];
-    if (!parsed.deposits) parsed.deposits = [];
-    if (!parsed.notifications) parsed.notifications = [];
-    if (!parsed.favorites) parsed.favorites = [];
-    return parsed;
+    if (fs.existsSync(tmpFile)) {
+      const raw = fs.readFileSync(tmpFile, 'utf-8');
+      const parsed: DatabaseSchema = JSON.parse(raw);
+      if (!parsed.appointments) parsed.appointments = [];
+      if (!parsed.deposits) parsed.deposits = [];
+      if (!parsed.notifications) parsed.notifications = [];
+      if (!parsed.favorites) parsed.favorites = [];
+      memoryDbCache = parsed;
+      return parsed;
+    }
   } catch {
-    const initial = getInitialData();
-    writeDb(initial);
-    return initial;
+    // Continue to other candidate files
   }
+
+  // 2. Locate from candidate paths (like /var/task/data/database.json or __dirname)
+  const existingFile = locateExistingDbFile();
+  if (existingFile) {
+    try {
+      const raw = fs.readFileSync(existingFile, 'utf-8');
+      const parsed: DatabaseSchema = JSON.parse(raw);
+      if (!parsed.appointments) parsed.appointments = [];
+      if (!parsed.deposits) parsed.deposits = [];
+      if (!parsed.notifications) parsed.notifications = [];
+      if (!parsed.favorites) parsed.favorites = [];
+      memoryDbCache = parsed;
+      return parsed;
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // 3. If in-memory cache exists, return it
+  if (memoryDbCache) {
+    return memoryDbCache;
+  }
+
+  // 4. Default to initial dataset
+  const initial = getInitialData();
+  memoryDbCache = initial;
+  writeDb(initial);
+  return initial;
 }
 
 export function writeDb(data: DatabaseSchema): void {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  memoryDbCache = data;
+  const jsonStr = JSON.stringify(data, null, 2);
+
+  // 1. Try writing to standard DB_FILE
+  let writeSuccess = false;
+  try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, jsonStr, 'utf-8');
+    writeSuccess = true;
+  } catch {
+    // Expected in read-only serverless filesystems (e.g. Vercel AWS Lambda)
+  }
+
+  // 2. If standard write failed, or in Vercel environment, always write to /tmp
+  if (!writeSuccess || process.env.VERCEL) {
+    try {
+      const tmpPath = path.join('/tmp', 'database.json');
+      fs.writeFileSync(tmpPath, jsonStr, 'utf-8');
+    } catch (tmpErr) {
+      console.warn('Could not write database to /tmp:', tmpErr);
+    }
+  }
 }
