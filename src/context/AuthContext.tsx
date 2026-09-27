@@ -33,31 +33,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+
+      // Kiểm tra nếu Serverless Vercel trả về trang HTML lỗi thay vì JSON
+      const contentType = res.headers.get('content-type');
+      const isJson = contentType && contentType.includes('application/json');
+      const data = isJson ? await res.json() : null;
+
+      if (res.ok && data?.success) {
         setUser(data.user);
-      } else {
-        // Token invalid or expired
+      } else if (res.status === 401) {
+        // CHỈ xóa token khi Server phản hồi chính xác 401 (Token thực sự hết hạn / không hợp lệ)
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setUser(null);
       }
-    } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      setToken(null);
-      setUser(null);
+      // Các trường hợp lỗi Server/Mạng khác -> Giữ nguyên Token trong storage, không tự văng out
+    } catch (error) {
+      console.error('Không thể xác thực phiên đăng nhập:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (token) {
-      fetchCurrentUser(token);
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (savedToken) {
+      fetchCurrentUser(savedToken);
     } else {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   const login = async (email: string, pass: string) => {
     try {
