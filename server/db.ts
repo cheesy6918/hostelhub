@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import mysql, { Pool } from 'mysql2/promise';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1147,3 +1148,840 @@ export function writeDb(data: DatabaseSchema): void {
     }
   }
 }
+
+// ========================================================
+// MYSQL CONNECTION & DIRECT DATA ACCESS LAYER (MYSQL2)
+// Host: localhost | User: root | Password: '' | DB: hostelhub
+// ========================================================
+
+export const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
+  database: process.env.DB_NAME || 'hostelhub',
+  port: Number(process.env.DB_PORT) || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+};
+
+export const pool: Pool = mysql.createPool(dbConfig);
+
+// Helper parse JSON safely
+function safeJsonParse<T>(val: any, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return fallback;
+  }
+}
+
+// Check MySQL connection availability
+let mySqlAvailable: boolean | null = null;
+let lastCheckTime = 0;
+
+export async function isMySqlConnected(): Promise<boolean> {
+  const now = Date.now();
+  if (mySqlAvailable !== null && now - lastCheckTime < 15000) {
+    return mySqlAvailable;
+  }
+
+  try {
+    const conn = await pool.getConnection();
+    conn.release();
+    if (!mySqlAvailable) {
+      console.log('[MySQL] Đã kết nối thành công tới database "hostelhub" trên localhost:3306');
+    }
+    mySqlAvailable = true;
+    lastCheckTime = now;
+    return true;
+  } catch {
+    mySqlAvailable = false;
+    lastCheckTime = now;
+    return false;
+  }
+}
+
+// Helper thực thi SQL tổng quát
+export async function queryMySql(sql: string, params: any[] = []): Promise<any> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  }
+  return null;
+}
+
+// Parse room row from MySQL to PhongTro
+export function parseRoomRow(row: any): PhongTro {
+  return {
+    ...row,
+    GiaThue: Number(row.GiaThue),
+    DienTich: Number(row.DienTich || 20),
+    TienIch: safeJsonParse<string[]>(row.TienIch, []),
+    HinhAnh: safeJsonParse<string[]>(row.HinhAnh, []),
+    DanhGia: safeJsonParse<ReviewItem[]>(row.DanhGia, []),
+  };
+}
+
+// -------------------------------------------------------------
+// 1. ROOMS (PHÒNG TRỌ)
+// -------------------------------------------------------------
+export async function getRoomsFromDb(filter?: { status?: string; district?: string }): Promise<PhongTro[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM rooms';
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (filter?.status) {
+        conditions.push('TrangThai = ?');
+        params.push(filter.status);
+      }
+      if (filter?.district) {
+        conditions.push('QuanHuyen = ?');
+        params.push(filter.district);
+      }
+
+      if (conditions.length > 0) {
+        sql += ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += ' ORDER BY NgayDang DESC';
+
+      const [rows] = await pool.query(sql, params);
+      const rooms = (rows as any[]).map(parseRoomRow);
+
+      // Đồng bộ vào cache bộ nhớ
+      const db = readDb();
+      db.rooms = rooms;
+
+      return rooms;
+    } catch (err) {
+      console.warn('[MySQL] Error querying rooms, falling back to local store:', err);
+    }
+  }
+
+  // Fallback local memory/JSON
+  const db = readDb();
+  let result = db.rooms || [];
+  if (filter?.status) result = result.filter(r => r.TrangThai === filter.status);
+  if (filter?.district) result = result.filter(r => r.QuanHuyen === filter.district);
+  return result;
+}
+
+export async function getRoomByIdFromDb(id: string): Promise<PhongTro | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM rooms WHERE Id = ? LIMIT 1', [id]);
+      const r = (rows as any[])[0];
+      if (r) return parseRoomRow(r);
+    } catch (err) {
+      console.warn('[MySQL] Error fetching room by Id, falling back:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.rooms.find(r => r.Id === id) || null;
+}
+
+export async function createRoomInDb(room: PhongTro): Promise<PhongTro> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO rooms (Id, TieuDe, DiaChi, QuanHuyen, GiaThue, GiaDien, GiaNuoc, TienIch, TrangThai, LyDoTuChoi, IdChuTro, ChuTroId, ChuTroTen, ChuTroSdt, HinhAnh, MoTa, NoiQuy, DienTich, LoaiPhong, NgayDang, DanhGia)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          room.Id,
+          room.TieuDe,
+          room.DiaChi,
+          room.QuanHuyen,
+          room.GiaThue,
+          room.GiaDien,
+          room.GiaNuoc,
+          JSON.stringify(room.TienIch || []),
+          room.TrangThai || 'Còn phòng',
+          room.LyDoTuChoi || null,
+          room.IdChuTro || room.ChuTroId || '',
+          room.ChuTroId || room.IdChuTro || '',
+          room.ChuTroTen || '',
+          room.ChuTroSdt || '',
+          JSON.stringify(room.HinhAnh || []),
+          room.MoTa || '',
+          room.NoiQuy || '',
+          room.DienTich || 20,
+          room.LoaiPhong || 'GacLung',
+          room.NgayDang || new Date().toISOString(),
+          JSON.stringify(room.DanhGia || []),
+        ]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating room in DB:', err);
+    }
+  }
+
+  // Cập nhật bộ nhớ cục bộ
+  const db = readDb();
+  const existingIdx = db.rooms.findIndex(r => r.Id === room.Id);
+  if (existingIdx >= 0) {
+    db.rooms[existingIdx] = room;
+  } else {
+    db.rooms.unshift(room);
+  }
+  writeDb(db);
+
+  return room;
+}
+
+export async function updateRoomInDb(id: string, updates: Partial<PhongTro>): Promise<PhongTro | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+
+      for (const [k, v] of Object.entries(updates)) {
+        if (k === 'TienIch' || k === 'HinhAnh' || k === 'DanhGia') {
+          fields.push(`\`${k}\` = ?`);
+          values.push(JSON.stringify(v || []));
+        } else {
+          fields.push(`\`${k}\` = ?`);
+          values.push(v);
+        }
+      }
+
+      if (fields.length > 0) {
+        values.push(id);
+        await pool.execute(`UPDATE rooms SET ${fields.join(', ')} WHERE Id = ?`, values);
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error updating room in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  const room = db.rooms.find(r => r.Id === id);
+  if (!room) return null;
+  Object.assign(room, updates);
+  writeDb(db);
+  return room;
+}
+
+export async function deleteRoomInDb(id: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute('DELETE FROM rooms WHERE Id = ?', [id]);
+    } catch (err) {
+      console.warn('[MySQL] Error deleting room from DB:', err);
+    }
+  }
+
+  const db = readDb();
+  const initialLen = db.rooms.length;
+  db.rooms = db.rooms.filter(r => r.Id !== id);
+  writeDb(db);
+  return db.rooms.length < initialLen;
+}
+
+// -------------------------------------------------------------
+// 2. USERS (NGƯỜI DÙNG)
+// -------------------------------------------------------------
+export async function getUsersFromDb(): Promise<NguoiDung[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM users ORDER BY NgayTao DESC');
+      const users = (rows as any[]).map(u => ({ ...u, soDuVi: Number(u.soDuVi || 0) }));
+      const db = readDb();
+      db.users = users;
+      return users;
+    } catch (err) {
+      console.warn('[MySQL] Error querying users:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.users || [];
+}
+
+export async function getUserByIdFromDb(id: string): Promise<NguoiDung | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM users WHERE Id = ? LIMIT 1', [id]);
+      const u = (rows as any[])[0];
+      if (u) return { ...u, soDuVi: Number(u.soDuVi || 0) };
+    } catch (err) {
+      console.warn('[MySQL] Error fetching user by Id:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.users.find(u => u.Id === id) || null;
+}
+
+export async function getUserByEmailFromDb(email: string): Promise<NguoiDung | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM users WHERE LOWER(Email) = LOWER(?) LIMIT 1', [email]);
+      const u = (rows as any[])[0];
+      if (u) return { ...u, soDuVi: Number(u.soDuVi || 0) };
+    } catch (err) {
+      console.warn('[MySQL] Error fetching user by Email:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.users.find(u => u.Email.toLowerCase() === email.toLowerCase()) || null;
+}
+
+export async function createUserInDb(user: NguoiDung): Promise<NguoiDung> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO users (Id, HoTen, Email, MatKhau, Sdt, VaiTro, soDuVi, NgayTao, TrangThai)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          user.Id,
+          user.HoTen,
+          user.Email,
+          user.MatKhau,
+          user.Sdt,
+          user.VaiTro,
+          user.soDuVi || 0,
+          user.NgayTao,
+          user.TrangThai || 'HoatDong',
+        ]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating user in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  db.users.push(user);
+  writeDb(db);
+  return user;
+}
+
+export async function updateUserInDb(id: string, updates: Partial<NguoiDung>): Promise<NguoiDung | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+      for (const [k, v] of Object.entries(updates)) {
+        fields.push(`\`${k}\` = ?`);
+        values.push(v);
+      }
+      if (fields.length > 0) {
+        values.push(id);
+        await pool.execute(`UPDATE users SET ${fields.join(', ')} WHERE Id = ?`, values);
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error updating user in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  const u = db.users.find(x => x.Id === id);
+  if (!u) return null;
+  Object.assign(u, updates);
+  writeDb(db);
+  return u;
+}
+
+// -------------------------------------------------------------
+// 3. INQUIRIES (YÊU CẦU LIÊN HỆ / GIỮ CHỖ)
+// -------------------------------------------------------------
+export async function getInquiriesFromDb(filter?: { studentId?: string; landlordId?: string }): Promise<YeuCauLienHe[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM inquiries';
+      const params: any[] = [];
+      if (filter?.studentId) {
+        sql += ' WHERE SinhVienId = ?';
+        params.push(filter.studentId);
+      } else if (filter?.landlordId) {
+        sql += ' WHERE ChuTroId = ?';
+        params.push(filter.landlordId);
+      }
+      sql += ' ORDER BY NgayTao DESC';
+
+      const [rows] = await pool.query(sql, params);
+      const inqs = (rows as any[]).map(i => ({ ...i, TienCoc: Number(i.TienCoc || 0) }));
+      const db = readDb();
+      db.inquiries = inqs;
+      return inqs;
+    } catch (err) {
+      console.warn('[MySQL] Error querying inquiries:', err);
+    }
+  }
+
+  const db = readDb();
+  let result = db.inquiries || [];
+  if (filter?.studentId) result = result.filter(i => i.SinhVienId === filter.studentId);
+  if (filter?.landlordId) result = result.filter(i => i.ChuTroId === filter.landlordId);
+  return result;
+}
+
+export async function getInquiryByIdFromDb(id: string): Promise<YeuCauLienHe | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM inquiries WHERE Id = ? LIMIT 1', [id]);
+      const i = (rows as any[])[0];
+      if (i) return { ...i, TienCoc: Number(i.TienCoc || 0) };
+    } catch (err) {
+      console.warn('[MySQL] Error fetching inquiry by Id:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.inquiries.find(i => i.Id === id) || null;
+}
+
+export async function createInquiryInDb(inq: YeuCauLienHe): Promise<YeuCauLienHe> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO inquiries (Id, PhongId, TieuDePhong, SinhVienId, SinhVienTen, SinhVienSdt, ChuTroId, TienCoc, GhiChu, TrangThai, NgayTao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          inq.Id,
+          inq.PhongId,
+          inq.TieuDePhong,
+          inq.SinhVienId,
+          inq.SinhVienTen,
+          inq.SinhVienSdt,
+          inq.ChuTroId,
+          inq.TienCoc || 0,
+          inq.GhiChu || '',
+          inq.TrangThai || 'ChoXacNhan',
+          inq.NgayTao,
+        ]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating inquiry:', err);
+    }
+  }
+
+  const db = readDb();
+  db.inquiries.unshift(inq);
+  writeDb(db);
+  return inq;
+}
+
+export async function updateInquiryInDb(id: string, updates: Partial<YeuCauLienHe>): Promise<YeuCauLienHe | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+      for (const [k, v] of Object.entries(updates)) {
+        fields.push(`\`${k}\` = ?`);
+        values.push(v);
+      }
+      if (fields.length > 0) {
+        values.push(id);
+        await pool.execute(`UPDATE inquiries SET ${fields.join(', ')} WHERE Id = ?`, values);
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error updating inquiry:', err);
+    }
+  }
+
+  const db = readDb();
+  const inq = db.inquiries.find(x => x.Id === id);
+  if (!inq) return null;
+  Object.assign(inq, updates);
+  writeDb(db);
+  return inq;
+}
+
+// -------------------------------------------------------------
+// 4. APPOINTMENTS (LỊCH HẸN XEM PHÒNG)
+// -------------------------------------------------------------
+export async function getAppointmentsFromDb(filter?: { studentId?: string; landlordId?: string }): Promise<LichHen[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM appointments';
+      const params: any[] = [];
+      if (filter?.studentId) {
+        sql += ' WHERE IdSinhVien = ?';
+        params.push(filter.studentId);
+      } else if (filter?.landlordId) {
+        sql += ' WHERE ChuTroId = ?';
+        params.push(filter.landlordId);
+      }
+      sql += ' ORDER BY NgayTao DESC';
+
+      const [rows] = await pool.query(sql, params);
+      const apts = rows as LichHen[];
+      const db = readDb();
+      db.appointments = apts;
+      return apts;
+    } catch (err) {
+      console.warn('[MySQL] Error querying appointments:', err);
+    }
+  }
+
+  const db = readDb();
+  let result = db.appointments || [];
+  if (filter?.studentId) result = result.filter(a => a.IdSinhVien === filter.studentId);
+  if (filter?.landlordId) result = result.filter(a => a.ChuTroId === filter.landlordId);
+  return result;
+}
+
+export async function getAppointmentByIdFromDb(id: string): Promise<LichHen | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM appointments WHERE Id = ? LIMIT 1', [id]);
+      const apt = (rows as any[])[0];
+      if (apt) return apt as LichHen;
+    } catch (err) {
+      console.warn('[MySQL] Error fetching appointment by Id:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.appointments.find(a => a.Id === id) || null;
+}
+
+export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO appointments (Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, LyDoTuChoi, TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, ChuTroId, ChuTroTen, ChuTroSdt, NgayTao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          apt.Id,
+          apt.IdSinhVien,
+          apt.IdPhong,
+          apt.ThoiGianHen,
+          apt.GhiChu || '',
+          apt.TrangThai || 'Chờ xác nhận',
+          apt.LyDoTuChoi || null,
+          apt.TieuDePhong || '',
+          apt.DiaChiPhong || '',
+          apt.SinhVienTen || '',
+          apt.SinhVienSdt || '',
+          apt.ChuTroId || '',
+          apt.ChuTroTen || '',
+          apt.ChuTroSdt || '',
+          apt.NgayTao || new Date().toISOString(),
+        ]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating appointment in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  db.appointments.unshift(apt);
+  writeDb(db);
+  return apt;
+}
+
+export async function updateAppointmentInDb(id: string, updates: Partial<LichHen>): Promise<LichHen | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+      for (const [k, v] of Object.entries(updates)) {
+        fields.push(`\`${k}\` = ?`);
+        values.push(v);
+      }
+      if (fields.length > 0) {
+        values.push(id);
+        await pool.execute(`UPDATE appointments SET ${fields.join(', ')} WHERE Id = ?`, values);
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error updating appointment in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  const apt = db.appointments.find(a => a.Id === id);
+  if (!apt) return null;
+  Object.assign(apt, updates);
+  writeDb(db);
+  return apt;
+}
+
+// -------------------------------------------------------------
+// 5. DEPOSITS (ĐẶT CỌC GIỮ CHỖ)
+// -------------------------------------------------------------
+export async function getDepositsFromDb(filter?: { studentId?: string; landlordId?: string }): Promise<DatCoc[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM deposits';
+      const params: any[] = [];
+      if (filter?.studentId) {
+        sql += ' WHERE IdSinhVien = ?';
+        params.push(filter.studentId);
+      } else if (filter?.landlordId) {
+        sql += ' WHERE ChuTroId = ?';
+        params.push(filter.landlordId);
+      }
+      sql += ' ORDER BY NgayTao DESC';
+
+      const [rows] = await pool.query(sql, params);
+      const deps = (rows as any[]).map(d => ({ ...d, SoTienCoc: Number(d.SoTienCoc || 500000) }));
+      const db = readDb();
+      db.deposits = deps;
+      return deps;
+    } catch (err) {
+      console.warn('[MySQL] Error querying deposits:', err);
+    }
+  }
+
+  const db = readDb();
+  let result = db.deposits || [];
+  if (filter?.studentId) result = result.filter(d => d.IdSinhVien === filter.studentId);
+  if (filter?.landlordId) result = result.filter(d => d.ChuTroId === filter.landlordId);
+  return result;
+}
+
+export async function getDepositByIdFromDb(id: string): Promise<DatCoc | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM deposits WHERE Id = ? LIMIT 1', [id]);
+      const dep = (rows as any[])[0];
+      if (dep) return { ...dep, SoTienCoc: Number(dep.SoTienCoc || 500000) };
+    } catch (err) {
+      console.warn('[MySQL] Error fetching deposit by Id:', err);
+    }
+  }
+
+  const db = readDb();
+  return db.deposits.find(d => d.Id === id) || null;
+}
+
+export async function createDepositInDb(dep: DatCoc): Promise<DatCoc> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO deposits (Id, IdSinhVien, IdPhong, SoTienCoc, NgayCoc, TrangThaiCoc, LyDoTuChoi, TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, ChuTroId, ChuTroTen, ThoiHanGiuCho, NgayTao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dep.Id,
+          dep.IdSinhVien,
+          dep.IdPhong,
+          dep.SoTienCoc || 500000,
+          dep.NgayCoc,
+          dep.TrangThaiCoc || 'Chờ xác nhận',
+          dep.LyDoTuChoi || null,
+          dep.TieuDePhong || '',
+          dep.DiaChiPhong || '',
+          dep.SinhVienTen || '',
+          dep.SinhVienSdt || '',
+          dep.ChuTroId || '',
+          dep.ChuTroTen || '',
+          dep.ThoiHanGiuCho || '48 giờ',
+          dep.NgayTao || new Date().toISOString(),
+        ]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating deposit in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  db.deposits.unshift(dep);
+  writeDb(db);
+  return dep;
+}
+
+export async function updateDepositInDb(id: string, updates: Partial<DatCoc>): Promise<DatCoc | null> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+      for (const [k, v] of Object.entries(updates)) {
+        fields.push(`\`${k}\` = ?`);
+        values.push(v);
+      }
+      if (fields.length > 0) {
+        values.push(id);
+        await pool.execute(`UPDATE deposits SET ${fields.join(', ')} WHERE Id = ?`, values);
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error updating deposit in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  const dep = db.deposits.find(d => d.Id === id);
+  if (!dep) return null;
+  Object.assign(dep, updates);
+  writeDb(db);
+  return dep;
+}
+
+// -------------------------------------------------------------
+// 6. NOTIFICATIONS (THÔNG BÁO)
+// -------------------------------------------------------------
+export async function getNotificationsFromDb(userId?: string): Promise<ThongBao[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM notifications';
+      const params: any[] = [];
+      if (userId) {
+        sql += ' WHERE UserId = ?';
+        params.push(userId);
+      }
+      sql += ' ORDER BY NgayTao DESC';
+
+      const [rows] = await pool.query(sql, params);
+      return rows as ThongBao[];
+    } catch (err) {
+      console.warn('[MySQL] Error querying notifications:', err);
+    }
+  }
+
+  const db = readDb();
+  if (userId) return db.notifications.filter(n => n.UserId === userId);
+  return db.notifications || [];
+}
+
+export async function createNotificationInDb(notif: ThongBao): Promise<ThongBao> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO notifications (Id, UserId, TieuDe, NoiDung, Loai, TrangThai, NgayTao)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [notif.Id, notif.UserId, notif.TieuDe, notif.NoiDung, notif.Loai || 'HeThong', notif.TrangThai || 'ChuaDoc', notif.NgayTao]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating notification:', err);
+    }
+  }
+
+  const db = readDb();
+  db.notifications.unshift(notif);
+  writeDb(db);
+  return notif;
+}
+
+export async function markNotificationReadInDb(id: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute("UPDATE notifications SET TrangThai = 'DaDoc' WHERE Id = ?", [id]);
+    } catch (err) {
+      console.warn('[MySQL] Error marking notification as read:', err);
+    }
+  }
+
+  const db = readDb();
+  const n = db.notifications.find(x => x.Id === id);
+  if (n) {
+    n.TrangThai = 'DaDoc';
+    writeDb(db);
+    return true;
+  }
+  return false;
+}
+
+export async function markAllNotificationsReadInDb(userId: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute("UPDATE notifications SET TrangThai = 'DaDoc' WHERE UserId = ?", [userId]);
+    } catch (err) {
+      console.warn('[MySQL] Error marking all notifications as read:', err);
+    }
+  }
+
+  const db = readDb();
+  db.notifications.forEach(n => {
+    if (n.UserId === userId) n.TrangThai = 'DaDoc';
+  });
+  writeDb(db);
+  return true;
+}
+
+// -------------------------------------------------------------
+// 7. FAVORITES (DANH SÁCH YÊU THÍCH)
+// -------------------------------------------------------------
+export async function getFavoritesFromDb(userId?: string): Promise<FavoriteItem[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM favorites';
+      const params: any[] = [];
+      if (userId) {
+        sql += ' WHERE UserId = ?';
+        params.push(userId);
+      }
+      sql += ' ORDER BY NgayTao DESC';
+      const [rows] = await pool.query(sql, params);
+      return rows as FavoriteItem[];
+    } catch (err) {
+      console.warn('[MySQL] Error querying favorites:', err);
+    }
+  }
+
+  const db = readDb();
+  if (userId) return db.favorites.filter(f => f.UserId === userId);
+  return db.favorites || [];
+}
+
+export async function createFavoriteInDb(fav: FavoriteItem): Promise<FavoriteItem> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `INSERT INTO favorites (Id, UserId, PhongId, NgayTao) VALUES (?, ?, ?, ?)`,
+        [fav.Id, fav.UserId, fav.PhongId, fav.NgayTao]
+      );
+    } catch (err) {
+      console.warn('[MySQL] Error creating favorite:', err);
+    }
+  }
+
+  const db = readDb();
+  if (!db.favorites.some(f => f.UserId === fav.UserId && f.PhongId === fav.PhongId)) {
+    db.favorites.push(fav);
+    writeDb(db);
+  }
+  return fav;
+}
+
+export async function deleteFavoriteInDb(userId: string, roomId: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute('DELETE FROM favorites WHERE UserId = ? AND PhongId = ?', [userId, roomId]);
+    } catch (err) {
+      console.warn('[MySQL] Error deleting favorite:', err);
+    }
+  }
+
+  const db = readDb();
+  const initialLen = db.favorites.length;
+  db.favorites = db.favorites.filter(f => !(f.UserId === userId && f.PhongId === roomId));
+  writeDb(db);
+  return db.favorites.length < initialLen;
+}
+

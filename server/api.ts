@@ -1,20 +1,59 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { readDb, writeDb, NguoiDung, PhongTro, YeuCauLienHe, LichHen, DatCoc, ThongBao, FavoriteItem } from './db.js';
+import {
+  readDb,
+  writeDb,
+  NguoiDung,
+  PhongTro,
+  YeuCauLienHe,
+  LichHen,
+  DatCoc,
+  ThongBao,
+  FavoriteItem,
+  // MySQL Direct Data Access Methods
+  getRoomsFromDb,
+  getRoomByIdFromDb,
+  createRoomInDb,
+  updateRoomInDb,
+  deleteRoomInDb,
+  getUsersFromDb,
+  getUserByIdFromDb,
+  getUserByEmailFromDb,
+  createUserInDb,
+  updateUserInDb,
+  getInquiriesFromDb,
+  getInquiryByIdFromDb,
+  createInquiryInDb,
+  updateInquiryInDb,
+  getAppointmentsFromDb,
+  getAppointmentByIdFromDb,
+  createAppointmentInDb,
+  updateAppointmentInDb,
+  getDepositsFromDb,
+  getDepositByIdFromDb,
+  createDepositInDb,
+  updateDepositInDb,
+  getNotificationsFromDb,
+  createNotificationInDb,
+  markNotificationReadInDb,
+  markAllNotificationsReadInDb,
+  getFavoritesFromDb,
+  createFavoriteInDb,
+  deleteFavoriteInDb,
+} from './db.js';
 import { createSessionToken, getUserByToken, sanitizeUser } from './auth.js';
 import { handleChatMessage } from './chatService.js';
 
 export const apiRouter = Router();
 
-// Helper to push in-app notification
-function addNotification(
-  db: any,
+// Helper to push in-app notification to MySQL
+async function addNotification(
+  _db: any,
   userId: string,
   title: string,
   content: string,
   type: 'LichHen' | 'DatCoc' | 'PhongTro' | 'HeThong' = 'HeThong'
-) {
-  if (!db.notifications) db.notifications = [];
+): Promise<ThongBao> {
   const notif: ThongBao = {
     Id: 'tb_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
     UserId: userId,
@@ -24,7 +63,7 @@ function addNotification(
     TrangThai: 'ChuaDoc',
     NgayTao: new Date().toISOString(),
   };
-  db.notifications.unshift(notif);
+  await createNotificationInDb(notif);
   return notif;
 }
 
@@ -49,7 +88,7 @@ export function requireAuth(req: Request, res: Response, next: () => void) {
 // -------------------------------------------------------------
 
 // POST /api/auth/register
-apiRouter.post('/auth/register', (req: Request, res: Response) => {
+apiRouter.post('/auth/register', async (req: Request, res: Response) => {
   try {
     const { HoTen, Email, MatKhau, Sdt, VaiTro } = req.body;
 
@@ -95,10 +134,8 @@ apiRouter.post('/auth/register', (req: Request, res: Response) => {
       return;
     }
 
-    const db = readDb();
-
-    // Check duplicate email
-    const existing = db.users.find(u => u.Email.toLowerCase() === cleanEmail);
+    // Check duplicate email from MySQL
+    const existing = await getUserByEmailFromDb(cleanEmail);
     if (existing) {
       res.status(400).json({ success: false, message: 'Email này đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.' });
       return;
@@ -120,8 +157,7 @@ apiRouter.post('/auth/register', (req: Request, res: Response) => {
       TrangThai: 'HoatDong',
     };
 
-    db.users.push(newUser);
-    writeDb(db);
+    await createUserInDb(newUser);
 
     const token = createSessionToken(newUser.Id);
 
@@ -137,7 +173,7 @@ apiRouter.post('/auth/register', (req: Request, res: Response) => {
 });
 
 // POST /api/auth/login
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   try {
     const { Email, MatKhau } = req.body;
 
@@ -147,9 +183,7 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
     }
 
     const cleanEmail = Email.trim().toLowerCase();
-    const db = readDb();
-
-    const user = db.users.find(u => u.Email.toLowerCase() === cleanEmail);
+    const user = await getUserByEmailFromDb(cleanEmail);
     if (!user) {
       res.status(400).json({
         success: false,
@@ -190,7 +224,7 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
 });
 
 // GET /api/auth/me
-apiRouter.get('/auth/me', (req: Request, res: Response) => {
+apiRouter.get('/auth/me', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const user = getUserByToken(authHeader);
 
@@ -199,35 +233,36 @@ apiRouter.get('/auth/me', (req: Request, res: Response) => {
     return;
   }
 
+  const latestUser = await getUserByIdFromDb(user.Id);
+
   res.json({
     success: true,
-    user: sanitizeUser(user),
+    user: sanitizeUser(latestUser || user),
   });
 });
 
 // PUT /api/auth/profile
-apiRouter.put('/auth/profile', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/auth/profile', requireAuth, async (req: Request, res: Response) => {
   try {
     const currentUser = (req as any).user as NguoiDung;
     const { HoTen, Sdt, MatKhauCu, MatKhauMoi } = req.body;
 
-    const db = readDb();
-    const userIndex = db.users.findIndex(u => u.Id === currentUser.Id);
-    if (userIndex === -1) {
+    const targetUser = await getUserByIdFromDb(currentUser.Id);
+    if (!targetUser) {
       res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
       return;
     }
 
-    const targetUser = db.users[userIndex];
+    const updates: Partial<NguoiDung> = {};
 
     if (HoTen && typeof HoTen === 'string' && HoTen.trim().length >= 2) {
-      targetUser.HoTen = HoTen.trim();
+      updates.HoTen = HoTen.trim();
     }
 
     if (Sdt && typeof Sdt === 'string') {
       const cleanPhone = Sdt.replace(/\D/g, '');
       if (cleanPhone.length >= 9 && cleanPhone.length <= 11) {
-        targetUser.Sdt = cleanPhone;
+        updates.Sdt = cleanPhone;
       }
     }
 
@@ -246,16 +281,15 @@ apiRouter.put('/auth/profile', requireAuth, (req: Request, res: Response) => {
         res.status(400).json({ success: false, message: 'Mật khẩu mới phải có tối thiểu 6 ký tự.' });
         return;
       }
-      targetUser.MatKhau = bcrypt.hashSync(MatKhauMoi, bcrypt.genSaltSync(10));
+      updates.MatKhau = bcrypt.hashSync(MatKhauMoi, bcrypt.genSaltSync(10));
     }
 
-    db.users[userIndex] = targetUser;
-    writeDb(db);
+    const updatedUser = await updateUserInDb(targetUser.Id, updates);
 
     res.json({
       success: true,
       message: 'Cập nhật thông tin cá nhân thành công!',
-      user: sanitizeUser(targetUser),
+      user: sanitizeUser(updatedUser || { ...targetUser, ...updates }),
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Lỗi cập nhật hồ sơ' });
@@ -263,21 +297,21 @@ apiRouter.put('/auth/profile', requireAuth, (req: Request, res: Response) => {
 });
 
 // POST /api/auth/wallet/topup (Demo nạp tiền ví)
-apiRouter.post('/auth/wallet/topup', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/auth/wallet/topup', requireAuth, async (req: Request, res: Response) => {
   try {
     const currentUser = (req as any).user as NguoiDung;
     const { amount } = req.body;
     const topupAmount = Number(amount) || 500000;
 
-    const db = readDb();
-    const user = db.users.find(u => u.Id === currentUser.Id);
+    const user = await getUserByIdFromDb(currentUser.Id);
     if (!user) {
       res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản.' });
       return;
     }
 
-    user.soDuVi += topupAmount;
-    writeDb(db);
+    const newBalance = (user.soDuVi || 0) + topupAmount;
+    await updateUserInDb(user.Id, { soDuVi: newBalance });
+    user.soDuVi = newBalance;
 
     res.json({
       success: true,
@@ -295,11 +329,11 @@ apiRouter.post('/auth/wallet/topup', requireAuth, (req: Request, res: Response) 
 // -------------------------------------------------------------
 
 // GET /api/rooms
-apiRouter.get('/rooms', (req: Request, res: Response) => {
+apiRouter.get('/rooms', async (req: Request, res: Response) => {
   const { search, district, minPrice, maxPrice, minArea, maxArea, amenities, type, landlordId, status } = req.query;
-  const db = readDb();
+  const dbRooms = await getRoomsFromDb();
 
-  let results = [...db.rooms];
+  let results = [...dbRooms];
 
   // Validate price range if both minPrice and maxPrice are provided
   if (minPrice !== undefined && maxPrice !== undefined && minPrice !== '' && maxPrice !== '') {
@@ -424,10 +458,9 @@ apiRouter.get('/rooms', (req: Request, res: Response) => {
 });
 
 // GET /api/rooms/:id
-apiRouter.get('/rooms/:id', (req: Request, res: Response) => {
+apiRouter.get('/rooms/:id', async (req: Request, res: Response) => {
   const roomId = req.params.id;
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === roomId);
+  const room = await getRoomByIdFromDb(roomId);
 
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy thông tin phòng trọ.' });
@@ -439,7 +472,7 @@ apiRouter.get('/rooms/:id', (req: Request, res: Response) => {
 
 // POST /api/rooms (ChuTro or Admin)
 // Theo yêu cầu: Sau khi đăng thì trạng thái mặc định là "Chờ duyệt"
-apiRouter.post('/rooms', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   if (user.VaiTro !== 'ChuTro' && user.VaiTro !== 'Admin') {
     res.status(403).json({ success: false, message: 'Chỉ Chủ trọ mới có quyền đăng tin phòng trọ.' });
@@ -468,8 +501,6 @@ apiRouter.post('/rooms', requireAuth, (req: Request, res: Response) => {
     });
     return;
   }
-
-  const db = readDb();
 
   // Ensure images array has at least placeholder if empty
   let images: string[] = [];
@@ -506,8 +537,7 @@ apiRouter.post('/rooms', requireAuth, (req: Request, res: Response) => {
     DanhGia: [],
   };
 
-  db.rooms.unshift(newRoom);
-  writeDb(db);
+  await createRoomInDb(newRoom);
 
   res.status(201).json({
     success: true,
@@ -517,45 +547,40 @@ apiRouter.post('/rooms', requireAuth, (req: Request, res: Response) => {
 });
 
 // PUT /api/rooms/:id
-apiRouter.put('/rooms/:id', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/rooms/:id', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const roomId = req.params.id;
-  const db = readDb();
 
-  const roomIndex = db.rooms.findIndex(r => r.Id === roomId);
-  if (roomIndex === -1) {
+  const existingRoom = await getRoomByIdFromDb(roomId);
+  if (!existingRoom) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
   }
 
-  const existingRoom = db.rooms[roomIndex];
   if (user.VaiTro !== 'Admin' && existingRoom.IdChuTro !== user.Id && existingRoom.ChuTroId !== user.Id) {
     res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa thông tin phòng trọ này.' });
     return;
   }
 
   // Preserve essential identity properties while updating editable ones
-  const updated: PhongTro = {
-    ...existingRoom,
+  const updatedData: Partial<PhongTro> = {
     ...req.body,
     Id: existingRoom.Id,
     IdChuTro: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
     ChuTroId: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
   };
 
-  db.rooms[roomIndex] = updated;
-  writeDb(db);
+  const updated = await updateRoomInDb(roomId, updatedData);
 
   res.json({ success: true, message: 'Cập nhật phòng trọ thành công!', room: updated });
 });
 
 // DELETE /api/rooms/:id
-apiRouter.delete('/rooms/:id', requireAuth, (req: Request, res: Response) => {
+apiRouter.delete('/rooms/:id', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const roomId = req.params.id;
-  const db = readDb();
 
-  const room = db.rooms.find(r => r.Id === roomId);
+  const room = await getRoomByIdFromDb(roomId);
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
@@ -566,8 +591,7 @@ apiRouter.delete('/rooms/:id', requireAuth, (req: Request, res: Response) => {
     return;
   }
 
-  db.rooms = db.rooms.filter(r => r.Id !== roomId);
-  writeDb(db);
+  await deleteRoomInDb(roomId);
 
   res.json({ success: true, message: 'Đã xóa phòng trọ thành công.' });
 });
@@ -576,12 +600,11 @@ apiRouter.delete('/rooms/:id', requireAuth, (req: Request, res: Response) => {
 // 3. YÊU CẦU ĐẶT / LIÊN HỆ PHÒNG (INQUIRIES)
 // -------------------------------------------------------------
 
-apiRouter.post('/inquiries', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/inquiries', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { roomId, message, depositAmount } = req.body;
 
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === roomId);
+  const room = await getRoomByIdFromDb(roomId);
   if (!room) {
     res.status(404).json({ success: false, message: 'Phòng không tồn tại.' });
     return;
@@ -589,17 +612,18 @@ apiRouter.post('/inquiries', requireAuth, (req: Request, res: Response) => {
 
   const deposit = Number(depositAmount) || 0;
   if (deposit > 0) {
-    if (user.soDuVi < deposit) {
+    const dbUser = await getUserByIdFromDb(user.Id);
+    if (!dbUser || dbUser.soDuVi < deposit) {
       res.status(400).json({
         success: false,
-        message: `Số dư ví không đủ để đặt cọc ${deposit.toLocaleString('vi-VN')} VNĐ. Số dư hiện tại: ${user.soDuVi.toLocaleString('vi-VN')} VNĐ.`
+        message: `Số dư ví không đủ để đặt cọc ${deposit.toLocaleString('vi-VN')} VNĐ. Số dư hiện tại: ${(dbUser ? dbUser.soDuVi : user.soDuVi).toLocaleString('vi-VN')} VNĐ.`
       });
       return;
     }
     // Deduct deposit from student
-    user.soDuVi -= deposit;
-    const dbUser = db.users.find(u => u.Id === user.Id);
-    if (dbUser) dbUser.soDuVi = user.soDuVi;
+    const updatedBalance = dbUser.soDuVi - deposit;
+    await updateUserInDb(user.Id, { soDuVi: updatedBalance });
+    user.soDuVi = updatedBalance;
   }
 
   const newInq: YeuCauLienHe = {
@@ -616,8 +640,7 @@ apiRouter.post('/inquiries', requireAuth, (req: Request, res: Response) => {
     NgayTao: new Date().toISOString(),
   };
 
-  db.inquiries.unshift(newInq);
-  writeDb(db);
+  await createInquiryInDb(newInq);
 
   res.status(201).json({
     success: true,
@@ -629,28 +652,27 @@ apiRouter.post('/inquiries', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-apiRouter.get('/inquiries', requireAuth, (req: Request, res: Response) => {
+apiRouter.get('/inquiries', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
+  const allInqs = await getInquiriesFromDb();
 
   let list: YeuCauLienHe[] = [];
   if (user.VaiTro === 'ChuTro') {
-    list = db.inquiries.filter(i => i.ChuTroId === user.Id);
+    list = allInqs.filter(i => i.ChuTroId === user.Id);
   } else if (user.VaiTro === 'SinhVien') {
-    list = db.inquiries.filter(i => i.SinhVienId === user.Id);
+    list = allInqs.filter(i => i.SinhVienId === user.Id);
   } else if (user.VaiTro === 'Admin') {
-    list = db.inquiries;
+    list = allInqs;
   }
 
   res.json({ success: true, data: list });
 });
 
-apiRouter.put('/inquiries/:id/status', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { status } = req.body;
-  const db = readDb();
 
-  const inq = db.inquiries.find(i => i.Id === req.params.id);
+  const inq = await getInquiryByIdFromDb(req.params.id);
   if (!inq) {
     res.status(404).json({ success: false, message: 'Yêu cầu không tồn tại.' });
     return;
@@ -661,21 +683,25 @@ apiRouter.put('/inquiries/:id/status', requireAuth, (req: Request, res: Response
     return;
   }
 
+  await updateInquiryInDb(inq.Id, { TrangThai: status });
   inq.TrangThai = status;
 
   // If approved and has deposit, landlord receives deposit
   if (status === 'DaDuyet' && inq.TienCoc > 0) {
-    const chuTro = db.users.find(u => u.Id === inq.ChuTroId);
-    if (chuTro) chuTro.soDuVi += inq.TienCoc;
+    const chuTro = await getUserByIdFromDb(inq.ChuTroId);
+    if (chuTro) {
+      await updateUserInDb(chuTro.Id, { soDuVi: (chuTro.soDuVi || 0) + inq.TienCoc });
+    }
   }
 
   // If rejected and has deposit, refund to student
   if (status === 'TuChoi' && inq.TienCoc > 0) {
-    const sinhVien = db.users.find(u => u.Id === inq.SinhVienId);
-    if (sinhVien) sinhVien.soDuVi += inq.TienCoc;
+    const sinhVien = await getUserByIdFromDb(inq.SinhVienId);
+    if (sinhVien) {
+      await updateUserInDb(sinhVien.Id, { soDuVi: (sinhVien.soDuVi || 0) + inq.TienCoc });
+    }
   }
 
-  writeDb(db);
   res.json({ success: true, message: `Đã cập nhật trạng thái: ${status}`, inquiry: inq });
 });
 
@@ -684,10 +710,9 @@ apiRouter.put('/inquiries/:id/status', requireAuth, (req: Request, res: Response
 // -------------------------------------------------------------
 
 // GET /api/appointments - Danh sách lịch hẹn
-apiRouter.get('/appointments', requireAuth, (req: Request, res: Response) => {
+apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  const list = db.appointments || [];
+  const list = await getAppointmentsFromDb();
 
   let result: LichHen[] = [];
   if (user.VaiTro === 'SinhVien') {
@@ -702,7 +727,7 @@ apiRouter.get('/appointments', requireAuth, (req: Request, res: Response) => {
 });
 
 // POST /api/appointments - Sinh viên đặt lịch hẹn xem phòng
-apiRouter.post('/appointments', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { IdPhong, ThoiGianHen, GhiChu } = req.body;
 
@@ -711,8 +736,7 @@ apiRouter.post('/appointments', requireAuth, (req: Request, res: Response) => {
     return;
   }
 
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === IdPhong);
+  const room = await getRoomByIdFromDb(IdPhong);
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
@@ -748,14 +772,13 @@ apiRouter.post('/appointments', requireAuth, (req: Request, res: Response) => {
     NgayTao: new Date().toISOString(),
   };
 
-  if (!db.appointments) db.appointments = [];
-  db.appointments.unshift(newAppointment);
+  await createAppointmentInDb(newAppointment);
 
   // Gửi thông báo đến chủ trọ về yêu cầu đặt lịch hẹn mới
   const landlordId = room.IdChuTro || room.ChuTroId;
   if (landlordId) {
-    addNotification(
-      db,
+    await addNotification(
+      null,
       landlordId,
       'Yêu cầu đặt lịch hẹn xem phòng mới!',
       `Sinh viên ${user.HoTen} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
@@ -764,15 +787,13 @@ apiRouter.post('/appointments', requireAuth, (req: Request, res: Response) => {
   }
 
   // Gửi thông báo xác nhận đã tạo lịch hẹn đến sinh viên
-  addNotification(
-    db,
+  await addNotification(
+    null,
     user.Id,
     'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
     `Yêu cầu đặt lịch xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${room.ChuTroTen}. Vui lòng chờ xác nhận.`,
     'LichHen'
   );
-
-  writeDb(db);
 
   res.status(201).json({
     success: true,
@@ -782,12 +803,10 @@ apiRouter.post('/appointments', requireAuth, (req: Request, res: Response) => {
 });
 
 // PUT /api/appointments/:id/cancel - Sinh viên hủy lịch hẹn (nếu chưa được xác nhận)
-apiRouter.put('/appointments/:id/cancel', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/appointments/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.appointments) db.appointments = [];
 
-  const appointment = db.appointments.find(a => a.Id === req.params.id);
+  const appointment = await getAppointmentByIdFromDb(req.params.id);
   if (!appointment) {
     res.status(404).json({ success: false, message: 'Lịch hẹn không tồn tại.' });
     return;
@@ -803,12 +822,13 @@ apiRouter.put('/appointments/:id/cancel', requireAuth, (req: Request, res: Respo
     return;
   }
 
+  await updateAppointmentInDb(appointment.Id, { TrangThai: 'Đã hủy' });
   appointment.TrangThai = 'Đã hủy';
 
   // Thông báo cho chủ trọ biết sinh viên đã hủy lịch hẹn
   if (appointment.ChuTroId) {
-    addNotification(
-      db,
+    await addNotification(
+      null,
       appointment.ChuTroId,
       'Sinh viên đã hủy lịch hẹn xem phòng',
       `Sinh viên ${user.HoTen} đã hủy lịch hẹn xem phòng "${appointment.TieuDePhong || 'Phòng trọ'}" lúc ${new Date(appointment.ThoiGianHen).toLocaleString('vi-VN')}.`,
@@ -816,19 +836,15 @@ apiRouter.put('/appointments/:id/cancel', requireAuth, (req: Request, res: Respo
     );
   }
 
-  writeDb(db);
-
   res.json({ success: true, message: 'Đã hủy lịch hẹn xem phòng.', appointment });
 });
 
 // PUT /api/appointments/:id/status - Chủ trọ hoặc Admin duyệt/hủy lịch hẹn
-apiRouter.put('/appointments/:id/status', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/appointments/:id/status', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { status, reason } = req.body;
-  const db = readDb();
-  if (!db.appointments) db.appointments = [];
 
-  const appointment = db.appointments.find(a => a.Id === req.params.id);
+  const appointment = await getAppointmentByIdFromDb(req.params.id);
   if (!appointment) {
     res.status(404).json({ success: false, message: 'Lịch hẹn không tồn tại.' });
     return;
@@ -844,28 +860,30 @@ apiRouter.put('/appointments/:id/status', requireAuth, (req: Request, res: Respo
     return;
   }
 
-  appointment.TrangThai = status;
+  const updates: Partial<LichHen> = { TrangThai: status };
 
   if (status === 'Đã xác nhận') {
-    addNotification(
-      db,
+    await addNotification(
+      null,
       appointment.IdSinhVien,
       'Lịch hẹn xem phòng đã được xác nhận!',
       `Chủ trọ ${user.HoTen} đã xác nhận lịch hẹn xem phòng "${appointment.TieuDePhong || 'Phòng trọ'}" vào lúc ${new Date(appointment.ThoiGianHen).toLocaleString('vi-VN')}. Vui lòng đến đúng giờ nhé!`,
       'LichHen'
     );
   } else if (status === 'Đã hủy') {
-    appointment.LyDoTuChoi = (reason || '').trim() || 'Chủ trọ có lịch bận đột xuất hoặc phòng đã kín lịch';
-    addNotification(
-      db,
+    updates.LyDoTuChoi = (reason || '').trim() || 'Chủ trọ có lịch bận đột xuất hoặc phòng đã kín lịch';
+    await addNotification(
+      null,
       appointment.IdSinhVien,
       'Lịch hẹn xem phòng bị từ chối',
-      `Chủ trọ ${user.HoTen} đã từ chối lịch hẹn xem phòng "${appointment.TieuDePhong || 'Phòng trọ'}". Lý do: ${appointment.LyDoTuChoi}`,
+      `Chủ trọ ${user.HoTen} đã từ chối lịch hẹn xem phòng "${appointment.TieuDePhong || 'Phòng trọ'}". Lý do: ${updates.LyDoTuChoi}`,
       'LichHen'
     );
   }
 
-  writeDb(db);
+  await updateAppointmentInDb(appointment.Id, updates);
+  Object.assign(appointment, updates);
+
   res.json({ success: true, message: `Lịch hẹn đã chuyển sang trạng thái: ${status}`, appointment });
 });
 
@@ -874,10 +892,9 @@ apiRouter.put('/appointments/:id/status', requireAuth, (req: Request, res: Respo
 // -------------------------------------------------------------
 
 // GET /api/deposits - Danh sách đơn đặt cọc
-apiRouter.get('/deposits', requireAuth, (req: Request, res: Response) => {
+apiRouter.get('/deposits', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  const list = db.deposits || [];
+  const list = await getDepositsFromDb();
 
   let result: DatCoc[] = [];
   if (user.VaiTro === 'SinhVien') {
@@ -892,7 +909,7 @@ apiRouter.get('/deposits', requireAuth, (req: Request, res: Response) => {
 });
 
 // POST /api/deposits - Sinh viên đặt cọc giữ phòng
-apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/deposits', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { IdPhong, ThoiHanGiuCho } = req.body;
 
@@ -901,8 +918,7 @@ apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
     return;
   }
 
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === IdPhong);
+  const room = await getRoomByIdFromDb(IdPhong);
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
@@ -916,7 +932,7 @@ apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
   const TIEN_COC_QUY_DINH = 500000;
 
   // Lấy dữ liệu người dùng mới nhất từ DB
-  const dbUser = db.users.find(u => u.Id === user.Id);
+  const dbUser = await getUserByIdFromDb(user.Id);
   if (!dbUser || dbUser.soDuVi < TIEN_COC_QUY_DINH) {
     res.status(400).json({
       success: false,
@@ -928,11 +944,12 @@ apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
   }
 
   // Đủ tiền: Trừ tiền ví của sinh viên
-  dbUser.soDuVi -= TIEN_COC_QUY_DINH;
-  user.soDuVi = dbUser.soDuVi;
+  const newBalance = dbUser.soDuVi - TIEN_COC_QUY_DINH;
+  await updateUserInDb(user.Id, { soDuVi: newBalance });
+  user.soDuVi = newBalance;
 
   // Chuyển trạng thái phòng sang "Chờ chủ trọ xác nhận cọc"
-  room.TrangThai = 'Chờ chủ trọ xác nhận cọc';
+  await updateRoomInDb(room.Id, { TrangThai: 'Chờ chủ trọ xác nhận cọc' });
 
   // Tạo bản ghi DatCoc
   const newDeposit: DatCoc = {
@@ -952,13 +969,12 @@ apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
     NgayTao: new Date().toISOString(),
   };
 
-  if (!db.deposits) db.deposits = [];
-  db.deposits.unshift(newDeposit);
+  await createDepositInDb(newDeposit);
 
   // Gửi thông báo đến chủ trọ
   if (room.IdChuTro || room.ChuTroId) {
-    addNotification(
-      db,
+    await addNotification(
+      null,
       room.IdChuTro || room.ChuTroId || '',
       'Có đơn đặt cọc mới!',
       `Sinh viên ${user.HoTen} vừa đặt cọc 500.000 VNĐ giữ chỗ cho phòng "${room.TieuDe}". Vui lòng xử lý đơn trong mục Quản lý yêu cầu.`,
@@ -966,23 +982,19 @@ apiRouter.post('/deposits', requireAuth, (req: Request, res: Response) => {
     );
   }
 
-  writeDb(db);
-
   res.status(201).json({
     success: true,
     message: 'Đặt cọc giữ phòng thành công! Số dư đã trừ 500.000 VNĐ. Phòng đã chuyển sang trạng thái "Chờ chủ trọ xác nhận cọc".',
     deposit: newDeposit,
-    newBalance: dbUser.soDuVi,
+    newBalance,
   });
 });
 
 // PUT /api/deposits/:id/cancel - Sinh viên hủy đơn cọc trước khi duyệt -> Hoàn tiền
-apiRouter.put('/deposits/:id/cancel', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.deposits) db.deposits = [];
 
-  const deposit = db.deposits.find(d => d.Id === req.params.id);
+  const deposit = await getDepositByIdFromDb(req.params.id);
   if (!deposit) {
     res.status(404).json({ success: false, message: 'Đơn đặt cọc không tồn tại.' });
     return;
@@ -998,25 +1010,31 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, (req: Request, res: Response)
     return;
   }
 
-  deposit.TrangThaiCoc = 'Đã hủy';
-  deposit.LyDoTuChoi = 'Sinh viên chủ động hủy trước khi chủ trọ tiếp nhận';
+  const updates: Partial<DatCoc> = {
+    TrangThaiCoc: 'Đã hủy',
+    LyDoTuChoi: 'Sinh viên chủ động hủy trước khi chủ trọ tiếp nhận',
+  };
+  await updateDepositInDb(deposit.Id, updates);
+  Object.assign(deposit, updates);
 
   // Hoàn tiền cho sinh viên
-  const sinhVien = db.users.find(u => u.Id === deposit.IdSinhVien);
+  let sinhVienBalance = 0;
+  const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien);
   if (sinhVien) {
-    sinhVien.soDuVi += deposit.SoTienCoc;
+    sinhVienBalance = (sinhVien.soDuVi || 0) + deposit.SoTienCoc;
+    await updateUserInDb(sinhVien.Id, { soDuVi: sinhVienBalance });
   }
 
   // Khôi phục trạng thái phòng về "Công khai" nếu phòng đang "Chờ chủ trọ xác nhận cọc"
-  const room = db.rooms.find(r => r.Id === deposit.IdPhong);
+  const room = await getRoomByIdFromDb(deposit.IdPhong);
   if (room && (room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc')) {
-    room.TrangThai = 'Công khai';
+    await updateRoomInDb(room.Id, { TrangThai: 'Công khai' });
   }
 
   // Thông báo đến chủ trọ về việc sinh viên đã hủy đơn đặt cọc
   if (deposit.ChuTroId) {
-    addNotification(
-      db,
+    await addNotification(
+      null,
       deposit.ChuTroId,
       'Sinh viên đã hủy đơn đặt cọc',
       `Sinh viên ${user.HoTen} đã hủy đơn cọc giữ chỗ phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được mở lại trạng thái "Công khai".`,
@@ -1024,24 +1042,20 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, (req: Request, res: Response)
     );
   }
 
-  writeDb(db);
-
   res.json({
     success: true,
     message: 'Đã hủy đơn đặt cọc và hoàn trả 500.000 VNĐ vào ví của bạn thành công!',
     deposit,
-    newBalance: sinhVien ? sinhVien.soDuVi : undefined,
+    newBalance: sinhVien ? sinhVienBalance : undefined,
   });
 });
 
 // PUT /api/deposits/:id/status - Chủ trọ hoặc Admin duyệt hoặc từ chối cọc
-apiRouter.put('/deposits/:id/status', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { status, reason } = req.body; // 'Đã tiếp nhận thành công' | 'Đã xác nhận' | 'Đã hủy'
-  const db = readDb();
-  if (!db.deposits) db.deposits = [];
 
-  const deposit = db.deposits.find(d => d.Id === req.params.id);
+  const deposit = await getDepositByIdFromDb(req.params.id);
   if (!deposit) {
     res.status(404).json({ success: false, message: 'Đơn đặt cọc không tồn tại.' });
     return;
@@ -1052,30 +1066,31 @@ apiRouter.put('/deposits/:id/status', requireAuth, (req: Request, res: Response)
     return;
   }
 
-  const room = db.rooms.find(r => r.Id === deposit.IdPhong);
+  const room = await getRoomByIdFromDb(deposit.IdPhong);
 
   if (status === 'Đã tiếp nhận thành công' || status === 'Đã xác nhận') {
+    await updateDepositInDb(deposit.Id, { TrangThaiCoc: 'Đã tiếp nhận thành công' });
     deposit.TrangThaiCoc = 'Đã tiếp nhận thành công';
+
     // Chủ trọ nhận tiền cọc vào ví
-    const chuTro = db.users.find(u => u.Id === deposit.ChuTroId);
+    const chuTro = await getUserByIdFromDb(deposit.ChuTroId || '');
     if (chuTro) {
-      chuTro.soDuVi += deposit.SoTienCoc;
+      await updateUserInDb(chuTro.Id, { soDuVi: (chuTro.soDuVi || 0) + deposit.SoTienCoc });
     }
     // Cập nhật phòng sang "Đã cọc"
     if (room) {
-      room.TrangThai = 'Đã cọc';
+      await updateRoomInDb(room.Id, { TrangThai: 'Đã cọc' });
     }
 
     // Gửi thông báo đến sinh viên
-    addNotification(
-      db,
+    await addNotification(
+      null,
       deposit.IdSinhVien,
       'Đơn đặt cọc đã được tiếp nhận thành công!',
       `Chủ trọ ${user.HoTen} đã tiếp nhận thành công đơn đặt cọc ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ cho phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được chuyển sang trạng thái "Đã cọc" và bảo lưu chỗ cho bạn.`,
       'DatCoc'
     );
 
-    writeDb(db);
     res.json({
       success: true,
       message: 'Đã tiếp nhận đơn đặt cọc thành công! Phòng đã chuyển sang trạng thái "Đã cọc".',
@@ -1083,30 +1098,30 @@ apiRouter.put('/deposits/:id/status', requireAuth, (req: Request, res: Response)
     });
   } else if (status === 'Đã hủy') {
     const rejectReason = (reason || '').trim() || 'Chủ trọ không thể tiếp nhận cọc vào lúc này';
+    await updateDepositInDb(deposit.Id, { TrangThaiCoc: 'Đã hủy', LyDoTuChoi: rejectReason });
     deposit.TrangThaiCoc = 'Đã hủy';
     deposit.LyDoTuChoi = rejectReason;
 
     // Tự động hoàn lại 100% tiền cọc vào ví sinh viên
-    const sinhVien = db.users.find(u => u.Id === deposit.IdSinhVien);
+    const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien);
     if (sinhVien) {
-      sinhVien.soDuVi += deposit.SoTienCoc;
+      await updateUserInDb(sinhVien.Id, { soDuVi: (sinhVien.soDuVi || 0) + deposit.SoTienCoc });
     }
 
     // Khôi phục phòng về Công khai / Còn phòng
     if (room && (room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc')) {
-      room.TrangThai = 'Công khai';
+      await updateRoomInDb(room.Id, { TrangThai: 'Công khai' });
     }
 
     // Gửi thông báo hoàn tiền đến sinh viên
-    addNotification(
-      db,
+    await addNotification(
+      null,
       deposit.IdSinhVien,
       'Đơn đặt cọc phòng bị từ chối - Đã hoàn tiền ví',
       `Đơn cọc phòng "${deposit.TieuDePhong || 'Phòng trọ'}" đã bị từ chối. Lý do: "${rejectReason}". Toàn bộ ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ tiền cọc đã được hoàn trả 100% vào ví của bạn.`,
       'DatCoc'
     );
 
-    writeDb(db);
     res.json({
       success: true,
       message: `Đã từ chối đơn cọc và tự động hoàn trả 100% (${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ) cho sinh viên.`,
@@ -1291,7 +1306,7 @@ apiRouter.delete('/notifications/clear-read', requireAuth, (req: Request, res: R
 });
 
 // POST /api/notifications/test-generate - Sinh thông báo thử nghiệm thời gian thực
-apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: Response) => {
+apiRouter.post('/notifications/test-generate', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { scenario } = req.body;
   const db = readDb();
@@ -1300,7 +1315,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
 
   if (user.VaiTro === 'SinhVien') {
     if (scenario === 'booking-confirm') {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Lịch hẹn xem phòng đã được xác nhận!',
@@ -1308,7 +1323,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
         'LichHen'
       );
     } else if (scenario === 'deposit-success') {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Đơn đặt cọc đã được tiếp nhận thành công!',
@@ -1316,7 +1331,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
         'DatCoc'
       );
     } else if (scenario === 'deposit-refund') {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Hoàn trả tiền cọc về ví thành công',
@@ -1324,7 +1339,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
         'DatCoc'
       );
     } else {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Cập nhật trạng thái đặt phòng',
@@ -1334,7 +1349,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
     }
   } else if (user.VaiTro === 'ChuTro') {
     if (scenario === 'booking-request') {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Yêu cầu đặt chỗ / Lịch hẹn xem phòng mới!',
@@ -1342,7 +1357,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
         'LichHen'
       );
     } else if (scenario === 'deposit-request') {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Có đơn đặt cọc giữ phòng mới (500.000 đ)!',
@@ -1350,7 +1365,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
         'DatCoc'
       );
     } else {
-      newNotif = addNotification(
+      newNotif = await addNotification(
         db,
         user.Id,
         'Tin đăng phòng trọ đã được phê duyệt!',
@@ -1359,7 +1374,7 @@ apiRouter.post('/notifications/test-generate', requireAuth, (req: Request, res: 
       );
     }
   } else {
-    newNotif = addNotification(
+    newNotif = await addNotification(
       db,
       user.Id,
       'Thông báo quản trị hệ thống',
