@@ -126,6 +126,40 @@ CREATE TABLE `favorites` (
   `NgayTao` VARCHAR(50) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 8. BẢNG RENTAL_CONTRACTS (Hợp đồng thuê phòng / Xác nhận thuê 2 chiều)
+DROP TABLE IF EXISTS `rental_contracts`;
+CREATE TABLE `rental_contracts` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `room_id` VARCHAR(50) NOT NULL,
+  `renter_id` VARCHAR(50) NOT NULL,
+  `landlord_id` VARCHAR(50) NOT NULL,
+  `status` ENUM('pending_renter', 'pending_landlord', 'active', 'completed', 'cancelled') NOT NULL DEFAULT 'pending_landlord',
+  `start_date` DATETIME NULL,
+  `end_date` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_rental_room` (`room_id`),
+  INDEX `idx_rental_renter` (`renter_id`),
+  INDEX `idx_rental_landlord` (`landlord_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. BẢNG REVIEWS (Đánh giá và nhận xét phòng trọ có phân quyền xác minh)
+DROP TABLE IF EXISTS `reviews`;
+CREATE TABLE `reviews` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `room_id` VARCHAR(50) NOT NULL,
+  `renter_id` VARCHAR(50) NOT NULL,
+  `contract_id` INT NOT NULL,
+  `tenNguoiDanhGia` VARCHAR(100) NOT NULL,
+  `truongHoc` VARCHAR(100) NULL,
+  `soSao` INT NOT NULL DEFAULT 5,
+  `nhanXet` TEXT NOT NULL,
+  `is_verified` BOOLEAN NOT NULL DEFAULT TRUE,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_renter_room_contract` (`renter_id`, `room_id`, `contract_id`),
+  INDEX `idx_review_room` (`room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ========================================================
@@ -221,3 +255,14 @@ INSERT INTO `notifications` (`Id`, `UserId`, `TieuDe`, `NoiDung`, `Loai`, `Trang
   ('tb_1790151513737_xix2', 'usr_chutro', 'Tin đăng phòng trọ đã được phê duyệt!', 'Tin đăng "Căn hộ 1 ngủ 1 khách hiện đại khu vực ĐH Luật & Học viện Ngoại Giao" của bạn đã được kiểm duyệt và chuyển sang trạng thái "Công khai", sẵn sàng hiển thị trên trang tìm kiếm.', 'PhongTro', 'ChuaDoc', '2026-09-23T08:18:33.737Z'),
   ('tb_1790151508540_4rvr', 'usr_sinhvien', 'Lịch hẹn xem phòng bị từ chối', 'Chủ trọ Trần Thị Bích (Chủ trọ Cầu Giấy) đã từ chối lịch hẹn xem phòng "Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân". Lý do: Chủ trọ bận đột xuất vào khung giờ này', 'LichHen', 'ChuaDoc', '2026-09-23T08:18:28.541Z'),
   ('tb_1790151502714_x3y2', 'usr_chutro', 'Phòng trọ nhận được đánh giá mới!', 'Sinh viên Nguyễn Văn Sinh (SV Bách Khoa) đã gửi đánh giá 5 sao cho phòng "Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân": "Phòng ngủ sạch sẽ, cô chú chủ trọ nhiệt tình hỗ trợ!"', 'PhongTro', 'ChuaDoc', '2026-09-23T08:18:22.714Z');
+
+-- Dữ liệu mẫu Rental Contracts (Hợp đồng thuê phòng xác nhận 2 chiều)
+INSERT INTO `rental_contracts` (`id`, `room_id`, `renter_id`, `landlord_id`, `status`, `start_date`, `end_date`, `created_at`, `updated_at`) VALUES
+  (1, 'room_1', 'usr_sinhvien', 'usr_chutro', 'active', '2026-09-01 08:00:00', NULL, '2026-09-01 07:30:00', '2026-09-01 08:00:00'),
+  (2, 'room_14', 'usr_sinhvien', 'usr_chutro', 'pending_landlord', '2026-10-01 08:00:00', NULL, '2026-09-27 08:00:00', '2026-09-27 08:00:00'),
+  (3, 'room_15', 'usr_sinhvien', 'usr_chutro', 'pending_renter', '2026-10-05 08:00:00', NULL, '2026-09-27 09:00:00', '2026-09-27 09:00:00');
+
+-- Dữ liệu mẫu Reviews (Đã xác minh thuê phòng có contract_id)
+INSERT INTO `reviews` (`id`, `room_id`, `renter_id`, `contract_id`, `tenNguoiDanhGia`, `truongHoc`, `soSao`, `nhanXet`, `is_verified`, `created_at`) VALUES
+  (1, 'room_1', 'usr_sinhvien', 1, 'Nguyễn Văn Sinh (SV Bách Khoa)', 'Sinh viên đã xác minh thuê phòng', 5, 'Phòng ngủ sạch sẽ, cô chú chủ trọ nhiệt tình hỗ trợ! An ninh tốt, khóa vân tay tiện lợi.', 1, '2026-09-23 08:18:22');
+

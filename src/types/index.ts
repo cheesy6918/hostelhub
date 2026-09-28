@@ -62,13 +62,41 @@ export interface DatCoc {
   NgayTao?: string;
 }
 
+export type RentalContractStatus = 'pending_renter' | 'pending_landlord' | 'active' | 'completed' | 'cancelled';
+
+export interface RentalContract {
+  id: number;
+  room_id: string;
+  renter_id: string;
+  landlord_id: string;
+  status: RentalContractStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Enriched fields for display:
+  roomTitle?: string;
+  roomAddress?: string;
+  roomImage?: string;
+  roomPrice?: number;
+  renterName?: string;
+  renterPhone?: string;
+  renterEmail?: string;
+  landlordName?: string;
+  landlordPhone?: string;
+}
+
 export interface Review {
-  id?: string;
+  id?: string | number;
   tenNguoiDanhGia: string;
-  truongHoc: string;
+  truongHoc?: string;
   soSao: number;
   nhanXet: string;
-  ngay: string;
+  ngay?: string;
+  is_verified?: boolean;
+  contract_id?: number;
+  renter_id?: string;
+  room_id?: string;
 }
 
 export interface FavoriteItem {

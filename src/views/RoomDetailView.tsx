@@ -74,6 +74,46 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [reviewError, setReviewError] = useState('');
   const [showReviewForm, setShowReviewForm] = useState(false);
 
+  // Review Verification & Eligibility state (Xác minh thuê phòng 2 chiều)
+  const [canReview, setCanReview] = useState(false);
+  const [canReviewReason, setCanReviewReason] = useState('');
+  const [canReviewLoading, setCanReviewLoading] = useState(false);
+  const [contractInfo, setContractInfo] = useState<any>(null);
+
+  // Kiểm tra quyền đánh giá từ API
+  useEffect(() => {
+    const checkReviewEligibility = async () => {
+      if (!roomId) return;
+      if (!user || !token) {
+        setCanReview(false);
+        setCanReviewReason('Vui lòng đăng nhập tài khoản sinh viên đã xác minh thuê phòng để viết nhận xét.');
+        return;
+      }
+      try {
+        setCanReviewLoading(true);
+        const res = await fetch(`/api/rooms/${roomId}/can-review?userId=${user.Id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setCanReview(Boolean(data.canReview));
+          setCanReviewReason(data.reason || '');
+          setContractInfo(data.contract || null);
+        } else {
+          setCanReview(false);
+          setCanReviewReason(data.message || 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.');
+        }
+      } catch {
+        setCanReview(false);
+        setCanReviewReason('Không thể kiểm tra điều kiện đánh giá.');
+      } finally {
+        setCanReviewLoading(false);
+      }
+    };
+
+    checkReviewEligibility();
+  }, [roomId, user, token]);
+
   useEffect(() => {
     const loadRoom = async () => {
       try {
@@ -311,6 +351,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
         setReviewSuccessMsg('Gửi đánh giá thành công! Cảm ơn trải nghiệm thực tế quý giá của bạn.');
         setTimeout(() => setReviewSuccessMsg(''), 4500);
         setShowReviewForm(false);
+        setCanReview(false);
+        setCanReviewReason('Bạn đã gửi đánh giá cho đợt thuê phòng này rồi. Cảm ơn bạn!');
         if (data.allReviews) {
           setRoom(prev => (prev ? { ...prev, DanhGia: data.allReviews } : null));
         }
@@ -576,17 +618,24 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 </span>
               </div>
 
-              {/* Button to open review form */}
-              <button
-                onClick={() => {
-                  setShowReviewForm(!showReviewForm);
-                  setReviewError('');
-                }}
-                className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Star className="w-3.5 h-3.5 text-blue-600 fill-blue-600" />
-                <span>{showReviewForm ? 'Đóng biểu mẫu' : 'Viết đánh giá'}</span>
-              </button>
+              {/* Button to open review form - Chỉ hiển thị khi ĐỦ ĐIỀU KIỆN */}
+              {canReview ? (
+                <button
+                  onClick={() => {
+                    setShowReviewForm(!showReviewForm);
+                    setReviewError('');
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Star className="w-3.5 h-3.5 fill-white text-white" />
+                  <span>{showReviewForm ? 'Đóng biểu mẫu' : 'Viết đánh giá (Đã xác minh)'}</span>
+                </button>
+              ) : (
+                <span className="px-3 py-1.5 bg-slate-100 text-slate-500 text-[11px] font-semibold rounded-xl border border-slate-200/80 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Yêu cầu xác minh người thuê</span>
+                </span>
+              )}
             </div>
 
             {/* Review Success Banner */}
@@ -597,13 +646,81 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
               </div>
             )}
 
-            {/* Interactive Review Form */}
-            {showReviewForm && (
+            {/* TH1: CHƯA ĐỦ ĐIỀU KIỆN ĐÁNH GIÁ (Ẩn form, hiển thị banner thông báo quy định) */}
+            {!canReview && (
+              <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl flex items-start gap-3.5 animate-in fade-in">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                  <ShieldCheck className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>Cơ chế xác minh thuê phòng 2 chiều</span>
+                    </h4>
+                    <span className="text-[10px] font-bold bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full">
+                      Chống đánh giá ảo
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-950 font-bold leading-relaxed">
+                    Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {canReviewReason || 'Hệ thống yêu cầu bạn và chủ trọ xác nhận hợp đồng thuê phòng ở trạng thái "Đang ở" hoặc "Đã hoàn tất" để bảo đảm 100% đánh giá minh bạch, khách quan từ sinh viên thực tế sinh sống.'}
+                  </p>
+                  {user && user.VaiTro === 'SinhVien' && (
+                    <div className="pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate ? onNavigate('student-history') : undefined}
+                        className="text-xs font-bold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1.5 hover:underline cursor-pointer"
+                      >
+                        <span>Mở mục Quản lý hợp đồng & Xác nhận thuê phòng</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TH2: ĐỦ ĐIỀU KIỆN ĐÁNH GIÁ (Hiển thị banner khích lệ hoặc form nhập) */}
+            {canReview && !showReviewForm && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 text-emerald-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-emerald-950">
+                      Bạn đã được xác minh là người thuê phòng ({contractInfo?.status === 'completed' ? 'Đã hoàn tất trả phòng' : 'Đang ở'})!
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      Hãy chia sẻ đánh giá thực tế của bạn để giúp các bạn sinh viên khác có thông tin hữu ích.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewForm(true)}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer shrink-0 transition-colors shadow-2xs"
+                >
+                  Viết nhận xét ngay
+                </button>
+              </div>
+            )}
+
+            {/* Interactive Review Form - Chỉ mở khi ĐỦ ĐIỀU KIỆN */}
+            {canReview && showReviewForm && (
               <form onSubmit={handleSendReview} className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4 animate-in fade-in">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Đánh giá trải nghiệm thực tế của bạn
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Đánh giá trải nghiệm thực tế của bạn
+                    </h3>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      ✔ Người thuê đã xác minh
+                    </span>
+                  </div>
                   <span className="text-[11px] text-slate-500">
                     {user ? `Người đánh giá: ${user.HoTen}` : 'Cần đăng nhập để đánh giá'}
                   </span>
@@ -679,7 +796,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   <button
                     type="submit"
                     disabled={reviewSubmitting}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     {reviewSubmitting ? 'Đang gửi...' : 'Gửi nhận xét đánh giá'}
                   </button>
@@ -690,7 +807,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
             {/* Notice */}
             <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl text-xs text-slate-500">
               <Info className="w-4 h-4 text-blue-500 shrink-0" />
-              <span>Đánh giá thực tế và minh bạch từ sinh viên đã hẹn xem phòng hoặc đặt cọc giữ chỗ.</span>
+              <span>Đánh giá thực tế và minh bạch từ sinh viên đã ký kết hợp đồng và xác minh thuê phòng 2 chiều.</span>
             </div>
 
             {/* Reviews List */}
@@ -703,14 +820,16 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                         {(rev.tenNguoiDanhGia || 'S').charAt(0)}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-xs text-slate-900">{rev.tenNguoiDanhGia}</span>
-                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-md font-semibold">
-                            Sinh viên
+                          {/* Huy hiệu xanh: ✔ Đã xác minh thuê phòng (Verified Tenant) */}
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                            ✔ Đã xác minh thuê phòng
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-400 font-medium">
-                          {rev.truongHoc || 'Đã xác thực xem phòng/đặt cọc'}
+                          {rev.truongHoc || 'Người thuê đã xác minh'}
                         </span>
                       </div>
                     </div>
@@ -732,7 +851,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 text-[10px] text-slate-400">
                     <span>Thời gian đánh giá: {rev.ngay}</span>
                     <span className="text-emerald-600 font-medium flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" /> Đã xác thực
+                      <ShieldCheck className="w-3.5 h-3.5" /> Hợp đồng hợp lệ
                     </span>
                   </div>
                 </div>

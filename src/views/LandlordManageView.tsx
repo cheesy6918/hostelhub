@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Room, Inquiry, TrangThaiPhong, LichHen, DatCoc } from '../types';
+import { Room, Inquiry, TrangThaiPhong, LichHen, DatCoc, RentalContract } from '../types';
 import { useAuth } from '../context/AuthContext';
 import {
   Building2,
@@ -7,6 +7,7 @@ import {
   Edit2,
   Trash2,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   MapPin,
   Maximize2,
@@ -23,7 +24,14 @@ import {
   Calendar,
   CreditCard,
   Phone,
-  Wallet
+  Wallet,
+  FileText,
+  Send,
+  UserCheck,
+  Star,
+  RefreshCw,
+  PlusCircle,
+  ArrowRight
 } from 'lucide-react';
 
 interface LandlordManageViewProps {
@@ -56,8 +64,22 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [appointments, setAppointments] = useState<LichHen[]>([]);
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
+  const [contracts, setContracts] = useState<RentalContract[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'rooms' | 'appointments' | 'deposits' | 'inquiries'>('rooms');
+  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>('rooms');
+
+  // Contract Action loading states
+  const [confirmingContractId, setConfirmingContractId] = useState<number | null>(null);
+  const [completingContractId, setCompletingContractId] = useState<number | null>(null);
+  const [cancelingContractId, setCancelingContractId] = useState<number | null>(null);
+
+  // Proposal modal state (Chủ trọ gửi đề xuất thuê phòng)
+  const [showProposalModal, setShowProposalModal] = useState(false);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [proposalRoomId, setProposalRoomId] = useState('');
+  const [proposalStudentId, setProposalStudentId] = useState('');
+  const [proposalStartDate, setProposalStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submittingProposal, setSubmittingProposal] = useState(false);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -108,25 +130,31 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
     if (!user || !token) return;
     try {
       setLoading(true);
-      // Fetch landlord's rooms, inquiries, appointments, deposits in parallel
-      const [resRooms, resInq, resApp, resDep] = await Promise.all([
+      // Fetch landlord's rooms, inquiries, appointments, deposits, contracts and student candidates
+      const [resRooms, resInq, resApp, resDep, resContracts, resCandidates] = await Promise.all([
         fetch(`/api/rooms?landlordId=${user.Id}`),
         fetch('/api/inquiries', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/appointments', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/deposits', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/rentals', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/rentals/candidates', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
-      const [dataRooms, dataInq, dataApp, dataDep] = await Promise.all([
+      const [dataRooms, dataInq, dataApp, dataDep, dataContracts, dataCandidates] = await Promise.all([
         resRooms.json(),
         resInq.json(),
         resApp.json(),
         resDep.json(),
+        resContracts.json(),
+        resCandidates.json(),
       ]);
 
       if (dataRooms.success) setRooms(dataRooms.data || []);
       if (dataInq.success) setInquiries(dataInq.data || []);
       if (dataApp.success) setAppointments(dataApp.data || []);
       if (dataDep.success) setDeposits(dataDep.data || []);
+      if (dataContracts.success) setContracts(dataContracts.data || []);
+      if (dataCandidates.success) setCandidates(dataCandidates.data || []);
     } catch {
       // ignore
     } finally {
@@ -137,6 +165,125 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   useEffect(() => {
     fetchLandlordData();
   }, [user, token]);
+
+  // Chủ trọ xác nhận đồng ý cho thuê (khi sinh viên gửi yêu cầu pending_landlord)
+  const handleConfirmContract = async (id: number) => {
+    try {
+      setConfirmingContractId(id);
+      const res = await fetch(`/api/rentals/${id}/confirm`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage('Xác nhận đồng ý cho thuê thành công! Hợp đồng đã có hiệu lực (Đang ở).');
+        setTimeout(() => setActionMessage(''), 4000);
+        fetchLandlordData();
+      } else {
+        alert(data.message || 'Không thể xác nhận hợp đồng.');
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ.');
+    } finally {
+      setConfirmingContractId(null);
+    }
+  };
+
+  // Ghi nhận hoàn tất trả phòng
+  const handleCompleteContract = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn ghi nhận sinh viên đã trả phòng và kết thúc đợt thuê này?')) return;
+    try {
+      setCompletingContractId(id);
+      const res = await fetch(`/api/rentals/${id}/complete`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage('Đã cập nhật trạng thái hợp đồng thành Đã hoàn tất (Trả phòng).');
+        setTimeout(() => setActionMessage(''), 4000);
+        fetchLandlordData();
+      } else {
+        alert(data.message || 'Không thể cập nhật hợp đồng.');
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ.');
+    } finally {
+      setCompletingContractId(null);
+    }
+  };
+
+  // Hủy hoặc từ chối đề xuất thuê phòng
+  const handleCancelContract = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn hủy / từ chối đề xuất thuê phòng này?')) return;
+    try {
+      setCancelingContractId(id);
+      const res = await fetch(`/api/rentals/${id}/cancel`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage('Đã hủy đề xuất thuê phòng.');
+        setTimeout(() => setActionMessage(''), 4000);
+        fetchLandlordData();
+      } else {
+        alert(data.message || 'Không thể hủy đề xuất.');
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ.');
+    } finally {
+      setCancelingContractId(null);
+    }
+  };
+
+  // Chủ trọ gửi đề xuất xác nhận thuê phòng tới sinh viên
+  const handleCreateProposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proposalRoomId || !proposalStudentId) {
+      alert('Vui lòng chọn đầy đủ phòng trọ và sinh viên cần gửi đề xuất!');
+      return;
+    }
+    try {
+      setSubmittingProposal(true);
+      const res = await fetch('/api/rentals/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          roomId: proposalRoomId,
+          renterId: proposalStudentId,
+          startDate: proposalStartDate,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage('Đã gửi đề xuất xác nhận thuê phòng đến sinh viên thành công!');
+        setTimeout(() => setActionMessage(''), 4000);
+        setShowProposalModal(false);
+        setProposalRoomId('');
+        setProposalStudentId('');
+        fetchLandlordData();
+      } else {
+        alert(data.message || 'Không thể gửi đề xuất.');
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ.');
+    } finally {
+      setSubmittingProposal(false);
+    }
+  };
 
   // Cập nhật trạng thái Lịch hẹn (Xác nhận)
   const handleAppointmentStatus = async (id: string, status: 'Đã xác nhận' | 'Đã hủy', reason?: string) => {
@@ -495,6 +642,23 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('contracts')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'contracts'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Hợp đồng & Xác nhận thuê ({contracts.length})</span>
+          {contracts.filter(c => c.status === 'pending_landlord').length > 0 && (
+            <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">
+              {contracts.filter(c => c.status === 'pending_landlord').length} cần xác nhận
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('appointments')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'appointments'
@@ -540,6 +704,251 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
           <span>Tin nhắn liên hệ ({inquiries.length})</span>
         </button>
       </div>
+
+      {/* Tab: Hợp đồng thuê phòng & Xác nhận 2 chiều */}
+      {activeTab === 'contracts' && (
+        <div className="space-y-5 animate-in fade-in">
+          {/* Header & New Proposal Button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                <span>Xác nhận thuê phòng 2 chiều & Cấp quyền đánh giá</span>
+              </h2>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Khi bạn bấm xác nhận đồng ý cho thuê, hợp đồng kích hoạt (Đang ở), người thuê được gắn huy hiệu xác minh khi đánh giá phòng.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowProposalModal(true)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>+ Đề xuất xác nhận thuê mới</span>
+              </button>
+              <button
+                onClick={fetchLandlordData}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
+                title="Làm mới"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Explanation Policy Card */}
+          <div className="p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-600 flex items-start gap-3 shadow-2xs">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="space-y-1">
+              <span className="font-bold text-slate-800">Quy trình vận hành hợp đồng xác minh 2 chiều:</span>
+              <p className="text-slate-600 leading-relaxed">
+                • <strong>Sinh viên gửi yêu cầu:</strong> Bạn bấm <em>"Xác nhận đồng ý cho thuê"</em> để kích hoạt hợp đồng sang trạng thái <strong>Đang ở (Active)</strong>.<br />
+                • <strong>Chủ trọ gửi đề xuất:</strong> Sinh viên sẽ nhận được thông báo để bấm xác nhận.<br />
+                • <strong>Phân quyền đánh giá:</strong> Chỉ những sinh viên có hợp đồng thuê được xác nhận mới có thể viết đánh giá kèm huy hiệu <strong>"✔ Đã xác minh thuê phòng"</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Contracts List */}
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="h-36 bg-slate-100 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : contracts.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center space-y-3">
+              <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto">
+                <FileText className="w-7 h-7" />
+              </div>
+              <h3 className="font-bold text-slate-800">Chưa có hợp đồng thuê phòng nào</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Khi sinh viên gửi yêu cầu thuê phòng hoặc bạn chủ động gửi đề xuất tới sinh viên, danh sách hợp đồng sẽ xuất hiện tại đây.
+              </p>
+              <button
+                onClick={() => setShowProposalModal(true)}
+                className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Gửi đề xuất xác nhận thuê đầu tiên</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {contracts.map(contract => {
+                const isPendingLandlord = contract.status === 'pending_landlord';
+                const isPendingRenter = contract.status === 'pending_renter';
+                const isActive = contract.status === 'active';
+                const isCompleted = contract.status === 'completed';
+                const isCancelled = contract.status === 'cancelled';
+
+                return (
+                  <div
+                    key={contract.id}
+                    className={`bg-white rounded-2xl border p-4.5 transition-all shadow-xs space-y-3.5 ${
+                      isPendingLandlord
+                        ? 'border-amber-300 ring-2 ring-amber-100'
+                        : isActive
+                        ? 'border-emerald-200'
+                        : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      {/* Room & Renter Info */}
+                      <div className="flex items-start gap-3.5">
+                        <img
+                          src={contract.roomImage || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=300&q=80'}
+                          alt={contract.roomTitle}
+                          className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-100"
+                        />
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                              HĐ #{contract.id}
+                            </span>
+                            <h3 className="font-bold text-sm text-slate-900 leading-snug">
+                              {contract.roomTitle}
+                            </h3>
+                          </div>
+                          <p className="text-xs text-slate-500 flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{contract.roomAddress || 'Khu vực phòng trọ'}</span>
+                          </p>
+                          <div className="flex items-center gap-3 pt-0.5 text-xs text-slate-600 flex-wrap">
+                            <span className="font-bold text-blue-600">
+                              {(contract.roomPrice || 0).toLocaleString('vi-VN')} đ/tháng
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-800">
+                              <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Người thuê: <strong>{contract.renterName}</strong></span>
+                            </span>
+                            {contract.renterPhone && (
+                              <span className="flex items-center gap-1 text-slate-500">
+                                <Phone className="w-3 h-3 text-slate-400" />
+                                <span>{contract.renterPhone}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="shrink-0 self-start sm:self-auto">
+                        {isPendingLandlord && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 animate-pulse">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Sinh viên đề xuất (Chờ bạn duyệt)</span>
+                          </span>
+                        )}
+                        {isPendingRenter && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            <Clock className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Đã gửi đề xuất (Chờ sinh viên)</span>
+                          </span>
+                        )}
+                        {isActive && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Đang thuê (Hợp đồng có hiệu lực)</span>
+                          </span>
+                        )}
+                        {isCompleted && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            <Check className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Đã hoàn tất (Trả phòng)</span>
+                          </span>
+                        )}
+                        {isCancelled && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <X className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Đã hủy</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Timeline & Actions Footer */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
+                      <div className="text-slate-500 flex items-center gap-3 flex-wrap">
+                        {contract.start_date && (
+                          <span>
+                            Ngày bắt đầu: <strong>{new Date(contract.start_date).toLocaleDateString('vi-VN')}</strong>
+                          </span>
+                        )}
+                        {contract.end_date && (
+                          <span>
+                            Ngày kết thúc: <strong>{new Date(contract.end_date).toLocaleDateString('vi-VN')}</strong>
+                          </span>
+                        )}
+                        <span>Ngày tạo: {new Date(contract.created_at).toLocaleString('vi-VN')}</span>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Case 1: Sinh viên gửi yêu cầu -> Chủ trọ bấm xác nhận */}
+                        {isPendingLandlord && (
+                          <>
+                            <button
+                              onClick={() => handleConfirmContract(contract.id)}
+                              disabled={confirmingContractId === contract.id}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>{confirmingContractId === contract.id ? 'Đang duyệt...' : 'Xác nhận đồng ý cho thuê'}</span>
+                            </button>
+                            <button
+                              onClick={() => handleCancelContract(contract.id)}
+                              disabled={cancelingContractId === contract.id}
+                              className="px-3 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 font-semibold rounded-xl transition-colors cursor-pointer"
+                            >
+                              Từ chối
+                            </button>
+                          </>
+                        )}
+
+                        {/* Case 2: Đang chờ sinh viên duyệt -> Chủ trọ có thể hủy */}
+                        {isPendingRenter && (
+                          <button
+                            onClick={() => handleCancelContract(contract.id)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                          >
+                            Hủy đề xuất
+                          </button>
+                        )}
+
+                        {/* Case 3: Đang ở -> Chủ trọ có thể ghi nhận trả phòng khi sinh viên dọn đi */}
+                        {isActive && (
+                          <button
+                            onClick={() => handleCompleteContract(contract.id)}
+                            disabled={completingContractId === contract.id}
+                            className="px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{completingContractId === contract.id ? 'Đang lưu...' : 'Ghi nhận trả phòng (Hoàn tất)'}</span>
+                          </button>
+                        )}
+
+                        {contract.room_id && (
+                          <button
+                            onClick={() => onViewRoomDetail?.(contract.room_id)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                          >
+                            Xem phòng
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tab 1: Rooms List */}
       {activeTab === 'rooms' ? (

@@ -40,6 +40,18 @@ import {
   getFavoritesFromDb,
   createFavoriteInDb,
   deleteFavoriteInDb,
+  // Rental Contracts & Reviews (Xác minh 2 chiều & Đánh giá)
+  RentalContract,
+  RentalContractStatus,
+  ReviewRecord,
+  ReviewItem,
+  getRentalContractsFromDb,
+  getRentalContractByIdFromDb,
+  createRentalContractInDb,
+  updateRentalContractInDb,
+  getReviewsFromDb,
+  createReviewInDb,
+  canUserReviewRoomInDb,
 } from './db.js';
 import { createSessionToken, getUserByToken, sanitizeUser } from './auth.js';
 import { handleChatMessage } from './chatService.js';
@@ -1161,65 +1173,430 @@ apiRouter.post('/wallet/topup', requireAuth, (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
-// 4. ĐÁNH GIÁ PHÒNG TRỌ (REVIEWS API)
+// 4. HỢP ĐỒNG THUÊ PHÒNG & XÁC MINH 2 CHIỀU (RENTAL CONTRACTS)
 // -------------------------------------------------------------
 
-apiRouter.post('/rooms/:id/reviews', requireAuth, (req: Request, res: Response) => {
+// GET /api/rentals - Danh sách hợp đồng thuê phòng của người dùng
+apiRouter.get('/rentals', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const roomId = req.params.id;
-  const { soSao, nhanXet } = req.body;
+  const { roomId, status } = req.query;
 
-  const star = Math.min(5, Math.max(1, Math.round(Number(soSao) || 5)));
-  const comment = (nhanXet || '').trim();
+  let filter: { renter_id?: string; landlord_id?: string; room_id?: string } = {};
 
-  if (!comment) {
-    res.status(400).json({ success: false, message: 'Vui lòng nhập nội dung đánh giá/nhận xét.' });
+  if (user.VaiTro === 'SinhVien') {
+    filter.renter_id = user.Id;
+  } else if (user.VaiTro === 'ChuTro') {
+    filter.landlord_id = user.Id;
+  }
+  // Admin sees all, or by roomId if specified
+  if (roomId && typeof roomId === 'string') {
+    filter.room_id = roomId;
+  }
+
+  let list = await getRentalContractsFromDb(filter);
+
+  if (status && typeof status === 'string' && status !== 'all') {
+    list = list.filter(c => c.status === status);
+  }
+
+  res.json({ success: true, count: list.length, data: list });
+});
+
+// GET /api/rentals/candidates - Danh sách sinh viên ứng viên để chủ trọ gửi đề xuất
+apiRouter.get('/rentals/candidates', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  if (user.VaiTro !== 'ChuTro' && user.VaiTro !== 'Admin') {
+    res.status(403).json({ success: false, message: 'Chỉ Chủ trọ mới có quyền truy cập.' });
     return;
   }
 
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === roomId);
+  const allUsers = await getUsersFromDb();
+  const students = allUsers
+    .filter(u => u.VaiTro === 'SinhVien' && u.TrangThai === 'HoatDong')
+    .map(u => ({
+      Id: u.Id,
+      HoTen: u.HoTen,
+      Email: u.Email,
+      Sdt: u.Sdt,
+    }));
+
+  res.json({ success: true, data: students });
+});
+
+// POST /api/rentals/request - Tạo yêu cầu xác nhận thuê phòng (Chủ trọ hoặc Sinh viên gửi đề xuất)
+apiRouter.post('/rentals/request', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const { roomId, renterId, startDate, notes } = req.body;
+
+  if (!roomId) {
+    res.status(400).json({ success: false, message: 'Vui lòng chọn phòng trọ cần tạo yêu cầu thuê.' });
+    return;
+  }
+
+  const room = await getRoomByIdFromDb(roomId);
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
   }
 
-  if (!room.DanhGia) room.DanhGia = [];
+  let effectiveRenterId = '';
+  let effectiveLandlordId = room.IdChuTro || room.ChuTroId || '';
+  let initialStatus: RentalContractStatus = 'pending_landlord';
 
-  const newReview = {
-    id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-    tenNguoiDanhGia: user.HoTen,
-    truongHoc: user.VaiTro === 'SinhVien' ? 'Sinh viên đã trải nghiệm' : 'Người thuê',
-    soSao: star,
-    nhanXet: comment,
-    ngay: new Date().toLocaleDateString('vi-VN'),
-  };
+  if (user.VaiTro === 'SinhVien') {
+    effectiveRenterId = user.Id;
+    initialStatus = 'pending_landlord'; // Sinh viên gửi -> chờ chủ trọ duyệt
+  } else if (user.VaiTro === 'ChuTro' || user.VaiTro === 'Admin') {
+    effectiveLandlordId = user.Id;
+    if (!renterId) {
+      res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn Sinh viên cần gửi đề xuất xác nhận thuê phòng.'
+      });
+      return;
+    }
+    effectiveRenterId = renterId;
+    initialStatus = 'pending_renter'; // Chủ trọ gửi -> chờ sinh viên duyệt
+  }
 
-  room.DanhGia.unshift(newReview);
+  // Kiểm tra xem đã có hợp đồng đang active giữa 2 bên cho phòng này chưa
+  const existingContracts = await getRentalContractsFromDb({
+    room_id: room.Id,
+    renter_id: effectiveRenterId,
+  });
 
-  // Gửi thông báo đến chủ trọ
-  if (room.IdChuTro || room.ChuTroId) {
-    addNotification(
-      db,
-      room.IdChuTro || room.ChuTroId || '',
-      'Phòng trọ nhận được đánh giá mới!',
-      `Sinh viên ${user.HoTen} đã gửi đánh giá ${star} sao cho phòng "${room.TieuDe}": "${comment}"`,
+  const activeContract = existingContracts.find(c => c.status === 'active');
+  if (activeContract) {
+    res.status(400).json({
+      success: false,
+      message: 'Hiện đã có hợp đồng thuê phòng đang có hiệu lực (Active) cho sinh viên này tại phòng này.'
+    });
+    return;
+  }
+
+  const pendingContract = existingContracts.find(
+    c => c.status === 'pending_landlord' || c.status === 'pending_renter'
+  );
+  if (pendingContract) {
+    res.status(400).json({
+      success: false,
+      message: 'Hiện đã có một đề xuất thuê phòng đang chờ xác nhận giữa hai bên. Vui lòng kiểm tra mục Quản lý hợp đồng.'
+    });
+    return;
+  }
+
+  const newContract = await createRentalContractInDb({
+    room_id: room.Id,
+    renter_id: effectiveRenterId,
+    landlord_id: effectiveLandlordId,
+    status: initialStatus,
+    start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+  });
+
+  // Gửi thông báo đến bên nhận đề xuất
+  if (initialStatus === 'pending_landlord') {
+    // Thông báo cho chủ trọ
+    await addNotification(
+      null,
+      effectiveLandlordId,
+      'Yêu cầu xác nhận thuê phòng mới!',
+      `Sinh viên ${user.HoTen} đã gửi yêu cầu xác nhận thuê phòng "${room.TieuDe}". Vui lòng vào mục Quản lý hợp đồng để kiểm tra và xác nhận đồng ý thuê.`,
+      'PhongTro'
+    );
+    // Thông báo cho sinh viên
+    await addNotification(
+      null,
+      user.Id,
+      'Đã gửi yêu cầu thuê phòng',
+      `Yêu cầu thuê phòng "${room.TieuDe}" đã được gửi tới chủ trọ ${room.ChuTroTen}. Vui lòng chờ chủ trọ duyệt.`,
+      'PhongTro'
+    );
+  } else {
+    // Chủ trọ gửi -> Thông báo cho sinh viên
+    await addNotification(
+      null,
+      effectiveRenterId,
+      'Chủ trọ gửi đề xuất xác nhận thuê phòng!',
+      `Chủ trọ ${user.HoTen} đã gửi đề xuất xác nhận thuê phòng "${room.TieuDe}" cho bạn. Vui lòng vào mục Quản lý hợp đồng để xác nhận đồng ý thuê.`,
+      'PhongTro'
+    );
+    // Thông báo cho chủ trọ
+    await addNotification(
+      null,
+      user.Id,
+      'Đã gửi đề xuất thuê phòng',
+      `Đề xuất thuê phòng "${room.TieuDe}" đã được gửi tới sinh viên. Đang chờ sinh viên xác nhận.`,
       'PhongTro'
     );
   }
 
-  writeDb(db);
-
   res.status(201).json({
     success: true,
-    message: 'Gửi đánh giá phòng trọ thành công! Cảm ơn nhận xét của bạn.',
-    review: newReview,
-    allReviews: room.DanhGia,
+    message: initialStatus === 'pending_landlord'
+      ? 'Đã gửi yêu cầu xác nhận thuê phòng đến chủ trọ thành công! Chờ chủ trọ duyệt.'
+      : 'Đã gửi đề xuất xác nhận thuê phòng đến sinh viên thành công! Chờ sinh viên xác nhận.',
+    contract: newContract,
+  });
+});
+
+// PUT /api/rentals/:id/confirm - Phê duyệt xác nhận thuê phòng 2 chiều (Chuyển sang active)
+apiRouter.put('/rentals/:id/confirm', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const contractId = req.params.id;
+
+  const contract = await getRentalContractByIdFromDb(contractId);
+  if (!contract) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy hợp đồng thuê phòng.' });
+    return;
+  }
+
+  if (contract.status === 'active') {
+    res.status(400).json({ success: false, message: 'Hợp đồng này hiện đã đang có hiệu lực (Đang ở).' });
+    return;
+  }
+
+  if (contract.status === 'completed' || contract.status === 'cancelled') {
+    res.status(400).json({ success: false, message: 'Hợp đồng đã kết thúc hoặc đã bị hủy trước đó.' });
+    return;
+  }
+
+  // Kiểm tra phân quyền:
+  // Nếu status là pending_landlord -> chỉ chủ trọ (hoặc Admin) mới có quyền duyệt
+  if (contract.status === 'pending_landlord') {
+    if (user.VaiTro !== 'Admin' && contract.landlord_id !== user.Id) {
+      res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xác nhận yêu cầu này (Chỉ Chủ trọ phòng này mới có quyền duyệt).'
+      });
+      return;
+    }
+  }
+
+  // Nếu status là pending_renter -> chỉ sinh viên được chỉ định (hoặc Admin) mới có quyền duyệt
+  if (contract.status === 'pending_renter') {
+    if (user.VaiTro !== 'Admin' && contract.renter_id !== user.Id) {
+      res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xác nhận yêu cầu này (Chỉ Sinh viên được đề xuất mới có quyền duyệt).'
+      });
+      return;
+    }
+  }
+
+  const startDate = contract.start_date || new Date().toISOString();
+  const updated = await updateRentalContractInDb(contract.id, {
+    status: 'active',
+    start_date: startDate,
+  });
+
+  // Gửi thông báo đến cả hai bên
+  await addNotification(
+    null,
+    contract.renter_id,
+    'Hợp đồng thuê phòng đã kích hoạt thành công! ✔',
+    `Hợp đồng thuê phòng "${contract.roomTitle || 'Phòng trọ'}" đã chính thức có hiệu lực từ ngày ${new Date(startDate).toLocaleDateString('vi-VN')}. Bạn đã có quyền viết đánh giá trải nghiệm thực tế kèm huy hiệu Đã xác minh thuê phòng!`,
+    'PhongTro'
+  );
+
+  await addNotification(
+    null,
+    contract.landlord_id,
+    'Hợp đồng thuê phòng đã kích hoạt thành công! ✔',
+    `Hợp đồng thuê phòng "${contract.roomTitle || 'Phòng trọ'}" với người thuê ${contract.renterName} đã chính thức chuyển sang trạng thái "Đang ở" (Active).`,
+    'PhongTro'
+  );
+
+  res.json({
+    success: true,
+    message: 'Xác nhận đồng ý thuê phòng thành công! Hợp đồng đã có hiệu lực (Đang ở).',
+    contract: updated,
+  });
+});
+
+// PUT /api/rentals/:id/cancel - Hủy / Từ chối đề xuất thuê phòng
+apiRouter.put('/rentals/:id/cancel', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const contractId = req.params.id;
+
+  const contract = await getRentalContractByIdFromDb(contractId);
+  if (!contract) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy hợp đồng thuê phòng.' });
+    return;
+  }
+
+  if (user.VaiTro !== 'Admin' && contract.renter_id !== user.Id && contract.landlord_id !== user.Id) {
+    res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác trên hợp đồng này.' });
+    return;
+  }
+
+  const updated = await updateRentalContractInDb(contract.id, { status: 'cancelled' });
+
+  // Thông báo tới bên còn lại
+  const otherPartyId = contract.renter_id === user.Id ? contract.landlord_id : contract.renter_id;
+  await addNotification(
+    null,
+    otherPartyId,
+    'Đề xuất thuê phòng đã bị hủy / từ chối',
+    `Đề xuất thuê phòng "${contract.roomTitle || 'Phòng trọ'}" đã bị hủy bởi ${user.HoTen}.`,
+    'PhongTro'
+  );
+
+  res.json({
+    success: true,
+    message: 'Đã hủy đề xuất thuê phòng.',
+    contract: updated,
+  });
+});
+
+// PUT /api/rentals/:id/complete - Hoàn tất trả phòng (Chủ trọ hoặc Admin)
+apiRouter.put('/rentals/:id/complete', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const contractId = req.params.id;
+
+  const contract = await getRentalContractByIdFromDb(contractId);
+  if (!contract) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy hợp đồng thuê phòng.' });
+    return;
+  }
+
+  if (user.VaiTro !== 'Admin' && contract.landlord_id !== user.Id) {
+    res.status(403).json({ success: false, message: 'Chỉ Chủ trọ mới có quyền kết thúc đợt thuê phòng.' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const updated = await updateRentalContractInDb(contract.id, {
+    status: 'completed',
+    end_date: now,
+  });
+
+  // Thông báo tới sinh viên
+  await addNotification(
+    null,
+    contract.renter_id,
+    'Đợt thuê phòng đã hoàn tất!',
+    `Chủ trọ đã ghi nhận hoàn tất trả phòng cho hợp đồng "${contract.roomTitle || 'Phòng trọ'}". Bạn vẫn có thể gửi đánh giá trải nghiệm thực tế nếu chưa đánh giá.`,
+    'PhongTro'
+  );
+
+  res.json({
+    success: true,
+    message: 'Đã cập nhật trạng thái hợp đồng thành Đã hoàn tất (Trả phòng).',
+    contract: updated,
   });
 });
 
 // -------------------------------------------------------------
-// 5. THÔNG BÁO (NOTIFICATIONS API)
+// 5. ĐÁNH GIÁ PHÒNG TRỌ CÓ PHÂN QUYỀN XÁC MINH (REVIEWS API)
+// -------------------------------------------------------------
+
+// GET /api/rooms/:roomId/can-review - Kiểm tra quyền đánh giá phòng trọ
+apiRouter.get('/rooms/:roomId/can-review', async (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const queryUserId = req.query.userId as string | undefined;
+
+  let effectiveUserId = queryUserId;
+  if (!effectiveUserId) {
+    const authHeader = req.headers.authorization;
+    const authUser = getUserByToken(authHeader);
+    if (authUser) {
+      effectiveUserId = authUser.Id;
+    }
+  }
+
+  if (!effectiveUserId) {
+    res.json({
+      success: true,
+      canReview: false,
+      reason: 'Vui lòng đăng nhập để kiểm tra quyền đánh giá phòng trọ.',
+    });
+    return;
+  }
+
+  const result = await canUserReviewRoomInDb(roomId, effectiveUserId);
+  res.json({
+    success: true,
+    canReview: result.canReview,
+    reason: result.reason,
+    contractId: result.contractId,
+    contract: result.contract,
+  });
+});
+
+// GET /api/rooms/:roomId/reviews - Lấy danh sách đánh giá kèm xác minh
+apiRouter.get('/rooms/:roomId/reviews', async (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const reviews = await getReviewsFromDb(roomId);
+  res.json({ success: true, count: reviews.length, data: reviews });
+});
+
+// POST /api/rooms/:roomId/reviews - Gửi đánh giá phòng trọ (Chỉ người thuê đã xác minh)
+apiRouter.post('/rooms/:roomId/reviews', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const roomId = req.params.roomId;
+  const { soSao, nhanXet } = req.body;
+
+  const room = await getRoomByIdFromDb(roomId);
+  if (!room) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
+    return;
+  }
+
+  // BƯỚC KIỂM TRA CHẶT CHẼ ĐIỀU KIỆN ĐÁNH GIÁ Ở BACKEND
+  const check = await canUserReviewRoomInDb(roomId, user.Id);
+  if (!check.canReview) {
+    res.status(403).json({
+      success: false,
+      message: check.reason || 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.'
+    });
+    return;
+  }
+
+  const star = Math.min(5, Math.max(1, Math.round(Number(soSao) || 5)));
+  const comment = (nhanXet || '').trim();
+
+  if (!comment) {
+    res.status(400).json({ success: false, message: 'Vui lòng nhập nội dung đánh giá/nhận xét chi tiết.' });
+    return;
+  }
+
+  // Lưu bản ghi vào bảng reviews (MySQL & fallback)
+  const newReviewRecord = await createReviewInDb({
+    room_id: roomId,
+    renter_id: user.Id,
+    contract_id: check.contractId || 1,
+    tenNguoiDanhGia: user.HoTen,
+    truongHoc: 'Sinh viên đã xác minh thuê phòng',
+    soSao: star,
+    nhanXet: comment,
+    is_verified: true,
+  });
+
+  // Lấy danh sách reviews mới nhất của phòng
+  const updatedRoom = await getRoomByIdFromDb(roomId);
+
+  // Gửi thông báo đến chủ trọ
+  const landlordId = room.IdChuTro || room.ChuTroId;
+  if (landlordId) {
+    await addNotification(
+      null,
+      landlordId,
+      'Phòng trọ nhận được đánh giá từ người thuê đã xác minh!',
+      `Người thuê ${user.HoTen} đã gửi đánh giá ${star} sao kèm huy hiệu Đã xác minh thuê phòng cho phòng "${room.TieuDe}": "${comment}"`,
+      'PhongTro'
+    );
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Gửi đánh giá phòng trọ thành công! Đánh giá của bạn đã được gắn huy hiệu Đã xác minh thuê phòng.',
+    review: newReviewRecord,
+    allReviews: updatedRoom ? updatedRoom.DanhGia : [],
+  });
+});
+
+// -------------------------------------------------------------
+// 6. THÔNG BÁO (NOTIFICATIONS API)
 // -------------------------------------------------------------
 
 apiRouter.get('/notifications', requireAuth, (req: Request, res: Response) => {

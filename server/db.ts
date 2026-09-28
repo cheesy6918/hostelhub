@@ -71,12 +71,53 @@ export interface DatCoc {
 }
 
 export interface ReviewItem {
-  id?: string;
+  id?: string | number;
   tenNguoiDanhGia: string;
-  truongHoc: string;
+  truongHoc?: string;
   soSao: number;
   nhanXet: string;
-  ngay: string;
+  ngay?: string;
+  is_verified?: boolean;
+  contract_id?: number;
+  renter_id?: string;
+  room_id?: string;
+}
+
+export type RentalContractStatus = 'pending_renter' | 'pending_landlord' | 'active' | 'completed' | 'cancelled';
+
+export interface RentalContract {
+  id: number;
+  room_id: string;
+  renter_id: string;
+  landlord_id: string;
+  status: RentalContractStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Enriched fields:
+  roomTitle?: string;
+  roomAddress?: string;
+  roomImage?: string;
+  roomPrice?: number;
+  renterName?: string;
+  renterPhone?: string;
+  renterEmail?: string;
+  landlordName?: string;
+  landlordPhone?: string;
+}
+
+export interface ReviewRecord {
+  id: number | string;
+  room_id: string;
+  renter_id: string;
+  contract_id: number;
+  tenNguoiDanhGia: string;
+  truongHoc?: string;
+  soSao: number;
+  nhanXet: string;
+  is_verified: boolean;
+  created_at: string;
 }
 
 export interface PhongTro {
@@ -132,6 +173,8 @@ export interface DatabaseSchema {
   deposits: DatCoc[];
   notifications: ThongBao[];
   favorites: FavoriteItem[];
+  rental_contracts: RentalContract[];
+  reviews: ReviewRecord[];
 }
 
 // Determine candidate paths for database file to support both local dev and Vercel Serverless
@@ -1055,7 +1098,58 @@ export function getInitialData(): DatabaseSchema {
     },
   ];
 
-  return { users, rooms, inquiries, appointments, deposits, notifications, favorites };
+  const rental_contracts: RentalContract[] = [
+    {
+      id: 1,
+      room_id: 'room_1',
+      renter_id: 'usr_sinhvien',
+      landlord_id: 'usr_chutro',
+      status: 'active',
+      start_date: '2026-09-01T08:00:00.000Z',
+      end_date: null,
+      created_at: '2026-09-01T07:30:00.000Z',
+      updated_at: '2026-09-01T08:00:00.000Z',
+    },
+    {
+      id: 2,
+      room_id: 'room_14',
+      renter_id: 'usr_sinhvien',
+      landlord_id: 'usr_chutro',
+      status: 'pending_landlord',
+      start_date: '2026-10-01T08:00:00.000Z',
+      end_date: null,
+      created_at: '2026-09-27T08:00:00.000Z',
+      updated_at: '2026-09-27T08:00:00.000Z',
+    },
+    {
+      id: 3,
+      room_id: 'room_15',
+      renter_id: 'usr_sinhvien',
+      landlord_id: 'usr_chutro',
+      status: 'pending_renter',
+      start_date: '2026-10-05T08:00:00.000Z',
+      end_date: null,
+      created_at: '2026-09-27T09:00:00.000Z',
+      updated_at: '2026-09-27T09:00:00.000Z',
+    },
+  ];
+
+  const reviews: ReviewRecord[] = [
+    {
+      id: 1,
+      room_id: 'room_1',
+      renter_id: 'usr_sinhvien',
+      contract_id: 1,
+      tenNguoiDanhGia: 'Nguyễn Văn Sinh (SV Bách Khoa)',
+      truongHoc: 'Sinh viên đã xác minh thuê phòng',
+      soSao: 5,
+      nhanXet: 'Phòng ngủ sạch sẽ, cô chú chủ trọ nhiệt tình hỗ trợ! An ninh tốt, khóa vân tay tiện lợi.',
+      is_verified: true,
+      created_at: '2026-09-23T08:18:22.000Z',
+    },
+  ];
+
+  return { users, rooms, inquiries, appointments, deposits, notifications, favorites, rental_contracts, reviews };
 }
 
 // In-memory cache for ultra-fast access and serverless warm container persistence
@@ -1085,6 +1179,8 @@ export function readDb(): DatabaseSchema {
       if (!parsed.deposits) parsed.deposits = [];
       if (!parsed.notifications) parsed.notifications = [];
       if (!parsed.favorites) parsed.favorites = [];
+      if (!parsed.rental_contracts) parsed.rental_contracts = [];
+      if (!parsed.reviews) parsed.reviews = [];
       memoryDbCache = parsed;
       return parsed;
     }
@@ -1102,6 +1198,8 @@ export function readDb(): DatabaseSchema {
       if (!parsed.deposits) parsed.deposits = [];
       if (!parsed.notifications) parsed.notifications = [];
       if (!parsed.favorites) parsed.favorites = [];
+      if (!parsed.rental_contracts) parsed.rental_contracts = [];
+      if (!parsed.reviews) parsed.reviews = [];
       memoryDbCache = parsed;
       return parsed;
     } catch {
@@ -1984,4 +2082,379 @@ export async function deleteFavoriteInDb(userId: string, roomId: string): Promis
   writeDb(db);
   return db.favorites.length < initialLen;
 }
+
+// -------------------------------------------------------------
+// 8. RENTAL CONTRACTS (HỢP ĐỒNG THUÊ PHÒNG / XÁC NHẬN 2 CHIỀU)
+// -------------------------------------------------------------
+
+export function enrichContract(c: RentalContract): RentalContract {
+  const db = readDb();
+  const room = db.rooms.find(r => r.Id === c.room_id);
+  const renter = db.users.find(u => u.Id === c.renter_id);
+  const landlord = db.users.find(u => u.Id === c.landlord_id);
+
+  return {
+    ...c,
+    roomTitle: room ? room.TieuDe : 'Phòng trọ',
+    roomAddress: room ? `${room.DiaChi}, ${room.QuanHuyen}` : '',
+    roomImage: room && room.HinhAnh && room.HinhAnh[0] ? room.HinhAnh[0] : 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
+    roomPrice: room ? room.GiaThue : 0,
+    renterName: renter ? renter.HoTen : 'Sinh viên',
+    renterPhone: renter ? renter.Sdt : '',
+    renterEmail: renter ? renter.Email : '',
+    landlordName: landlord ? landlord.HoTen : (room ? room.ChuTroTen : 'Chủ trọ'),
+    landlordPhone: landlord ? landlord.Sdt : (room ? room.ChuTroSdt : ''),
+  };
+}
+
+export async function getRentalContractsFromDb(filter?: {
+  renter_id?: string;
+  landlord_id?: string;
+  room_id?: string;
+}): Promise<RentalContract[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM rental_contracts';
+      const params: any[] = [];
+      const conditions: string[] = [];
+
+      if (filter?.renter_id) {
+        conditions.push('renter_id = ?');
+        params.push(filter.renter_id);
+      }
+      if (filter?.landlord_id) {
+        conditions.push('landlord_id = ?');
+        params.push(filter.landlord_id);
+      }
+      if (filter?.room_id) {
+        conditions.push('room_id = ?');
+        params.push(filter.room_id);
+      }
+
+      if (conditions.length > 0) {
+        sql += ' WHERE ' + conditions.join(' AND ');
+      }
+      sql += ' ORDER BY created_at DESC';
+
+      const [rows] = await pool.query(sql, params);
+      const list = (rows as any[]).map(row => ({
+        ...row,
+        id: Number(row.id),
+      })) as RentalContract[];
+
+      return list.map(enrichContract);
+    } catch (err) {
+      console.warn('[MySQL] Error querying rental_contracts:', err);
+    }
+  }
+
+  const db = readDb();
+  let list = db.rental_contracts || [];
+  if (filter?.renter_id) {
+    list = list.filter(c => c.renter_id === filter.renter_id);
+  }
+  if (filter?.landlord_id) {
+    list = list.filter(c => c.landlord_id === filter.landlord_id);
+  }
+  if (filter?.room_id) {
+    list = list.filter(c => c.room_id === filter.room_id);
+  }
+
+  return list.map(enrichContract);
+}
+
+export async function getRentalContractByIdFromDb(id: number | string): Promise<RentalContract | null> {
+  const numId = Number(id);
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [rows] = await pool.query('SELECT * FROM rental_contracts WHERE id = ? LIMIT 1', [numId]);
+      const row = (rows as any[])[0];
+      if (row) {
+        return enrichContract({ ...row, id: Number(row.id) });
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error fetching rental contract by id:', err);
+    }
+  }
+
+  const db = readDb();
+  const found = (db.rental_contracts || []).find(c => Number(c.id) === numId);
+  return found ? enrichContract(found) : null;
+}
+
+export async function createRentalContractInDb(contractData: {
+  room_id: string;
+  renter_id: string;
+  landlord_id: string;
+  status: RentalContractStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+}): Promise<RentalContract> {
+  const now = new Date().toISOString();
+  let newId = Date.now();
+
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [res] = await pool.execute(
+        `INSERT INTO rental_contracts (room_id, renter_id, landlord_id, status, start_date, end_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          contractData.room_id,
+          contractData.renter_id,
+          contractData.landlord_id,
+          contractData.status,
+          contractData.start_date || null,
+          contractData.end_date || null,
+        ]
+      );
+      if ((res as any).insertId) {
+        newId = (res as any).insertId;
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error creating rental contract:', err);
+    }
+  }
+
+  const fullContract: RentalContract = {
+    id: newId,
+    room_id: contractData.room_id,
+    renter_id: contractData.renter_id,
+    landlord_id: contractData.landlord_id,
+    status: contractData.status,
+    start_date: contractData.start_date || null,
+    end_date: contractData.end_date || null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const db = readDb();
+  if (!db.rental_contracts) db.rental_contracts = [];
+  db.rental_contracts.unshift(fullContract);
+  writeDb(db);
+
+  return enrichContract(fullContract);
+}
+
+export async function updateRentalContractInDb(
+  id: number | string,
+  updates: Partial<RentalContract>
+): Promise<RentalContract | null> {
+  const numId = Number(id);
+  const now = new Date().toISOString();
+
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const fields: string[] = [];
+      const values: any[] = [];
+      for (const [k, v] of Object.entries(updates)) {
+        if (k !== 'id' && !k.startsWith('room') && !k.startsWith('renter') && !k.startsWith('landlord')) {
+          fields.push(`\`${k}\` = ?`);
+          values.push(v);
+        }
+      }
+      fields.push('`updated_at` = NOW()');
+      values.push(numId);
+      await pool.execute(`UPDATE rental_contracts SET ${fields.join(', ')} WHERE id = ?`, values);
+    } catch (err) {
+      console.warn('[MySQL] Error updating rental contract in DB:', err);
+    }
+  }
+
+  const db = readDb();
+  if (!db.rental_contracts) db.rental_contracts = [];
+  const existing = db.rental_contracts.find(c => Number(c.id) === numId);
+  if (!existing) return null;
+
+  Object.assign(existing, updates, { updated_at: now });
+  writeDb(db);
+  return enrichContract(existing);
+}
+
+// -------------------------------------------------------------
+// 9. REVIEWS (ĐÁNH GIÁ VÀ XÁC MINH THUÊ PHÒNG)
+// -------------------------------------------------------------
+
+export async function getReviewsFromDb(roomId?: string): Promise<ReviewRecord[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      let sql = 'SELECT * FROM reviews';
+      const params: any[] = [];
+      if (roomId) {
+        sql += ' WHERE room_id = ?';
+        params.push(roomId);
+      }
+      sql += ' ORDER BY created_at DESC';
+      const [rows] = await pool.query(sql, params);
+      return (rows as any[]).map(r => ({
+        ...r,
+        id: Number(r.id),
+        contract_id: Number(r.contract_id),
+        is_verified: Boolean(r.is_verified),
+        soSao: Number(r.soSao),
+      }));
+    } catch (err) {
+      console.warn('[MySQL] Error querying reviews from DB:', err);
+    }
+  }
+
+  const db = readDb();
+  let list = db.reviews || [];
+  if (roomId) {
+    list = list.filter(r => r.room_id === roomId);
+  }
+  return list;
+}
+
+export async function createReviewInDb(rev: Omit<ReviewRecord, 'id' | 'created_at'> & { id?: number | string; created_at?: string }): Promise<ReviewRecord> {
+  const now = rev.created_at || new Date().toISOString();
+  let newId: number | string = rev.id || Date.now();
+
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [res] = await pool.execute(
+        `INSERT INTO reviews (room_id, renter_id, contract_id, tenNguoiDanhGia, truongHoc, soSao, nhanXet, is_verified, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          rev.room_id,
+          rev.renter_id,
+          Number(rev.contract_id),
+          rev.tenNguoiDanhGia,
+          rev.truongHoc || '',
+          Number(rev.soSao),
+          rev.nhanXet,
+          rev.is_verified ? 1 : 0,
+        ]
+      );
+      if ((res as any).insertId) {
+        newId = (res as any).insertId;
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error inserting review into DB:', err);
+    }
+  }
+
+  const newReviewRecord: ReviewRecord = {
+    id: newId,
+    room_id: rev.room_id,
+    renter_id: rev.renter_id,
+    contract_id: Number(rev.contract_id),
+    tenNguoiDanhGia: rev.tenNguoiDanhGia,
+    truongHoc: rev.truongHoc || '',
+    soSao: Number(rev.soSao),
+    nhanXet: rev.nhanXet,
+    is_verified: rev.is_verified !== false,
+    created_at: now,
+  };
+
+  const db = readDb();
+  if (!db.reviews) db.reviews = [];
+  db.reviews.unshift(newReviewRecord);
+
+  // Đồng bộ vào room.DanhGia
+  const room = db.rooms.find(r => r.Id === rev.room_id);
+  if (room) {
+    if (!room.DanhGia) room.DanhGia = [];
+    const reviewItem: ReviewItem = {
+      id: String(newId),
+      tenNguoiDanhGia: rev.tenNguoiDanhGia,
+      truongHoc: rev.truongHoc || 'Người thuê đã xác minh',
+      soSao: Number(rev.soSao),
+      nhanXet: rev.nhanXet,
+      ngay: new Date().toLocaleDateString('vi-VN'),
+      is_verified: true,
+      contract_id: Number(rev.contract_id),
+      renter_id: rev.renter_id,
+      room_id: rev.room_id,
+    };
+    room.DanhGia.unshift(reviewItem);
+  }
+
+  writeDb(db);
+  return newReviewRecord;
+}
+
+export async function canUserReviewRoomInDb(
+  roomId: string,
+  userId: string
+): Promise<{ canReview: boolean; reason: string; contractId?: number; contract?: RentalContract }> {
+  // 1. Kiểm tra trong MySQL nếu có kết nối
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      const [contracts] = await pool.query(
+        'SELECT * FROM rental_contracts WHERE room_id = ? AND renter_id = ? AND status IN ("active", "completed")',
+        [roomId, userId]
+      );
+      const contractList = contracts as any[];
+      if (!contractList || contractList.length === 0) {
+        return {
+          canReview: false,
+          reason: 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.',
+        };
+      }
+
+      for (const contract of contractList) {
+        const [existing] = await pool.query(
+          'SELECT id FROM reviews WHERE room_id = ? AND renter_id = ? AND contract_id = ? LIMIT 1',
+          [roomId, userId, contract.id]
+        );
+        if ((existing as any[]).length === 0) {
+          return {
+            canReview: true,
+            reason: 'Đủ điều kiện đánh giá phòng trọ',
+            contractId: Number(contract.id),
+            contract: enrichContract({ ...contract, id: Number(contract.id) }),
+          };
+        }
+      }
+
+      return {
+        canReview: false,
+        reason: 'Bạn đã gửi đánh giá cho đợt thuê phòng này rồi.',
+      };
+    } catch (err) {
+      console.warn('[MySQL] Error checking review permission:', err);
+    }
+  }
+
+  // 2. Fallback kiểm tra trong memory / JSON
+  const db = readDb();
+  const contracts = (db.rental_contracts || []).filter(
+    c => c.room_id === roomId && c.renter_id === userId && (c.status === 'active' || c.status === 'completed')
+  );
+
+  if (!contracts || contracts.length === 0) {
+    return {
+      canReview: false,
+      reason: 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.',
+    };
+  }
+
+  const allReviews = db.reviews || [];
+  for (const contract of contracts) {
+    const hasReviewed = allReviews.some(
+      r => r.room_id === roomId && r.renter_id === userId && Number(r.contract_id) === Number(contract.id)
+    );
+    if (!hasReviewed) {
+      return {
+        canReview: true,
+        reason: 'Đủ điều kiện đánh giá phòng trọ',
+        contractId: Number(contract.id),
+        contract: enrichContract(contract),
+      };
+    }
+  }
+
+  return {
+    canReview: false,
+    reason: 'Bạn đã gửi đánh giá cho đợt thuê phòng này rồi.',
+  };
+}
+
 
