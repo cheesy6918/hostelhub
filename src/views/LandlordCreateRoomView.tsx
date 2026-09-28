@@ -166,11 +166,26 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
 
     try {
       setSubmitting(true);
+      const authToken = token || localStorage.getItem('token') || '';
+      if (!authToken) {
+        setErrorMessage('Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập lại tài khoản Chủ trọ.');
+        setSubmitting(false);
+        return;
+      }
+
+      const landlordId = (user && (user.Id || (user as any).id)) || 'usr_chutro';
+      const landlordName = (user && user.HoTen) || 'Trần Thị Bích (Chủ trọ)';
+      const landlordPhone = (user && user.Sdt) || '0987654321';
+
+      // Đảm bảo request gửi kèm đầy đủ headers xác thực
+      const authHeader = authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`;
+
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Authorization': authHeader,
         },
         body: JSON.stringify({
           TieuDe: tieuDe.trim(),
@@ -185,20 +200,51 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
           HinhAnh: images,
           MoTa: moTa.trim(),
           NoiQuy: noiQuy.trim(),
+          IdChuTro: landlordId,
+          ChuTroId: landlordId,
+          chu_tro_id: landlordId,
+          landlord_id: landlordId,
+          ChuTroTen: landlordName,
+          ChuTroSdt: landlordPhone,
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setSuccessMessage(data.message || 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.');
-        setTimeout(() => {
-          onSuccess();
-        }, 1200);
-      } else {
-        setErrorMessage(data.message || 'Không thể đăng phòng trọ. Vui lòng kiểm tra lại thông tin.');
+      let responseData: any = {};
+      try {
+        const rawText = await res.text();
+        try {
+          responseData = JSON.parse(rawText);
+        } catch {
+          responseData = { message: rawText || `Máy chủ phản hồi mã lỗi ${res.status}` };
+        }
+      } catch (readErr: any) {
+        responseData = { message: readErr?.message || 'Không thể đọc phản hồi từ máy chủ' };
       }
-    } catch {
-      setErrorMessage('Lỗi kết nối máy chủ. Vui lòng thử lại sau.');
+
+      // Nếu API trả về lỗi, ném error với response.data để catch xử lý đồng nhất
+      if (!res.ok || !responseData.success) {
+        const apiError: any = new Error(responseData?.message || `Lỗi từ máy chủ (${res.status})`);
+        apiError.response = {
+          status: res.status,
+          data: responseData,
+        };
+        throw apiError;
+      }
+
+      setSuccessMessage(responseData.message || 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.');
+      setTimeout(() => {
+        onSuccess();
+      }, 1200);
+    } catch (error: any) {
+      console.error('Lỗi khi gửi form đăng tin phòng:', error);
+      // Thay thế thông báo chung chung bằng chi tiết lỗi thực tế từ error.response.data.message
+      const actualErrorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.data?.message ||
+        error?.message ||
+        'Lỗi lưu dữ liệu phòng trọ vào cơ sở dữ liệu. Vui lòng kiểm tra lại.';
+      setErrorMessage(actualErrorMessage);
     } finally {
       setSubmitting(false);
     }

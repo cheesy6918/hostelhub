@@ -2,13 +2,13 @@ import crypto from 'crypto';
 import { NguoiDung, readDb, writeDb } from './db.js';
 
 // In-memory token store mapped to userId with TTL
-const SESSIONS = new Map<string, { userId: string; expiresAt: number }>();
+const SESSIONS = new Map<string, { userId: string; user?: NguoiDung; expiresAt: number }>();
 
-export function createSessionToken(userId: string): string {
+export function createSessionToken(userId: string, user?: NguoiDung): string {
   const token = 'hh_tok_' + crypto.randomBytes(24).toString('hex');
   // Token valid for 7 days
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  SESSIONS.set(token, { userId, expiresAt });
+  SESSIONS.set(token, { userId, user, expiresAt });
   return token;
 }
 
@@ -26,6 +26,9 @@ export function getUserByToken(token: string | undefined): NguoiDung | null {
       SESSIONS.delete(cleanToken);
       return null;
     }
+    if (session.user) {
+      return session.user;
+    }
     userId = session.userId;
   } else if (cleanToken.startsWith('hh_tok_demo_')) {
     // Demo token helper for quick testing
@@ -38,7 +41,7 @@ export function getUserByToken(token: string | undefined): NguoiDung | null {
   if (!userId) return null;
 
   const db = readDb();
-  const user = db.users.find(u => u.Id === userId);
+  const user = db.users.find(u => u.Id === userId || (u as any).id === userId);
   return user || null;
 }
 

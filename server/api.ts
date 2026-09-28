@@ -40,6 +40,9 @@ import {
   getFavoritesFromDb,
   createFavoriteInDb,
   deleteFavoriteInDb,
+  // MySQL connection & pool
+  pool,
+  isMySqlConnected,
   // Rental Contracts & Reviews (Xác minh 2 chiều & Đánh giá)
   RentalContract,
   RentalContractStatus,
@@ -485,127 +488,295 @@ apiRouter.get('/rooms/:id', async (req: Request, res: Response) => {
 // POST /api/rooms (ChuTro or Admin)
 // Theo yêu cầu: Sau khi đăng thì trạng thái mặc định là "Chờ duyệt"
 apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  if (user.VaiTro !== 'ChuTro' && user.VaiTro !== 'Admin') {
-    res.status(403).json({ success: false, message: 'Chỉ Chủ trọ mới có quyền đăng tin phòng trọ.' });
-    return;
-  }
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user && user.VaiTro !== 'ChuTro' && user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Chủ trọ mới có quyền đăng tin phòng trọ.' });
+      return;
+    }
 
-  const {
-    TieuDe,
-    DiaChi,
-    QuanHuyen,
-    GiaThue,
-    GiaDien,
-    GiaNuoc,
-    TienIch,
-    HinhAnh,
-    MoTa,
-    NoiQuy,
-    DienTich,
-    LoaiPhong,
-  } = req.body;
+    const {
+      TieuDe,
+      tieu_de,
+      DiaChi,
+      dia_chi,
+      QuanHuyen,
+      quan_huyen,
+      GiaThue,
+      GiaDien,
+      gia_dien,
+      GiaNuoc,
+      gia_nuoc,
+      TienIch,
+      HinhAnh,
+      MoTa,
+      mo_ta,
+      NoiQuy,
+      noi_quy,
+      DienTich,
+      TienCoc,
+      LoaiPhong,
+      loai_phong,
+      ChuTroId,
+      IdChuTro,
+      chu_tro_id,
+      landlord_id,
+      ChuTroTen,
+      chu_tro_ten,
+      ChuTroSdt,
+      chu_tro_sdt,
+    } = req.body;
 
-  if (!TieuDe || !GiaThue || !DiaChi) {
-    res.status(400).json({
-      success: false,
-      message: 'Vui lòng điền đầy đủ các thông tin bắt buộc: Tiêu đề, Giá thuê và Địa chỉ phòng trọ.'
+    // 1. Ép kiểu dữ liệu bằng Number() cho gia_thue, dien_tich, tien_coc
+    const gia_thue = Number(GiaThue !== undefined ? GiaThue : (req.body.gia_thue !== undefined ? req.body.gia_thue : 0));
+    const dien_tich = Number(DienTich !== undefined ? DienTich : (req.body.dien_tich !== undefined ? req.body.dien_tich : 20));
+    const tien_coc = Number(TienCoc !== undefined ? TienCoc : (req.body.tien_coc !== undefined ? req.body.tien_coc : 0));
+
+    const title = (TieuDe || tieu_de || '').trim();
+    const address = (DiaChi || dia_chi || '').trim();
+    const district = (QuanHuyen || quan_huyen || 'Cầu Giấy, Hà Nội').trim();
+    const electricityPrice = String(GiaDien || gia_dien || '3.800 đ/kWh').trim();
+    const waterPrice = String(GiaNuoc || gia_nuoc || '30.000 đ/khối').trim();
+    const description = (MoTa || mo_ta || '').trim() || 'Phòng trọ sinh viên tiện nghi, an ninh tốt, gần các trường đại học.';
+    const houseRules = (NoiQuy || noi_quy || '').trim() || '1. Giữ gìn trật tự và vệ sinh chung sau 23:00.\n2. Khóa cửa cẩn thận khi ra vào.\n3. Tiết kiệm điện nước.';
+    const roomType = LoaiPhong || loai_phong || 'GacLung';
+
+    if (!title || isNaN(gia_thue) || gia_thue <= 0 || !address) {
+      res.status(400).json({
+        success: false,
+        message: 'Vui lòng điền đầy đủ các thông tin bắt buộc: Tiêu đề, Giá thuê hợp lệ và Địa chỉ phòng trọ.'
+      });
+      return;
+    }
+
+    // 2. Xác định an toàn thông tin chủ trọ
+    const landlordId = (user && (user.Id || (user as any).id)) || IdChuTro || ChuTroId || chu_tro_id || landlord_id || 'usr_chutro';
+    const landlordName = (user && user.HoTen) || ChuTroTen || chu_tro_ten || 'Trần Thị Bích (Chủ trọ)';
+    const landlordPhone = (user && user.Sdt) || ChuTroSdt || chu_tro_sdt || '0987654321';
+
+    // 3. Sử dụng JSON.stringify() cho các trường tien_ich và hinh_anh trước khi thực thi truy vấn SQL
+    const rawAmenities = TienIch !== undefined ? TienIch : req.body.tien_ich;
+    let amenitiesList: string[] = [];
+    if (Array.isArray(rawAmenities)) {
+      amenitiesList = rawAmenities;
+    } else if (typeof rawAmenities === 'string') {
+      try {
+        amenitiesList = JSON.parse(rawAmenities);
+      } catch {
+        amenitiesList = rawAmenities.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    } else {
+      amenitiesList = ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do'];
+    }
+    const tien_ich = JSON.stringify(amenitiesList);
+
+    const rawImages = HinhAnh !== undefined ? HinhAnh : req.body.hinh_anh;
+    let imagesList: string[] = [];
+    if (Array.isArray(rawImages) && rawImages.length > 0) {
+      imagesList = rawImages;
+    } else if (typeof rawImages === 'string' && rawImages.trim().startsWith('[')) {
+      try {
+        imagesList = JSON.parse(rawImages);
+      } catch {
+        imagesList = [rawImages];
+      }
+    } else if (typeof rawImages === 'string' && rawImages.trim()) {
+      imagesList = [rawImages];
+    } else {
+      imagesList = [
+        'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1000&q=80',
+      ];
+    }
+    const hinh_anh = JSON.stringify(imagesList);
+    const danh_gia = JSON.stringify([]);
+
+    const roomId = 'room_' + Date.now();
+    const currentDate = new Date().toISOString();
+
+    // 4. Thực thi truy vấn SQL MySQL với các trường đã ép kiểu Number và JSON.stringify()
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        // Thực thi câu lệnh Prepared Statement khớp với database.sql
+        await pool.execute(
+          `INSERT INTO rooms (
+            Id, TieuDe, DiaChi, QuanHuyen, GiaThue, GiaDien, GiaNuoc, 
+            TienIch, TrangThai, LyDoTuChoi, IdChuTro, ChuTroId, ChuTroTen, 
+            ChuTroSdt, HinhAnh, MoTa, NoiQuy, DienTich, LoaiPhong, 
+            NgayDang, DanhGia
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            roomId,
+            title,
+            address,
+            district,
+            gia_thue, // Number()
+            electricityPrice,
+            waterPrice,
+            tien_ich, // JSON.stringify()
+            'Chờ duyệt',
+            null,
+            landlordId,
+            landlordId,
+            landlordName,
+            landlordPhone,
+            hinh_anh, // JSON.stringify()
+            description,
+            houseRules,
+            dien_tich, // Number()
+            roomType,
+            currentDate,
+            danh_gia, // JSON.stringify()
+          ]
+        );
+      } catch (sqlErr: any) {
+        // Fallback tự động nếu cơ sở dữ liệu trên phpMyAdmin dùng tên cột snake_case
+        if (sqlErr.code === 'ER_BAD_FIELD_ERROR') {
+          await pool.execute(
+            `INSERT INTO rooms (
+              id, tieu_de, dia_chi, quan_huyen, gia_thue, gia_dien, gia_nuoc, 
+              tien_ich, trang_thai, ly_do_tu_choi, chu_tro_id, chu_tro_ten, 
+              chu_tro_sdt, hinh_anh, mo_ta, noi_quy, dien_tich, loai_phong, 
+              ngay_dang, danh_gia
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              roomId,
+              title,
+              address,
+              district,
+              gia_thue,
+              electricityPrice,
+              waterPrice,
+              tien_ich,
+              'Chờ duyệt',
+              null,
+              landlordId,
+              landlordName,
+              landlordPhone,
+              hinh_anh,
+              description,
+              houseRules,
+              dien_tich,
+              roomType,
+              currentDate,
+              danh_gia,
+            ]
+          );
+        } else {
+          throw sqlErr;
+        }
+      }
+    }
+
+    // 5. Cập nhật đối tượng phòng vào bộ nhớ cục bộ
+    const newRoom: PhongTro = {
+      Id: roomId,
+      TieuDe: title,
+      DiaChi: address,
+      QuanHuyen: district,
+      GiaThue: gia_thue,
+      GiaDien: electricityPrice,
+      GiaNuoc: waterPrice,
+      TienIch: amenitiesList,
+      TrangThai: 'Chờ duyệt',
+      IdChuTro: landlordId,
+      ChuTroId: landlordId,
+      ChuTroTen: landlordName,
+      ChuTroSdt: landlordPhone,
+      HinhAnh: imagesList,
+      MoTa: description,
+      NoiQuy: houseRules,
+      DienTich: isNaN(dien_tich) || dien_tich <= 0 ? 20 : dien_tich,
+      LoaiPhong: roomType,
+      NgayDang: currentDate,
+      DanhGia: [],
+    };
+
+    const db = readDb();
+    db.rooms.unshift(newRoom);
+    writeDb(db);
+
+    res.status(201).json({
+      success: true,
+      message: 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.',
+      room: newRoom,
+      data: {
+        id: roomId,
+        gia_thue,
+        dien_tich,
+        tien_coc,
+        tien_ich,
+        hinh_anh,
+      }
     });
-    return;
+  } catch (error: any) {
+    console.error("Lỗi đăng tin phòng:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi lưu dữ liệu vào cơ sở dữ liệu'
+    });
   }
-
-  // Ensure images array has at least placeholder if empty
-  let images: string[] = [];
-  if (Array.isArray(HinhAnh) && HinhAnh.length > 0) {
-    images = HinhAnh;
-  } else {
-    images = [
-      'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
-      'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1000&q=80',
-    ];
-  }
-
-  const newRoom: PhongTro = {
-    Id: 'room_' + Date.now(),
-    TieuDe: TieuDe.trim(),
-    DiaChi: DiaChi.trim(),
-    QuanHuyen: QuanHuyen || 'Cầu Giấy, Hà Nội',
-    GiaThue: Number(GiaThue) || 2000000,
-    GiaDien: GiaDien ? String(GiaDien).trim() : '3.800 đ/kWh',
-    GiaNuoc: GiaNuoc ? String(GiaNuoc).trim() : '30.000 đ/khối',
-    TienIch: Array.isArray(TienIch) ? TienIch : ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do'],
-    // Theo yêu cầu: sau khi đăng thì trạng thái mặc định là "Chờ duyệt"
-    TrangThai: 'Chờ duyệt',
-    IdChuTro: user.Id,
-    ChuTroId: user.Id,
-    ChuTroTen: user.HoTen,
-    ChuTroSdt: user.Sdt,
-    HinhAnh: images,
-    MoTa: (MoTa || '').trim() || 'Phòng trọ sinh viên tiện nghi, an ninh tốt, gần các trường đại học.',
-    NoiQuy: (NoiQuy || '').trim() || '1. Giữ gìn trật tự và vệ sinh chung sau 23:00.\n2. Khóa cửa cẩn thận khi ra vào.\n3. Tiết kiệm điện nước.',
-    DienTich: Number(DienTich) || 20,
-    LoaiPhong: LoaiPhong || 'GacLung',
-    NgayDang: new Date().toISOString(),
-    DanhGia: [],
-  };
-
-  await createRoomInDb(newRoom);
-
-  res.status(201).json({
-    success: true,
-    message: 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.',
-    room: newRoom
-  });
 });
 
 // PUT /api/rooms/:id
 apiRouter.put('/rooms/:id', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  const roomId = req.params.id;
+  try {
+    const user = (req as any).user as NguoiDung;
+    const roomId = req.params.id;
 
-  const existingRoom = await getRoomByIdFromDb(roomId);
-  if (!existingRoom) {
-    res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
-    return;
+    const existingRoom = await getRoomByIdFromDb(roomId);
+    if (!existingRoom) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
+      return;
+    }
+
+    if (user.VaiTro !== 'Admin' && existingRoom.IdChuTro !== user.Id && existingRoom.ChuTroId !== user.Id) {
+      res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa thông tin phòng trọ này.' });
+      return;
+    }
+
+    // Preserve essential identity properties while updating editable ones
+    const updatedData: Partial<PhongTro> = {
+      ...req.body,
+      Id: existingRoom.Id,
+      IdChuTro: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
+      ChuTroId: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
+    };
+
+    const updated = await updateRoomInDb(roomId, updatedData);
+
+    res.json({ success: true, message: 'Cập nhật phòng trọ thành công!', room: updated });
+  } catch (error: any) {
+    console.error("Lỗi cập nhật phòng trọ:", error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi cập nhật phòng trọ' });
   }
-
-  if (user.VaiTro !== 'Admin' && existingRoom.IdChuTro !== user.Id && existingRoom.ChuTroId !== user.Id) {
-    res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa thông tin phòng trọ này.' });
-    return;
-  }
-
-  // Preserve essential identity properties while updating editable ones
-  const updatedData: Partial<PhongTro> = {
-    ...req.body,
-    Id: existingRoom.Id,
-    IdChuTro: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
-    ChuTroId: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
-  };
-
-  const updated = await updateRoomInDb(roomId, updatedData);
-
-  res.json({ success: true, message: 'Cập nhật phòng trọ thành công!', room: updated });
 });
 
 // DELETE /api/rooms/:id
 apiRouter.delete('/rooms/:id', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  const roomId = req.params.id;
+  try {
+    const user = (req as any).user as NguoiDung;
+    const roomId = req.params.id;
 
-  const room = await getRoomByIdFromDb(roomId);
-  if (!room) {
-    res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
-    return;
+    const room = await getRoomByIdFromDb(roomId);
+    if (!room) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
+      return;
+    }
+
+    if (user.VaiTro !== 'Admin' && room.IdChuTro !== user.Id && room.ChuTroId !== user.Id) {
+      res.status(403).json({ success: false, message: 'Bạn không có quyền xóa phòng trọ này.' });
+      return;
+    }
+
+    await deleteRoomInDb(roomId);
+
+    res.json({ success: true, message: 'Đã xóa phòng trọ thành công.' });
+  } catch (error: any) {
+    console.error("Lỗi xóa phòng trọ:", error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi xóa phòng trọ' });
   }
-
-  if (user.VaiTro !== 'Admin' && room.IdChuTro !== user.Id && room.ChuTroId !== user.Id) {
-    res.status(403).json({ success: false, message: 'Bạn không có quyền xóa phòng trọ này.' });
-    return;
-  }
-
-  await deleteRoomInDb(roomId);
-
-  res.json({ success: true, message: 'Đã xóa phòng trọ thành công.' });
 });
 
 // -------------------------------------------------------------
