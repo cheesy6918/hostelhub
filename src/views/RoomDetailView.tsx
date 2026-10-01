@@ -30,8 +30,49 @@ import {
   Clock,
   ArrowRight,
   Heart,
-  ArrowLeftRight
+  ArrowLeftRight,
+  QrCode,
+  Copy,
+  Download,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
+
+// Danh sách ngân hàng hỗ trợ tạo mã VietQR chuẩn quốc gia
+const BANK_OPTIONS = [
+  {
+    id: 'MB',
+    name: 'MBBank (Ngân hàng Quân Đội)',
+    shortName: 'MBBank',
+    accountNo: '0987654321',
+    accountName: 'CONG TY HOSTELHUB VIETNAM',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  {
+    id: 'VCB',
+    name: 'Vietcombank (Ngoại Thương Việt Nam)',
+    shortName: 'Vietcombank',
+    accountNo: '1023456789',
+    accountName: 'CONG TY HOSTELHUB VIETNAM',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  {
+    id: 'TCB',
+    name: 'Techcombank (Kỹ Thương Việt Nam)',
+    shortName: 'Techcombank',
+    accountNo: '19034567890',
+    accountName: 'CONG TY HOSTELHUB VIETNAM',
+    badgeColor: 'bg-red-50 text-red-700 border-red-200',
+  },
+  {
+    id: 'BIDV',
+    name: 'BIDV (Đầu Tư & Phát Triển Việt Nam)',
+    shortName: 'BIDV',
+    accountNo: '2151000123456',
+    accountName: 'CONG TY HOSTELHUB VIETNAM',
+    badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+];
 
 interface RoomDetailViewProps {
   roomId: string;
@@ -64,6 +105,17 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [depositError, setDepositError] = useState('');
   const [depositSuccess, setDepositSuccess] = useState(false);
   const [topupLoading, setTopupLoading] = useState(false);
+
+  // QR Payment & Bank Top-up state (VietQR)
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [selectedBankIndex, setSelectedBankIndex] = useState(0);
+  const [qrAmount, setQrAmount] = useState<number>(500000);
+  const [customQrAmount, setCustomQrAmount] = useState<string>('');
+  const [qrCopiedField, setQrCopiedField] = useState<string | null>(null);
+  const [qrConfirmLoading, setQrConfirmLoading] = useState(false);
+  const [qrSuccessMessage, setQrSuccessMessage] = useState('');
+  const [qrImageError, setQrImageError] = useState(false);
+  const [qrRefreshKey, setQrRefreshKey] = useState(0);
 
   // Review form state
   const [reviewStar, setReviewStar] = useState(5);
@@ -316,6 +368,52 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
       setDepositError('Lỗi kết nối khi thanh toán đặt cọc.');
     } finally {
       setDepositLoading(false);
+    }
+  };
+
+  // Dữ liệu & helper xử lý VietQR Ngân hàng
+  const selectedBank = BANK_OPTIONS[selectedBankIndex] || BANK_OPTIONS[0];
+  const effectiveQrAmount = customQrAmount ? (Number(customQrAmount) || 500000) : qrAmount;
+  const studentCode = user?.Id ? user.Id.replace('usr_', '').toUpperCase() : 'SV';
+  const roomCode = room?.Id ? room.Id.replace('room_', '').toUpperCase() : 'PHONG';
+  const transferMemo = `HOSTELHUB ${studentCode} ${roomCode}`;
+
+  const vietQrUrl = `https://img.vietqr.io/image/${selectedBank.id}-${selectedBank.accountNo}-compact2.png?amount=${effectiveQrAmount}&addInfo=${encodeURIComponent(transferMemo)}&accountName=${encodeURIComponent(selectedBank.accountName)}&key=${qrRefreshKey}`;
+  const fallbackQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`VietQR|Bank:${selectedBank.shortName}|STK:${selectedBank.accountNo}|Name:${selectedBank.accountName}|Amount:${effectiveQrAmount}|Memo:${transferMemo}`)}`;
+
+  const handleCopyText = (text: string, fieldName: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setQrCopiedField(fieldName);
+      setTimeout(() => {
+        setQrCopiedField(null);
+      }, 2000);
+    } catch {
+      // Fallback nếu browser chặn clipboard
+    }
+  };
+
+  const handleConfirmQrTopup = async () => {
+    if (!token) {
+      setDepositError('Vui lòng đăng nhập để nạp tiền vào ví.');
+      return;
+    }
+    if (isNaN(effectiveQrAmount) || effectiveQrAmount <= 0) {
+      return;
+    }
+    try {
+      setQrConfirmLoading(true);
+      await topupWallet(effectiveQrAmount);
+      await refreshUser();
+      setQrSuccessMessage(`Nạp thành công ${effectiveQrAmount.toLocaleString('vi-VN')} VNĐ vào ví HostelHub!`);
+      setDepositError('');
+      setTimeout(() => {
+        setQrSuccessMessage('');
+      }, 4000);
+    } catch {
+      setDepositError('Lỗi kết nối khi nạp tiền ví.');
+    } finally {
+      setQrConfirmLoading(false);
     }
   };
 
@@ -970,6 +1068,36 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     <CreditCard className="w-4 h-4" />
                     <span>Đặt cọc giữ phòng (500.000 VNĐ)</span>
                   </button>
+
+                  {/* Student Wallet & VietQR Top-up Widget */}
+                  <div className="pt-1">
+                    <div className="p-3 bg-gradient-to-br from-blue-50/90 via-indigo-50/70 to-blue-50/90 rounded-2xl border border-blue-200/80 space-y-2.5 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                          <Wallet className="w-4 h-4 text-blue-600" />
+                          <span>Ví sinh viên:</span>
+                        </div>
+                        <span className="text-xs font-black text-blue-700 tabular-nums">
+                          {(user?.soDuVi || 0).toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQrAmount(500000);
+                          setCustomQrAmount('');
+                          setShowQrModal(true);
+                        }}
+                        className="w-full py-2 px-3 bg-white hover:bg-blue-600 hover:text-white text-blue-700 border border-blue-200 hover:border-blue-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer group"
+                      >
+                        <QrCode className="w-4 h-4 text-blue-600 group-hover:text-white transition-colors" />
+                        <span>Mã QR Nạp tiền Ngân hàng</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 group-hover:bg-white/20 text-blue-700 group-hover:text-white font-semibold ml-auto">
+                          VietQR 24/7
+                        </span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1217,15 +1345,29 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     <p className="text-[11px] text-rose-600 leading-relaxed">
                       Số dư ví hiện tại ({(user?.soDuVi || 0).toLocaleString('vi-VN')} đ) không đủ để thanh toán tiền cọc 500.000 VNĐ. Hãy nạp thêm tiền ví demo để tiếp tục.
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleQuickTopupInModal}
-                      disabled={topupLoading}
-                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      <span>{topupLoading ? 'Đang nạp...' : '+ Nạp nhanh 500.000 VNĐ vào ví demo'}</span>
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQrAmount(500000);
+                          setCustomQrAmount('');
+                          setShowQrModal(true);
+                        }}
+                        className="flex-1 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98"
+                      >
+                        <QrCode className="w-4 h-4" />
+                        <span>Quét mã VietQR nạp 500.000 đ</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleQuickTopupInModal}
+                        disabled={topupLoading}
+                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{topupLoading ? 'Đang nạp...' : 'Nạp demo nhanh'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1256,6 +1398,302 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Quét mã QR thanh toán ngân hàng (VietQR) */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                    <span>Thanh toán & Nạp tiền qua VietQR</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">24/7</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">Quét mã bằng app ngân hàng để chuyển khoản nạp tiền vào ví</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQrModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Notification / Success banner */}
+            {qrSuccessMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-800 font-bold animate-in fade-in duration-150">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{qrSuccessMessage}</span>
+              </div>
+            )}
+
+            {/* Bank Selector Chips */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                1. Chọn ngân hàng thụ hưởng:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {BANK_OPTIONS.map((b, idx) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBankIndex(idx);
+                      setQrImageError(false);
+                      setQrRefreshKey(k => k + 1);
+                    }}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                      selectedBankIndex === idx
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <span>{b.shortName}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Amount Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">
+                  2. Chọn số tiền cần nạp:
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  Số dư hiện tại: <strong className="text-blue-700">{(user?.soDuVi || 0).toLocaleString('vi-VN')} đ</strong>
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[500000, 1000000, 2000000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => {
+                      setQrAmount(amt);
+                      setCustomQrAmount('');
+                      setQrImageError(false);
+                      setQrRefreshKey(k => k + 1);
+                    }}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${
+                      qrAmount === amt && !customQrAmount
+                        ? 'bg-blue-50 text-blue-700 border-blue-400 shadow-2xs ring-1 ring-blue-400'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <span>{amt.toLocaleString('vi-VN')} đ</span>
+                    {amt === 500000 && (
+                      <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Đủ tiền cọc</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* QR Code Display & Info Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
+              {/* QR Code Frame */}
+              <div className="flex flex-col items-center justify-center space-y-2">
+                <div className="relative p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center group">
+                  <img
+                    src={qrImageError ? fallbackQrUrl : vietQrUrl}
+                    alt="Mã QR Chuyển khoản ngân hàng"
+                    onError={() => setQrImageError(true)}
+                    className="w-48 h-48 object-contain rounded-xl"
+                  />
+                  {/* Watermark / Badge */}
+                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-xs whitespace-nowrap">
+                    NAPAS 247 · VietQR
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrRefreshKey(k => k + 1);
+                      setQrImageError(false);
+                    }}
+                    className="text-[11px] font-semibold text-slate-600 hover:text-blue-600 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Làm mới mã</span>
+                  </button>
+                  <span className="text-slate-300">·</span>
+                  <a
+                    href={qrImageError ? fallbackQrUrl : vietQrUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Tải ảnh QR</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Bank Transfer Details Table with Copy Buttons */}
+              <div className="space-y-2.5 text-xs">
+                {/* Bank Name */}
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Ngân hàng thụ hưởng</span>
+                    <span className="font-bold text-slate-900">{selectedBank.name}</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">
+                    {selectedBank.shortName}
+                  </span>
+                </div>
+
+                {/* Account Number */}
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Số tài khoản</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">{selectedBank.accountNo}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(selectedBank.accountNo, 'accountNo')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    {qrCopiedField === 'accountNo' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Đã chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sao chép</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Account Name */}
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Chủ tài khoản</span>
+                    <span className="font-bold text-slate-800 uppercase">{selectedBank.accountName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(selectedBank.accountName, 'accountName')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    {qrCopiedField === 'accountName' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Đã chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sao chép</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Transfer Amount */}
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Số tiền nạp</span>
+                    <span className="font-black text-blue-600 text-sm tabular-nums">
+                      {effectiveQrAmount.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(String(effectiveQrAmount), 'amount')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    {qrCopiedField === 'amount' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Đã chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sao chép</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Transfer Content / Memo */}
+                <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between">
+                  <div className="pr-2 truncate">
+                    <span className="text-[10px] text-amber-800 block font-bold">Nội dung chuyển khoản (bắt buộc)</span>
+                    <span className="font-mono font-bold text-slate-900 text-xs truncate block">{transferMemo}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(transferMemo, 'memo')}
+                    className="px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                  >
+                    {qrCopiedField === 'memo' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Đã chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Sao chép</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Instruction Footer Note */}
+            <div className="text-[11px] text-slate-500 bg-blue-50/60 p-3 rounded-xl border border-blue-100 flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <span>
+                Mã VietQR đã tích hợp sẵn số tài khoản, số tiền và nội dung chuyển khoản. Sau khi chuyển khoản thành công trên app ngân hàng, vui lòng nhấn nút <strong>"Xác nhận đã chuyển khoản"</strong> bên dưới để số dư ví được cập nhật ngay lập tức.
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQrTopup}
+                disabled={qrConfirmLoading}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98 transition-all"
+              >
+                {qrConfirmLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang cập nhật ví...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Xác nhận đã chuyển khoản ({effectiveQrAmount.toLocaleString('vi-VN')} đ)</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
