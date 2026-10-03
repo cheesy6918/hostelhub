@@ -89,7 +89,8 @@
           "nhanXet": "Giá 1.2tr mà bao cả điện nước điều hòa là quá hời cho sinh viên. Rất yên tĩnh để ôn thi.",
           "ngay": "02/09/2026"
         }
-      ]
+      ],
+      "VideoUrl": "https://drive.google.com/file/d/1XyZ9_drive_room_tour_sample/preview"
     },
     {
       "Id": "room_2",
@@ -129,7 +130,8 @@
           "nhanXet": "Phòng rộng rãi, gần chợ sinh viên Nhổn đồ ăn rẻ. Điện nước tính theo công tơ rõ ràng.",
           "ngay": "10/08/2026"
         }
-      ]
+      ],
+      "VideoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     },
     {
       "Id": "room_3",

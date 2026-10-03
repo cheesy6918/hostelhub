@@ -142,6 +142,7 @@ export interface PhongTro {
   LoaiPhong?: 'GacLung' | 'Studio' | 'KyTucXa' | 'ChungCuMini';
   NgayDang?: string;
   DanhGia?: ReviewItem[];
+  VideoUrl?: string;
 }
 
 export interface YeuCauLienHe {
@@ -1202,31 +1203,27 @@ function locateExistingDbFile(): string | null {
 }
 
 export function readDb(): DatabaseSchema {
-  // 1. If /tmp/database.json exists, prefer it as it holds latest serverless writes
-  const tmpFile = path.join('/tmp', 'database.json');
-  try {
-    if (fs.existsSync(tmpFile)) {
-      const raw = fs.readFileSync(tmpFile, 'utf-8');
-      const parsed: DatabaseSchema = JSON.parse(raw);
-      if (!parsed.appointments) parsed.appointments = [];
-      if (!parsed.deposits) parsed.deposits = [];
-      if (!parsed.notifications) parsed.notifications = [];
-      if (!parsed.favorites) parsed.favorites = [];
-      if (!parsed.rental_contracts) parsed.rental_contracts = [];
-      if (!parsed.reviews) parsed.reviews = [];
-      if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
-      memoryDbCache = parsed;
-      return parsed;
-    }
-  } catch {
-    // Continue to other candidate files
-  }
+  // Check candidate database files and select the one with the latest mtime
+  let targetFile: string | null = null;
+  let latestMtime = -1;
 
-  // 2. Locate from candidate paths (like /var/task/data/database.json or __dirname)
-  const existingFile = locateExistingDbFile();
-  if (existingFile) {
+  for (const candidate of CANDIDATE_DB_FILES) {
     try {
-      const raw = fs.readFileSync(existingFile, 'utf-8');
+      if (fs.existsSync(candidate)) {
+        const stat = fs.statSync(candidate);
+        if (stat.mtimeMs > latestMtime) {
+          latestMtime = stat.mtimeMs;
+          targetFile = candidate;
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  if (targetFile) {
+    try {
+      const raw = fs.readFileSync(targetFile, 'utf-8');
       const parsed: DatabaseSchema = JSON.parse(raw);
       if (!parsed.appointments) parsed.appointments = [];
       if (!parsed.deposits) parsed.deposits = [];
@@ -1237,18 +1234,18 @@ export function readDb(): DatabaseSchema {
       if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
       memoryDbCache = parsed;
       return parsed;
-    } catch {
-      // Fallback below
+    } catch (parseErr) {
+      console.warn('Error reading db file at', targetFile, parseErr);
     }
   }
 
-  // 3. If in-memory cache exists, return it
+  // If in-memory cache exists, return it
   if (memoryDbCache) {
     if (!memoryDbCache.wallet_transactions) memoryDbCache.wallet_transactions = [];
     return memoryDbCache;
   }
 
-  // 4. Default to initial dataset
+  // Default to initial dataset
   const initial = getInitialData();
   memoryDbCache = initial;
   writeDb(initial);
@@ -1259,27 +1256,23 @@ export function writeDb(data: DatabaseSchema): void {
   memoryDbCache = data;
   const jsonStr = JSON.stringify(data, null, 2);
 
-  // 1. Try writing to standard DB_FILE
-  let writeSuccess = false;
+  // 1. Write to standard DB_FILE
   try {
     const dir = path.dirname(DB_FILE);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(DB_FILE, jsonStr, 'utf-8');
-    writeSuccess = true;
   } catch {
-    // Expected in read-only serverless filesystems (e.g. Vercel AWS Lambda)
+    // Read-only filesystem in serverless environments
   }
 
-  // 2. If standard write failed, or in Vercel environment, always write to /tmp
-  if (!writeSuccess || process.env.VERCEL) {
-    try {
-      const tmpPath = path.join('/tmp', 'database.json');
-      fs.writeFileSync(tmpPath, jsonStr, 'utf-8');
-    } catch (tmpErr) {
-      console.warn('Could not write database to /tmp:', tmpErr);
-    }
+  // 2. Also write to /tmp/database.json for serverless persistence
+  try {
+    const tmpPath = path.join('/tmp', 'database.json');
+    fs.writeFileSync(tmpPath, jsonStr, 'utf-8');
+  } catch {
+    // Ignore
   }
 }
 

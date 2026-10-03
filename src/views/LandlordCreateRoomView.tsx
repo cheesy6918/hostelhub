@@ -15,8 +15,12 @@ import {
   Maximize2,
   FileText,
   ShieldCheck,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Video,
+  Play,
+  ExternalLink
 } from 'lucide-react';
+import { parseVideoUrl } from '../utils/video';
 
 interface LandlordCreateRoomViewProps {
   onBack: () => void;
@@ -99,6 +103,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
     'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1000&q=80',
   ]);
   const [customImageUrl, setCustomImageUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -206,6 +211,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
           landlord_id: landlordId,
           ChuTroTen: landlordName,
           ChuTroSdt: landlordPhone,
+          VideoUrl: videoUrl.trim() || undefined,
         }),
       });
 
@@ -611,11 +617,94 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
           </div>
         </div>
 
-        {/* Step 4: Description & House Rules */}
+        {/* Step 4: Video thực tế phòng trọ (Google Drive, YouTube, MP4) */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Video className="w-4 h-4 text-rose-600" />
+              <span>4. Video thực tế phòng trọ (Tùy chọn)</span>
+            </h2>
+            <span className="text-[11px] font-semibold bg-rose-50 text-rose-700 px-2.5 py-0.5 rounded-full border border-rose-200">
+              Tăng 80% lượt liên hệ
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Đường dẫn link Video (Google Drive, YouTube, hoặc tệp .mp4)
+            </label>
+            <div className="relative">
+              <input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="VD: https://drive.google.com/file/d/1a2b3c4d.../view?usp=sharing hoặc https://youtu.be/..."
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
+              />
+            </div>
+            
+            <div className="mt-2.5 p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 space-y-1">
+              <p className="font-semibold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                Hướng dẫn dùng video từ Google Drive:
+              </p>
+              <p className="text-blue-800 pl-3">
+                1. Tải video lên Google Drive của bạn.
+              </p>
+              <p className="text-blue-800 pl-3">
+                2. Chuột phải vào video ➔ Chọn <strong>Chia sẻ (Share)</strong> ➔ Chuyển quyền truy cập chung thành <strong>"Bất kỳ ai có đường liên kết đều có thể xem"</strong> (Anyone with the link).
+              </p>
+              <p className="text-blue-800 pl-3">
+                3. Sao chép liên kết và dán vào đây. Hệ thống HostelHub sẽ tự động chuyển đổi sang định dạng nhúng video tương thích chuẩn xác!
+              </p>
+            </div>
+          </div>
+
+          {/* Live Preview if videoUrl is filled */}
+          {videoUrl.trim() && (() => {
+            const parsed = parseVideoUrl(videoUrl);
+            return (
+              <div className="mt-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Play className="w-3.5 h-3.5 text-rose-600" />
+                    Xem trước video:
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 font-semibold uppercase">
+                    {parsed.type === 'gdrive' ? 'Google Drive' : parsed.type === 'youtube' ? 'YouTube' : 'Video trực tiếp'}
+                  </span>
+                </div>
+
+                <div className="aspect-16/9 w-full max-w-lg rounded-xl overflow-hidden bg-black border border-slate-300">
+                  {parsed.isIframe ? (
+                    <iframe
+                      src={parsed.embedUrl}
+                      title="Xem trước video phòng trọ"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
+                  ) : parsed.type === 'direct' ? (
+                    <video controls src={parsed.embedUrl} className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-4 text-center">
+                      <p>Link: {parsed.originalUrl}</p>
+                      <a href={parsed.originalUrl} target="_blank" rel="noreferrer" className="mt-2 text-blue-400 underline inline-flex items-center gap-1">
+                        Mở liên kết <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Step 5: Description & House Rules */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
             <FileText className="w-4 h-4 text-indigo-600" />
-            <span>4. Mô tả chi tiết & Nội quy phòng</span>
+            <span>5. Mô tả chi tiết & Nội quy phòng</span>
           </h2>
 
           <div>

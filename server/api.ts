@@ -586,7 +586,11 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
       chu_tro_ten,
       ChuTroSdt,
       chu_tro_sdt,
+      VideoUrl,
+      video_url,
     } = req.body;
+
+    const videoUrlStr = String(VideoUrl || video_url || req.body.videoUrl || '').trim();
 
     // 1. Ép kiểu dữ liệu bằng Number() cho gia_thue, dien_tich, tien_coc
     const gia_thue = Number(GiaThue !== undefined ? GiaThue : (req.body.gia_thue !== undefined ? req.body.gia_thue : 0));
@@ -752,6 +756,7 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
       LoaiPhong: roomType,
       NgayDang: currentDate,
       DanhGia: [],
+      VideoUrl: videoUrlStr || undefined,
     };
 
     const db = readDb();
@@ -1059,13 +1064,18 @@ apiRouter.put('/appointments/:id/cancel', requireAuth, async (req: Request, res:
     return;
   }
 
-  if (appointment.IdSinhVien !== user.Id && user.VaiTro !== 'Admin') {
+  if (
+    appointment.IdSinhVien !== user.Id &&
+    (appointment as any).SinhVienId !== user.Id &&
+    (appointment as any).sinh_vien_id !== user.Id &&
+    user.VaiTro !== 'Admin'
+  ) {
     res.status(403).json({ success: false, message: 'Bạn không có quyền hủy lịch hẹn này.' });
     return;
   }
 
-  if (appointment.TrangThai !== 'Chờ xác nhận') {
-    res.status(400).json({ success: false, message: 'Chỉ có thể hủy lịch hẹn khi đang ở trạng thái Chờ xác nhận.' });
+  if (appointment.TrangThai === 'Đã hủy') {
+    res.status(400).json({ success: false, message: 'Lịch hẹn này đã được hủy trước đó.' });
     return;
   }
 
@@ -1338,10 +1348,11 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Res
   }
 
   // Thông báo đến chủ trọ về việc sinh viên đã hủy đơn đặt cọc
-  if (deposit.ChuTroId) {
+  const targetChuTroId = deposit.ChuTroId || (deposit as any).IdChuTro || room?.IdChuTro || room?.ChuTroId;
+  if (targetChuTroId) {
     await addNotification(
       null,
-      deposit.ChuTroId,
+      targetChuTroId,
       'Sinh viên đã hủy đơn đặt cọc',
       `Sinh viên ${user.HoTen} đã hủy đơn cọc giữ chỗ phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được mở lại cho sinh viên khác.`,
       'DatCoc'

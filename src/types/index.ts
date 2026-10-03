@@ -128,6 +128,7 @@ export interface Room {
   LoaiPhong?: 'GacLung' | 'Studio' | 'KyTucXa' | 'ChungCuMini';
   NgayDang?: string;
   DanhGia?: Review[];
+  VideoUrl?: string;
 }
 
 export interface Inquiry {
