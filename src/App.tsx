@@ -56,6 +56,9 @@ const MainContent: React.FC = () => {
         'student-favorites',
         'student-inquiries',
         'student-history',
+        'student-history-appointments',
+        'student-history-deposits',
+        'student-history-contracts',
         'landlord-rooms',
         'landlord-create-room',
         'landlord-inquiries',
@@ -97,6 +100,15 @@ const MainContent: React.FC = () => {
 
       case 'student-history':
         return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} />;
+
+      case 'student-history-appointments':
+        return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} initialTab="appointments" />;
+
+      case 'student-history-deposits':
+        return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} initialTab="deposits" />;
+
+      case 'student-history-contracts':
+        return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} initialTab="contracts" />;
 
       case 'landlord-rooms':
       case 'landlord-inquiries':

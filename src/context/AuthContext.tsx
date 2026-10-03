@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, VaiTro } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User, VaiTro, GiaoDichVi } from '../types';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  walletTransactions: GiaoDichVi[];
   login: (email: string, pass: string) => Promise<{ success: boolean; message: string; role?: VaiTro }>;
   register: (payload: {
     HoTen: string;
@@ -17,6 +18,7 @@ interface AuthContextType {
   updateProfile: (data: { HoTen?: string; Sdt?: string; MatKhauCu?: string; MatKhauMoi?: string }) => Promise<{ success: boolean; message: string }>;
   topupWallet: (amount: number) => Promise<{ success: boolean; message: string }>;
   refreshUser: () => Promise<void>;
+  refreshTransactions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,8 +29,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [loading, setLoading] = useState<boolean>(true);
+  const [walletTransactions, setWalletTransactions] = useState<GiaoDichVi[]>([]);
 
-  const fetchCurrentUser = async (authToken: string) => {
+  const fetchCurrentUser = useCallback(async (authToken: string) => {
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` },
@@ -36,41 +39,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       if (res.ok && data.success) {
         setUser(data.user);
-      } else {
-        // Token invalid or expired
+      } else if (res.status === 401) {
+        // Only clear session if strictly 401 Unauthorized
+        console.warn('Session expired, logging out');
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setUser(null);
       }
     } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      setToken(null);
-      setUser(null);
+      // Don't log user out on transient network error
+      console.warn('Network error fetching current user');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchWalletTransactions = useCallback(async (authToken: string) => {
+    try {
+      const res = await fetch('/api/wallet/transactions', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWalletTransactions(data.data || []);
+      }
+    } catch {
+      // ignore silently
+    }
+  }, []);
 
   useEffect(() => {
     if (token) {
       fetchCurrentUser(token);
+      fetchWalletTransactions(token);
     } else {
       setLoading(false);
+      setWalletTransactions([]);
     }
-  }, [token]);
+  }, [token, fetchCurrentUser, fetchWalletTransactions]);
 
   const login = async (email: string, pass: string) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ Email: email, MatKhau: pass }),
+        body: JSON.stringify({ Email: email, MatKhau: pass, email, password: pass }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem(TOKEN_KEY, data.token);
         setToken(data.token);
         setUser(data.user);
+        fetchWalletTransactions(data.token);
         return { success: true, message: data.message, role: data.user.VaiTro };
       } else {
         return { success: false, message: data.message || 'Đăng nhập thất bại.' };
@@ -98,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(TOKEN_KEY, data.token);
         setToken(data.token);
         setUser(data.user);
+        fetchWalletTransactions(data.token);
         return { success: true, message: data.message, role: data.user.VaiTro };
       } else {
         return { success: false, message: data.message || 'Đăng ký thất bại.' };
@@ -111,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
+    setWalletTransactions([]);
   };
 
   const updateProfile = async (data: { HoTen?: string; Sdt?: string; MatKhauCu?: string; MatKhauMoi?: string }) => {
@@ -139,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const topupWallet = async (amount: number) => {
     if (!token) return { success: false, message: 'Chưa đăng nhập.' };
     try {
-      const res = await fetch('/api/auth/wallet/topup', {
+      let res = await fetch('/api/wallet/topup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,9 +169,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify({ amount }),
       });
+      if (!res.ok) {
+        res = await fetch('/api/auth/wallet/topup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ amount }),
+        });
+      }
       const resData = await res.json();
       if (res.ok && resData.success) {
-        setUser(resData.user);
+        if (resData.user) {
+          setUser(resData.user);
+        } else if (resData.newBalance !== undefined && user) {
+          setUser({ ...user, soDuVi: resData.newBalance });
+        }
+        await fetchWalletTransactions(token);
         return { success: true, message: resData.message };
       } else {
         return { success: false, message: resData.message || 'Lỗi nạp tiền.' };
@@ -162,6 +199,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     if (token) {
       await fetchCurrentUser(token);
+      await fetchWalletTransactions(token);
+    }
+  };
+
+  const refreshTransactions = async () => {
+    if (token) {
+      await fetchWalletTransactions(token);
     }
   };
 
@@ -171,12 +215,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         loading,
+        walletTransactions,
         login,
         register,
         logout,
         updateProfile,
         topupWallet,
         refreshUser,
+        refreshTransactions,
       }}
     >
       {children}

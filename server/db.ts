@@ -165,6 +165,17 @@ export interface FavoriteItem {
   NgayTao: string;
 }
 
+export interface GiaoDichVi {
+  Id: string;
+  UserId: string;
+  LoaiGiaoDich: 'NapTien' | 'DatCoc' | 'HoanCoc' | 'NhanCoc';
+  SoTien: number; // (+ hoặc -)
+  SoDuSauGiaoDich: number;
+  NoiDung: string;
+  MaThamChieu?: string;
+  NgayTao: string;
+}
+
 export interface DatabaseSchema {
   users: NguoiDung[];
   rooms: PhongTro[];
@@ -175,6 +186,7 @@ export interface DatabaseSchema {
   favorites: FavoriteItem[];
   rental_contracts: RentalContract[];
   reviews: ReviewRecord[];
+  wallet_transactions?: GiaoDichVi[];
 }
 
 // Determine candidate paths for database file to support both local dev and Vercel Serverless
@@ -1149,7 +1161,28 @@ export function getInitialData(): DatabaseSchema {
     },
   ];
 
-  return { users, rooms, inquiries, appointments, deposits, notifications, favorites, rental_contracts, reviews };
+  const wallet_transactions: GiaoDichVi[] = [
+    {
+      Id: 'tx_init_sv',
+      UserId: 'usr_sinhvien',
+      LoaiGiaoDich: 'NapTien',
+      SoTien: 2000000,
+      SoDuSauGiaoDich: 2000000,
+      NoiDung: 'Số dư khởi tạo tài khoản trải nghiệm',
+      NgayTao: '2026-09-23T07:53:06.312Z',
+    },
+    {
+      Id: 'tx_init_ct',
+      UserId: 'usr_chutro',
+      LoaiGiaoDich: 'NapTien',
+      SoTien: 2000000,
+      SoDuSauGiaoDich: 2000000,
+      NoiDung: 'Số dư khởi tạo ví chủ trọ',
+      NgayTao: '2026-09-23T07:53:06.312Z',
+    },
+  ];
+
+  return { users, rooms, inquiries, appointments, deposits, notifications, favorites, rental_contracts, reviews, wallet_transactions };
 }
 
 // In-memory cache for ultra-fast access and serverless warm container persistence
@@ -1181,6 +1214,7 @@ export function readDb(): DatabaseSchema {
       if (!parsed.favorites) parsed.favorites = [];
       if (!parsed.rental_contracts) parsed.rental_contracts = [];
       if (!parsed.reviews) parsed.reviews = [];
+      if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
       memoryDbCache = parsed;
       return parsed;
     }
@@ -1200,6 +1234,7 @@ export function readDb(): DatabaseSchema {
       if (!parsed.favorites) parsed.favorites = [];
       if (!parsed.rental_contracts) parsed.rental_contracts = [];
       if (!parsed.reviews) parsed.reviews = [];
+      if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
       memoryDbCache = parsed;
       return parsed;
     } catch {
@@ -1209,6 +1244,7 @@ export function readDb(): DatabaseSchema {
 
   // 3. If in-memory cache exists, return it
   if (memoryDbCache) {
+    if (!memoryDbCache.wallet_transactions) memoryDbCache.wallet_transactions = [];
     return memoryDbCache;
   }
 
@@ -1263,7 +1299,25 @@ export const dbConfig = {
   queueLimit: 0,
 };
 
-export const pool: Pool = mysql.createPool(dbConfig);
+// In AI Studio / Web container: direct TCP to external DB is blocked, use mock pool & in-memory JSON store
+let realPool: Pool | null = null;
+try {
+  if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+    realPool = mysql.createPool(dbConfig);
+  }
+} catch {
+  // DB not connected — mock active
+}
+
+export const pool: Pool = (realPool || {
+  query: async () => [[]],
+  execute: async () => [[]],
+  getConnection: async () => ({
+    release: () => {},
+    query: async () => [[]],
+    execute: async () => [[]],
+  }),
+}) as unknown as Pool;
 
 // Helper parse JSON safely
 function safeJsonParse<T>(val: any, fallback: T): T {
@@ -1277,27 +1331,22 @@ function safeJsonParse<T>(val: any, fallback: T): T {
 }
 
 // Check MySQL connection availability
-let mySqlAvailable: boolean | null = null;
-let lastCheckTime = 0;
+let loggedMockNotice = false;
 
 export async function isMySqlConnected(): Promise<boolean> {
-  const now = Date.now();
-  if (mySqlAvailable !== null && now - lastCheckTime < 15000) {
-    return mySqlAvailable;
+  if (!realPool) {
+    if (!loggedMockNotice) {
+      console.log('[AI Studio] Database mock active — using local in-memory/JSON store');
+      loggedMockNotice = true;
+    }
+    return false;
   }
 
   try {
-    const conn = await pool.getConnection();
+    const conn = await realPool.getConnection();
     conn.release();
-    if (!mySqlAvailable) {
-      console.log('[MySQL] Đã kết nối thành công tới database "hostelhub" trên localhost:3306');
-    }
-    mySqlAvailable = true;
-    lastCheckTime = now;
     return true;
   } catch {
-    mySqlAvailable = false;
-    lastCheckTime = now;
     return false;
   }
 }
@@ -2534,5 +2583,28 @@ export async function canUserReviewRoomInDb(
     reason: 'Bạn đã gửi đánh giá cho đợt thuê phòng này rồi.',
   };
 }
+
+// -------------------------------------------------------------
+// 10. WALLET TRANSACTIONS (LỊCH SỬ GIAO DỊCH VÍ)
+// -------------------------------------------------------------
+
+export async function getWalletTransactionsFromDb(userId?: string): Promise<GiaoDichVi[]> {
+  const db = readDb();
+  let list = db.wallet_transactions || [];
+  if (userId) {
+    list = list.filter(t => t.UserId === userId);
+  }
+  // Sắp xếp mới nhất lên đầu
+  return [...list].sort((a, b) => new Date(b.NgayTao).getTime() - new Date(a.NgayTao).getTime());
+}
+
+export async function createWalletTransactionInDb(tx: GiaoDichVi): Promise<GiaoDichVi> {
+  const db = readDb();
+  if (!db.wallet_transactions) db.wallet_transactions = [];
+  db.wallet_transactions.unshift(tx);
+  writeDb(db);
+  return tx;
+}
+
 
 

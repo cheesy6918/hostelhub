@@ -40,6 +40,10 @@ import {
   getFavoritesFromDb,
   createFavoriteInDb,
   deleteFavoriteInDb,
+  // Wallet Transactions (Lịch sử thanh toán & giao dịch ví)
+  GiaoDichVi,
+  getWalletTransactionsFromDb,
+  createWalletTransactionInDb,
   // MySQL connection & pool
   pool,
   isMySqlConnected,
@@ -105,7 +109,11 @@ export function requireAuth(req: Request, res: Response, next: () => void) {
 // POST /api/auth/register
 apiRouter.post('/auth/register', async (req: Request, res: Response) => {
   try {
-    const { HoTen, Email, MatKhau, Sdt, VaiTro } = req.body;
+    const HoTen = req.body.HoTen || req.body.hoTen || req.body.fullName || req.body.name;
+    const Email = req.body.Email || req.body.email;
+    const MatKhau = req.body.MatKhau || req.body.matKhau || req.body.password;
+    const Sdt = req.body.Sdt || req.body.sdt || req.body.phone;
+    const VaiTro = req.body.VaiTro || req.body.vaiTro || req.body.role;
 
     // Validate HoTen
     if (!HoTen || typeof HoTen !== 'string' || HoTen.trim().length < 2) {
@@ -190,7 +198,8 @@ apiRouter.post('/auth/register', async (req: Request, res: Response) => {
 // POST /api/auth/login
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   try {
-    const { Email, MatKhau } = req.body;
+    const Email = req.body.Email || req.body.email;
+    const MatKhau = req.body.MatKhau || req.body.matKhau || req.body.password;
 
     if (!Email || !MatKhau) {
       res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ Email và Mật khẩu.' });
@@ -260,7 +269,10 @@ apiRouter.get('/auth/me', async (req: Request, res: Response) => {
 apiRouter.put('/auth/profile', requireAuth, async (req: Request, res: Response) => {
   try {
     const currentUser = (req as any).user as NguoiDung;
-    const { HoTen, Sdt, MatKhauCu, MatKhauMoi } = req.body;
+    const HoTen = req.body.HoTen || req.body.hoTen || req.body.fullName || req.body.name;
+    const Sdt = req.body.Sdt || req.body.sdt || req.body.phone;
+    const MatKhauCu = req.body.MatKhauCu || req.body.matKhauCu;
+    const MatKhauMoi = req.body.MatKhauMoi || req.body.matKhauMoi;
 
     const targetUser = await getUserByIdFromDb(currentUser.Id);
     if (!targetUser) {
@@ -275,7 +287,9 @@ apiRouter.put('/auth/profile', requireAuth, async (req: Request, res: Response) 
     }
 
     if (Sdt && typeof Sdt === 'string') {
-      const cleanPhone = Sdt.replace(/\D/g, '');
+      let cleanPhone = Sdt.replace(/\s+/g, '').replace(/[\.\-]/g, '');
+      if (cleanPhone.startsWith('+84')) cleanPhone = '0' + cleanPhone.slice(3);
+      if (cleanPhone.startsWith('84') && cleanPhone.length > 10) cleanPhone = '0' + cleanPhone.slice(2);
       if (cleanPhone.length >= 9 && cleanPhone.length <= 11) {
         updates.Sdt = cleanPhone;
       }
@@ -301,6 +315,20 @@ apiRouter.put('/auth/profile', requireAuth, async (req: Request, res: Response) 
 
     const updatedUser = await updateUserInDb(targetUser.Id, updates);
 
+    // Đồng bộ tên và số điện thoại chủ trọ vào tất cả phòng trọ của họ nếu là ChuTro
+    if (targetUser.VaiTro === 'ChuTro' && (updates.HoTen || updates.Sdt)) {
+      const db = readDb();
+      let changedRooms = false;
+      db.rooms.forEach(r => {
+        if (r.IdChuTro === targetUser.Id || r.ChuTroId === targetUser.Id) {
+          if (updates.HoTen) r.ChuTroTen = updates.HoTen;
+          if (updates.Sdt) r.ChuTroSdt = updates.Sdt;
+          changedRooms = true;
+        }
+      });
+      if (changedRooms) writeDb(db);
+    }
+
     res.json({
       success: true,
       message: 'Cập nhật thông tin cá nhân thành công!',
@@ -311,12 +339,17 @@ apiRouter.put('/auth/profile', requireAuth, async (req: Request, res: Response) 
   }
 });
 
-// POST /api/auth/wallet/topup (Demo nạp tiền ví)
-apiRouter.post('/auth/wallet/topup', requireAuth, async (req: Request, res: Response) => {
+// POST /api/wallet/topup & POST /api/auth/wallet/topup (Demo nạp tiền ví)
+const handleWalletTopup = async (req: Request, res: Response) => {
   try {
     const currentUser = (req as any).user as NguoiDung;
     const { amount } = req.body;
     const topupAmount = Number(amount) || 500000;
+
+    if (topupAmount <= 0 || topupAmount > 1000000000) {
+      res.status(400).json({ success: false, message: 'Số tiền nạp không hợp lệ (từ 10.000 đến 1.000.000.000 VNĐ).' });
+      return;
+    }
 
     const user = await getUserByIdFromDb(currentUser.Id);
     if (!user) {
@@ -328,16 +361,44 @@ apiRouter.post('/auth/wallet/topup', requireAuth, async (req: Request, res: Resp
     await updateUserInDb(user.Id, { soDuVi: newBalance });
     user.soDuVi = newBalance;
 
+    // Ghi lại lịch sử giao dịch nạp tiền
+    await createWalletTransactionInDb({
+      Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      UserId: user.Id,
+      LoaiGiaoDich: 'NapTien',
+      SoTien: topupAmount,
+      SoDuSauGiaoDich: newBalance,
+      NoiDung: `Nạp tiền vào ví điện tử: +${topupAmount.toLocaleString('vi-VN')} VNĐ`,
+      NgayTao: new Date().toISOString(),
+    });
+
     res.json({
       success: true,
       message: `Nạp thành công +${topupAmount.toLocaleString('vi-VN')} VNĐ vào ví!`,
       soDuVi: user.soDuVi,
+      newBalance: user.soDuVi,
       user: sanitizeUser(user),
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Lỗi nạp tiền' });
   }
-});
+};
+
+apiRouter.post('/wallet/topup', requireAuth, handleWalletTopup);
+apiRouter.post('/auth/wallet/topup', requireAuth, handleWalletTopup);
+
+// GET /api/wallet/transactions & GET /api/auth/wallet/transactions - Lịch sử giao dịch ví
+const handleGetTransactions = async (req: Request, res: Response) => {
+  const user = (req as any).user as NguoiDung;
+  const list = await getWalletTransactionsFromDb(user.Id);
+  list.sort((a, b) => new Date(b.NgayTao).getTime() - new Date(a.NgayTao).getTime());
+  res.json({ success: true, count: list.length, data: list });
+};
+
+apiRouter.get('/wallet/transactions', requireAuth, handleGetTransactions);
+apiRouter.get('/auth/wallet/transactions', requireAuth, handleGetTransactions);
+apiRouter.get('/student/transactions', requireAuth, handleGetTransactions);
+apiRouter.get('/auth/wallet/transactions', requireAuth, handleGetTransactions);
 
 // -------------------------------------------------------------
 // 2. PHÒNG TRỌ (ROOMS API)
@@ -899,14 +960,17 @@ apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) 
 
   let result: LichHen[] = [];
   if (user.VaiTro === 'SinhVien') {
-    result = list.filter(a => a.IdSinhVien === user.Id);
+    result = list.filter(a => a.IdSinhVien === user.Id || (a as any).SinhVienId === user.Id);
   } else if (user.VaiTro === 'ChuTro') {
-    result = list.filter(a => a.ChuTroId === user.Id);
+    result = list.filter(a => a.ChuTroId === user.Id || (a as any).IdChuTro === user.Id);
   } else {
     result = list;
   }
 
-  res.json({ success: true, data: result });
+  // Sort newest first
+  result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
+
+  res.json({ success: true, count: result.length, data: result });
 });
 
 // POST /api/appointments - Sinh viên đặt lịch hẹn xem phòng
@@ -1074,21 +1138,24 @@ apiRouter.put('/appointments/:id/status', requireAuth, async (req: Request, res:
 // 3.2. ĐẶT CỌC GIỮ PHÒNG (DAT COC)
 // -------------------------------------------------------------
 
-// GET /api/deposits - Danh sách đơn đặt cọc
+// GET /api/deposits - Danh sách đặt cọc
 apiRouter.get('/deposits', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const list = await getDepositsFromDb();
 
   let result: DatCoc[] = [];
   if (user.VaiTro === 'SinhVien') {
-    result = list.filter(d => d.IdSinhVien === user.Id);
+    result = list.filter(d => d.IdSinhVien === user.Id || (d as any).SinhVienId === user.Id);
   } else if (user.VaiTro === 'ChuTro') {
-    result = list.filter(d => d.ChuTroId === user.Id);
+    result = list.filter(d => d.ChuTroId === user.Id || (d as any).IdChuTro === user.Id);
   } else {
     result = list;
   }
 
-  res.json({ success: true, data: result });
+  // Sort newest first
+  result.sort((a, b) => new Date(b.NgayTao || b.NgayCoc || 0).getTime() - new Date(a.NgayTao || a.NgayCoc || 0).getTime());
+
+  res.json({ success: true, count: result.length, data: result });
 });
 
 // POST /api/deposits - Sinh viên đặt cọc giữ phòng
@@ -1112,11 +1179,41 @@ apiRouter.post('/deposits', requireAuth, async (req: Request, res: Response) => 
     return;
   }
 
+  // Kiểm tra xem sinh viên hiện tại đã có đơn cọc CHỜ XÁC NHẬN cho phòng này hay chưa
+  const allDeposits = await getDepositsFromDb();
+  const existingPending = allDeposits.find(
+    d => (d.IdSinhVien === user.Id || (d as any).SinhVienId === user.Id) &&
+         d.IdPhong === room.Id &&
+         d.TrangThaiCoc === 'Chờ xác nhận'
+  );
+  if (existingPending) {
+    res.status(400).json({
+      success: false,
+      message: 'Bạn đã có một đơn đặt cọc đang chờ chủ trọ duyệt cho phòng này rồi. Hãy kiểm tra mục Lịch sử của tôi.',
+    });
+    return;
+  }
+
+  // Kiểm tra xem có người khác đang đặt cọc chờ xác nhận không
+  const otherPending = allDeposits.find(
+    d => d.IdPhong === room.Id &&
+         d.TrangThaiCoc === 'Chờ xác nhận' &&
+         d.IdSinhVien !== user.Id &&
+         (d as any).SinhVienId !== user.Id
+  );
+  if (otherPending) {
+    res.status(400).json({
+      success: false,
+      message: 'Phòng này hiện đang có sinh viên khác đặt cọc giữ chỗ và đang chờ chủ trọ duyệt.',
+    });
+    return;
+  }
+
   const TIEN_COC_QUY_DINH = 500000;
 
   // Lấy dữ liệu người dùng mới nhất từ DB
   const dbUser = await getUserByIdFromDb(user.Id);
-  if (!dbUser || dbUser.soDuVi < TIEN_COC_QUY_DINH) {
+  if (!dbUser || (dbUser.soDuVi || 0) < TIEN_COC_QUY_DINH) {
     res.status(400).json({
       success: false,
       message: 'Số dư không đủ',
@@ -1127,9 +1224,21 @@ apiRouter.post('/deposits', requireAuth, async (req: Request, res: Response) => 
   }
 
   // Đủ tiền: Trừ tiền ví của sinh viên
-  const newBalance = dbUser.soDuVi - TIEN_COC_QUY_DINH;
+  const newBalance = (dbUser.soDuVi || 0) - TIEN_COC_QUY_DINH;
   await updateUserInDb(user.Id, { soDuVi: newBalance });
   user.soDuVi = newBalance;
+
+  // Ghi nhận lịch sử giao dịch trừ tiền cọc
+  await createWalletTransactionInDb({
+    Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    UserId: user.Id,
+    LoaiGiaoDich: 'DatCoc',
+    SoTien: -TIEN_COC_QUY_DINH,
+    SoDuSauGiaoDich: newBalance,
+    NoiDung: `Đặt cọc 500.000 VNĐ giữ chỗ phòng "${room.TieuDe}"`,
+    MaThamChieu: room.Id,
+    NgayTao: new Date().toISOString(),
+  });
 
   // Chuyển trạng thái phòng sang "Chờ chủ trọ xác nhận cọc"
   await updateRoomInDb(room.Id, { TrangThai: 'Chờ chủ trọ xác nhận cọc' });
@@ -1170,6 +1279,7 @@ apiRouter.post('/deposits', requireAuth, async (req: Request, res: Response) => 
     message: 'Đặt cọc giữ phòng thành công! Số dư đã trừ 500.000 VNĐ. Phòng đã chuyển sang trạng thái "Chờ chủ trọ xác nhận cọc".',
     deposit: newDeposit,
     newBalance,
+    user: sanitizeUser({ ...user, soDuVi: newBalance }),
   });
 });
 
@@ -1183,7 +1293,7 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Res
     return;
   }
 
-  if (deposit.IdSinhVien !== user.Id && user.VaiTro !== 'Admin') {
+  if (deposit.IdSinhVien !== user.Id && (deposit as any).SinhVienId !== user.Id && user.VaiTro !== 'Admin') {
     res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác đơn này.' });
     return;
   }
@@ -1200,18 +1310,31 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Res
   await updateDepositInDb(deposit.Id, updates);
   Object.assign(deposit, updates);
 
-  // Hoàn tiền cho sinh viên
+  // Hoàn tiền 100% cho sinh viên
   let sinhVienBalance = 0;
-  const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien);
+  let updatedSinhVien: NguoiDung | null = null;
+  const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien || (deposit as any).SinhVienId);
   if (sinhVien) {
     sinhVienBalance = (sinhVien.soDuVi || 0) + deposit.SoTienCoc;
-    await updateUserInDb(sinhVien.Id, { soDuVi: sinhVienBalance });
+    updatedSinhVien = await updateUserInDb(sinhVien.Id, { soDuVi: sinhVienBalance });
+
+    // Ghi nhận lịch sử giao dịch hoàn tiền cọc
+    await createWalletTransactionInDb({
+      Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      UserId: sinhVien.Id,
+      LoaiGiaoDich: 'HoanCoc',
+      SoTien: deposit.SoTienCoc,
+      SoDuSauGiaoDich: sinhVienBalance,
+      NoiDung: `Hoàn 100% tiền cọc (+${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ) giữ chỗ phòng "${deposit.TieuDePhong || 'Phòng trọ'}"`,
+      MaThamChieu: deposit.Id,
+      NgayTao: new Date().toISOString(),
+    });
   }
 
-  // Khôi phục trạng thái phòng về "Công khai" nếu phòng đang "Chờ chủ trọ xác nhận cọc"
+  // Khôi phục trạng thái phòng về "Còn phòng"
   const room = await getRoomByIdFromDb(deposit.IdPhong);
   if (room && (room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc')) {
-    await updateRoomInDb(room.Id, { TrangThai: 'Công khai' });
+    await updateRoomInDb(room.Id, { TrangThai: 'Còn phòng' });
   }
 
   // Thông báo đến chủ trọ về việc sinh viên đã hủy đơn đặt cọc
@@ -1220,7 +1343,7 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Res
       null,
       deposit.ChuTroId,
       'Sinh viên đã hủy đơn đặt cọc',
-      `Sinh viên ${user.HoTen} đã hủy đơn cọc giữ chỗ phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được mở lại trạng thái "Công khai".`,
+      `Sinh viên ${user.HoTen} đã hủy đơn cọc giữ chỗ phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được mở lại cho sinh viên khác.`,
       'DatCoc'
     );
   }
@@ -1230,6 +1353,7 @@ apiRouter.put('/deposits/:id/cancel', requireAuth, async (req: Request, res: Res
     message: 'Đã hủy đơn đặt cọc và hoàn trả 500.000 VNĐ vào ví của bạn thành công!',
     deposit,
     newBalance: sinhVien ? sinhVienBalance : undefined,
+    user: updatedSinhVien ? sanitizeUser(updatedSinhVien) : undefined,
   });
 });
 
@@ -1258,7 +1382,20 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     // Chủ trọ nhận tiền cọc vào ví
     const chuTro = await getUserByIdFromDb(deposit.ChuTroId || '');
     if (chuTro) {
-      await updateUserInDb(chuTro.Id, { soDuVi: (chuTro.soDuVi || 0) + deposit.SoTienCoc });
+      const chuTroNewBal = (chuTro.soDuVi || 0) + deposit.SoTienCoc;
+      await updateUserInDb(chuTro.Id, { soDuVi: chuTroNewBal });
+
+      // Ghi nhận lịch sử giao dịch nhận cọc cho chủ trọ
+      await createWalletTransactionInDb({
+        Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        UserId: chuTro.Id,
+        LoaiGiaoDich: 'NhanCoc',
+        SoTien: deposit.SoTienCoc,
+        SoDuSauGiaoDich: chuTroNewBal,
+        NoiDung: `Nhận tiền cọc giữ chỗ +${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ cho phòng "${deposit.TieuDePhong}" từ ${deposit.SinhVienTen}`,
+        MaThamChieu: deposit.Id,
+        NgayTao: new Date().toISOString(),
+      });
     }
     // Cập nhật phòng sang "Đã cọc"
     if (room) {
@@ -1288,12 +1425,25 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     // Tự động hoàn lại 100% tiền cọc vào ví sinh viên
     const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien);
     if (sinhVien) {
-      await updateUserInDb(sinhVien.Id, { soDuVi: (sinhVien.soDuVi || 0) + deposit.SoTienCoc });
+      const svNewBal = (sinhVien.soDuVi || 0) + deposit.SoTienCoc;
+      await updateUserInDb(sinhVien.Id, { soDuVi: svNewBal });
+
+      // Ghi nhận lịch sử giao dịch hoàn tiền cọc
+      await createWalletTransactionInDb({
+        Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        UserId: sinhVien.Id,
+        LoaiGiaoDich: 'HoanCoc',
+        SoTien: deposit.SoTienCoc,
+        SoDuSauGiaoDich: svNewBal,
+        NoiDung: `Hoàn 100% tiền cọc (+${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ) do chủ trọ từ chối đơn cọc phòng "${deposit.TieuDePhong || 'Phòng trọ'}"`,
+        MaThamChieu: deposit.Id,
+        NgayTao: new Date().toISOString(),
+      });
     }
 
-    // Khôi phục phòng về Công khai / Còn phòng
+    // Khôi phục phòng về Còn phòng
     if (room && (room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc')) {
-      await updateRoomInDb(room.Id, { TrangThai: 'Công khai' });
+      await updateRoomInDb(room.Id, { TrangThai: 'Còn phòng' });
     }
 
     // Gửi thông báo hoàn tiền đến sinh viên
@@ -1315,31 +1465,43 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
   }
 });
 
-// POST /api/wallet/topup - Nạp tiền ví demo cho sinh viên để trải nghiệm test
-apiRouter.post('/wallet/topup', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
+// POST /api/wallet/topup - Nạp tiền ví
+apiRouter.post('/wallet/topup', requireAuth, async (req: Request, res: Response) => {
+  const currentUser = (req as any).user as NguoiDung;
   const amount = Number(req.body.amount) || 1000000;
 
-  if (amount <= 0 || amount > 50000000) {
-    res.status(400).json({ success: false, message: 'Số tiền nạp không hợp lệ (từ 50.000 đến 50.000.000 VNĐ).' });
+  if (amount <= 0 || amount > 100000000) {
+    res.status(400).json({ success: false, message: 'Số tiền nạp không hợp lệ (từ 10.000 đến 100.000.000 VNĐ).' });
     return;
   }
 
-  const db = readDb();
-  const dbUser = db.users.find(u => u.Id === user.Id);
-  if (!dbUser) {
+  const user = await getUserByIdFromDb(currentUser.Id);
+  if (!user) {
     res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản.' });
     return;
   }
 
-  dbUser.soDuVi = (dbUser.soDuVi || 0) + amount;
-  user.soDuVi = dbUser.soDuVi;
-  writeDb(db);
+  const newBalance = (user.soDuVi || 0) + amount;
+  await updateUserInDb(user.Id, { soDuVi: newBalance });
+  user.soDuVi = newBalance;
+
+  // Ghi lại lịch sử thanh toán
+  await createWalletTransactionInDb({
+    Id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    UserId: user.Id,
+    LoaiGiaoDich: 'NapTien',
+    SoTien: amount,
+    SoDuSauGiaoDich: newBalance,
+    NoiDung: `Nạp tiền vào ví điện tử: +${amount.toLocaleString('vi-VN')} VNĐ`,
+    NgayTao: new Date().toISOString(),
+  });
 
   res.json({
     success: true,
-    message: `Đã nạp ${amount.toLocaleString('vi-VN')} VNĐ vào ví demo thành công!`,
-    newBalance: dbUser.soDuVi,
+    message: `Đã nạp +${amount.toLocaleString('vi-VN')} VNĐ vào ví thành công!`,
+    newBalance,
+    soDuVi: newBalance,
+    user: sanitizeUser(user),
   });
 });
 

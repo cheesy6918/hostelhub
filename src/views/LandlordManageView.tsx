@@ -37,6 +37,7 @@ import {
 interface LandlordManageViewProps {
   onNavigateToCreate?: () => void;
   onViewRoomDetail?: (roomId: string) => void;
+  initialTab?: 'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries';
 }
 
 const AVAILABLE_AMENITIES_LIST = [
@@ -57,6 +58,7 @@ const AVAILABLE_AMENITIES_LIST = [
 export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   onNavigateToCreate,
   onViewRoomDetail,
+  initialTab,
 }) => {
   const { user, token, refreshUser } = useAuth();
 
@@ -66,7 +68,13 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
   const [contracts, setContracts] = useState<RentalContract[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>('rooms');
+  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>(initialTab || 'rooms');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Contract Action loading states
   const [confirmingContractId, setConfirmingContractId] = useState<number | null>(null);

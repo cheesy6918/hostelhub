@@ -13,7 +13,7 @@
     },
     {
       "Id": "usr_chutro",
-      "HoTen": "Trần Thị Bích (Chủ trọ Cầu Giấy)",
+      "HoTen": "Trần Thị Bích Cập Nhật",
       "Email": "chutro@hostelhub.vn",
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0987654321",
@@ -24,10 +24,10 @@
     },
     {
       "Id": "usr_sinhvien",
-      "HoTen": "Nguyễn Văn Sinh (SV Bách Khoa)",
+      "HoTen": "Nguyễn Văn Sinh Test",
       "Email": "sinhvien@hostelhub.vn",
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
-      "Sdt": "0912345678",
+      "Sdt": "0912345699",
       "VaiTro": "SinhVien",
       "soDuVi": 2000000,
       "NgayTao": "2026-09-23T07:53:06.312Z",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LichHen, DatCoc, RentalContract } from '../types';
+import { LichHen, DatCoc, RentalContract, GiaoDichVi } from '../types';
 import {
   Calendar,
   CreditCard,
@@ -22,21 +22,26 @@ import {
   FileText,
   Star,
   Send,
-  X
+  X,
+  History,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 
 interface StudentHistoryViewProps {
   onViewRoom?: (roomId: string) => void;
   onNavigate?: (view: string) => void;
+  initialTab?: 'contracts' | 'appointments' | 'deposits' | 'transactions';
 }
 
-export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRoom, onNavigate }) => {
+export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRoom, onNavigate, initialTab }) => {
   const { user, token, refreshUser, topupWallet } = useAuth();
-  const [activeTab, setActiveTab] = useState<'contracts' | 'appointments' | 'deposits'>('contracts');
+  const [activeTab, setActiveTab] = useState<'contracts' | 'appointments' | 'deposits' | 'transactions'>(initialTab || 'appointments');
   
   const [contracts, setContracts] = useState<RentalContract[]>([]);
   const [appointments, setAppointments] = useState<LichHen[]>([]);
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
+  const [transactions, setTransactions] = useState<GiaoDichVi[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [confirmingContractId, setConfirmingContractId] = useState<number | null>(null);
@@ -54,16 +59,18 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
     if (!token) return;
     try {
       setLoading(true);
-      const [appRes, depRes, contRes, roomsRes] = await Promise.all([
+      const [appRes, depRes, contRes, roomsRes, txRes] = await Promise.all([
         fetch('/api/appointments', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/deposits', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/rentals', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/rooms'),
+        fetch('/api/wallet/transactions', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const appData = await appRes.json();
       const depData = await depRes.json();
       const contData = await contRes.json();
       const roomsData = await roomsRes.json();
+      const txData = await txRes.json();
 
       if (appData.success) {
         setAppointments(appData.data || []);
@@ -77,6 +84,9 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
       if (roomsData.success) {
         setAvailableRooms(roomsData.data || []);
       }
+      if (txData.success) {
+        setTransactions(txData.data || []);
+      }
     } catch (err) {
       console.error('Error fetching student history:', err);
     } finally {
@@ -87,6 +97,12 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
   useEffect(() => {
     fetchData();
   }, [token]);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Sinh viên xác nhận đồng ý thuê phòng (khi chủ trọ gửi đề xuất pending_renter)
   const handleConfirmContract = async (id: number) => {
@@ -354,28 +370,103 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-slate-200 gap-4 overflow-x-auto">
+      {/* Quick Summary Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <button
-          onClick={() => setActiveTab('contracts')}
-          className={`pb-3 text-sm sm:text-base font-bold flex items-center gap-2 transition-all relative whitespace-nowrap cursor-pointer ${
-            activeTab === 'contracts'
-              ? 'text-indigo-600'
-              : 'text-slate-500 hover:text-slate-800'
+          type="button"
+          onClick={() => setActiveTab('appointments')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            activeTab === 'appointments'
+              ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-400 shadow-sm'
+              : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50'
           }`}
         >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Hợp đồng & Xác nhận thuê phòng</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-            activeTab === 'contracts' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
-          }`}>
-            {contracts.length}
-          </span>
-          {activeTab === 'contracts' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
-          )}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500">Lịch xem phòng</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+              <Calendar className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-900 tabular-nums">
+            {appointments.length}
+          </div>
+          <p className="text-[11px] text-blue-600 font-medium mt-1">
+            {appointments.filter(a => a.TrangThai === 'Chờ xác nhận').length} đang chờ duyệt
+          </p>
         </button>
 
+        <button
+          type="button"
+          onClick={() => setActiveTab('deposits')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            activeTab === 'deposits'
+              ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-400 shadow-sm'
+              : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500">Đơn đặt cọc</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-900 tabular-nums">
+            {deposits.length}
+          </div>
+          <p className="text-[11px] text-emerald-600 font-medium mt-1">
+            {deposits.filter(d => d.TrangThaiCoc === 'Chờ xác nhận').length} chờ tiếp nhận
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('contracts')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            activeTab === 'contracts'
+              ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-400 shadow-sm'
+              : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500">Hợp đồng thuê</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-900 tabular-nums">
+            {contracts.length}
+          </div>
+          <p className="text-[11px] text-indigo-600 font-medium mt-1">
+            {contracts.filter(c => c.status === 'active').length} đang ở thực tế
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('transactions')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            activeTab === 'transactions'
+              ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400 shadow-sm'
+              : 'bg-white border-slate-200 hover:border-amber-300 hover:bg-slate-50'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500">Lịch sử thanh toán</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+              <History className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-900 tabular-nums">
+            {transactions.length}
+          </div>
+          <p className="text-[11px] text-amber-700 font-medium mt-1">
+            Giao dịch nạp & hoàn tiền
+          </p>
+        </button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-200 gap-4 overflow-x-auto">
         <button
           onClick={() => setActiveTab('appointments')}
           className={`pb-3 text-sm sm:text-base font-bold flex items-center gap-2 transition-all relative whitespace-nowrap cursor-pointer ${
@@ -413,6 +504,46 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
           </span>
           {activeTab === 'deposits' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-full" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('contracts')}
+          className={`pb-3 text-sm sm:text-base font-bold flex items-center gap-2 transition-all relative whitespace-nowrap cursor-pointer ${
+            activeTab === 'contracts'
+              ? 'text-indigo-600'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Hợp đồng & Xác nhận thuê</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            activeTab === 'contracts' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {contracts.length}
+          </span>
+          {activeTab === 'contracts' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transactions')}
+          className={`pb-3 text-sm sm:text-base font-bold flex items-center gap-2 transition-all relative whitespace-nowrap cursor-pointer ${
+            activeTab === 'transactions'
+              ? 'text-amber-600'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          <span>Lịch sử thanh toán & Ví</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            activeTab === 'transactions' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {transactions.length}
+          </span>
+          {activeTab === 'transactions' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600 rounded-full" />
           )}
         </button>
       </div>
@@ -1039,6 +1170,87 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Lịch sử thanh toán & Ví điện tử */}
+      {activeTab === 'transactions' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Lịch sử thanh toán & biến động số dư</h3>
+                <p className="text-xs text-slate-500">
+                  Theo dõi chi tiết các giao dịch nạp tiền, đặt cọc giữ phòng và hoàn tiền ví
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-[11px] text-slate-400 block font-medium">Số dư hiện tại</span>
+                <span className="text-base font-black text-emerald-600 tabular-nums">
+                  {(user?.soDuVi || 0).toLocaleString('vi-VN')} đ
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickTopup}
+                disabled={topupLoading}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{topupLoading ? 'Đang nạp...' : '+ Nạp tiền'}</span>
+              </button>
+            </div>
+          </div>
+
+          {transactions.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
+              <Wallet className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              <p className="text-sm font-semibold text-slate-700">Chưa có giao dịch thanh toán nào</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Khi bạn nạp tiền ví, đặt cọc giữ phòng hoặc nhận hoàn tiền cọc, thông tin sẽ được lưu đầy đủ tại đây.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-xs">
+              {transactions.map((tx) => {
+                const isPlus = tx.SoTien > 0;
+                return (
+                  <div key={tx.Id} className="p-4 flex items-center justify-between gap-3 text-xs hover:bg-slate-50/60 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        isPlus ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
+                      }`}>
+                        {isPlus ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-900 text-xs sm:text-sm">{tx.NoiDung}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {formatDateTime(tx.NgayTao)} • Mã GD: <span className="font-mono">{tx.Id}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className={`font-black tabular-nums text-sm sm:text-base ${
+                        isPlus ? 'text-emerald-600' : 'text-rose-600'
+                      }`}>
+                        {isPlus ? '+' : ''}{tx.SoTien.toLocaleString('vi-VN')} đ
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                        Số dư sau GD: <span className="font-bold text-slate-700">{tx.SoDuSauGiaoDich.toLocaleString('vi-VN')} đ</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

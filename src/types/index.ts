@@ -179,3 +179,15 @@ export interface AdminStats {
     totalDepositMoney: number;
   };
 }
+
+export interface GiaoDichVi {
+  Id: string;
+  UserId: string;
+  LoaiGiaoDich: 'NapTien' | 'DatCoc' | 'HoanCoc' | 'NhanCoc';
+  SoTien: number;
+  SoDuSauGiaoDich: number;
+  NoiDung: string;
+  MaThamChieu?: string;
+  NgayTao: string;
+}
+

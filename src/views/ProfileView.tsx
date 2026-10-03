@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Phone, Mail, Lock, ShieldCheck, Wallet, PlusCircle, CheckCircle2, AlertCircle, Save } from 'lucide-react';
+import { User, Phone, Mail, Lock, ShieldCheck, Wallet, PlusCircle, CheckCircle2, AlertCircle, Save, ArrowDownLeft, ArrowUpRight, History } from 'lucide-react';
 
 export const ProfileView: React.FC = () => {
-  const { user, updateProfile, topupWallet } = useAuth();
+  const { user, updateProfile, topupWallet, walletTransactions, refreshTransactions } = useAuth();
 
   const [hoTen, setHoTen] = useState(user?.HoTen || '');
   const [sdt, setSdt] = useState(user?.Sdt || '');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [matKhauCu, setMatKhauCu] = useState('');
   const [matKhauMoi, setMatKhauMoi] = useState('');
   const [xacNhanMatKhauMoi, setXacNhanMatKhauMoi] = useState('');
@@ -16,7 +17,20 @@ export const ProfileView: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [walletMsg, setWalletMsg] = useState('');
+  const [customTopupAmount, setCustomTopupAmount] = useState('');
   const [isTopup, setIsTopup] = useState(false);
+
+  // Sync profile form when user object updates
+  useEffect(() => {
+    if (user) {
+      setHoTen(user.HoTen || '');
+      setSdt(user.Sdt || '');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshTransactions();
+  }, [refreshTransactions]);
 
   const handleUpdateInfo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,18 +42,21 @@ export const ProfileView: React.FC = () => {
       return;
     }
 
-    const cleanPhone = sdt.replace(/\D/g, '');
+    let cleanPhone = sdt.replace(/\s+/g, '').replace(/[\.\-]/g, '');
+    if (cleanPhone.startsWith('+84')) cleanPhone = '0' + cleanPhone.slice(3);
+    if (cleanPhone.startsWith('84') && cleanPhone.length > 10) cleanPhone = '0' + cleanPhone.slice(2);
+
     if (!cleanPhone || cleanPhone.length < 9 || cleanPhone.length > 11) {
-      setProfileError('Số điện thoại không hợp lệ (cần từ 9 đến 11 chữ số).');
+      setProfileError('Số điện thoại không hợp lệ (cần từ 9 đến 11 chữ số, VD: 0987654321).');
       return;
     }
 
-    if (matKhauMoi) {
+    if (isChangingPassword) {
       if (!matKhauCu) {
         setProfileError('Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu mới.');
         return;
       }
-      if (matKhauMoi.length < 6) {
+      if (!matKhauMoi || matKhauMoi.length < 6) {
         setProfileError('Mật khẩu mới phải có tối thiểu 6 ký tự.');
         return;
       }
@@ -53,16 +70,19 @@ export const ProfileView: React.FC = () => {
     const res = await updateProfile({
       HoTen: hoTen.trim(),
       Sdt: cleanPhone,
-      MatKhauCu: matKhauCu || undefined,
-      MatKhauMoi: matKhauMoi || undefined,
+      MatKhauCu: isChangingPassword ? matKhauCu : undefined,
+      MatKhauMoi: isChangingPassword ? matKhauMoi : undefined,
     });
     setIsUpdating(false);
 
     if (res.success) {
       setProfileMsg(res.message);
-      setMatKhauCu('');
-      setMatKhauMoi('');
-      setXacNhanMatKhauMoi('');
+      if (isChangingPassword) {
+        setMatKhauCu('');
+        setMatKhauMoi('');
+        setXacNhanMatKhauMoi('');
+        setIsChangingPassword(false);
+      }
       setTimeout(() => setProfileMsg(''), 4000);
     } else {
       setProfileError(res.message);
@@ -70,14 +90,26 @@ export const ProfileView: React.FC = () => {
   };
 
   const handleTopup = async (amount: number) => {
+    if (amount <= 0) return;
     setIsTopup(true);
     setWalletMsg('');
     const res = await topupWallet(amount);
     setIsTopup(false);
     if (res.success) {
       setWalletMsg(res.message);
+      setCustomTopupAmount('');
       setTimeout(() => setWalletMsg(''), 4000);
     }
+  };
+
+  const handleCustomTopup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = Number(customTopupAmount.replace(/\D/g, ''));
+    if (!val || val < 10000) {
+      setWalletMsg('Vui lòng nhập số tiền từ 10.000 VNĐ trở lên.');
+      return;
+    }
+    handleTopup(val);
   };
 
   const getRoleBadge = () => {
@@ -88,6 +120,21 @@ export const ProfileView: React.FC = () => {
       return <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-semibold rounded-lg text-xs">🏢 Chủ trọ cho thuê</span>;
     }
     return <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-semibold rounded-lg text-xs">🎓 Sinh viên tìm phòng</span>;
+  };
+
+  const formatDateTime = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      return new Date(isoString).toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return isoString;
+    }
   };
 
   return (
@@ -143,14 +190,14 @@ export const ProfileView: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-white/15">
-              <span className="text-[11px] text-blue-200 block mb-2 font-medium">Nạp tiền thử nghiệm nhanh:</span>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="mt-4 pt-4 border-t border-white/15 space-y-3">
+              <span className="text-[11px] text-blue-200 block font-medium">Nạp tiền nhanh vào ví:</span>
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   disabled={isTopup}
                   onClick={() => handleTopup(500000)}
-                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-semibold text-center transition-colors disabled:opacity-50"
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   +500.000 đ
                 </button>
@@ -158,11 +205,69 @@ export const ProfileView: React.FC = () => {
                   type="button"
                   disabled={isTopup}
                   onClick={() => handleTopup(1000000)}
-                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-semibold text-center transition-colors disabled:opacity-50"
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   +1.000.000 đ
                 </button>
+                <button
+                  type="button"
+                  disabled={isTopup}
+                  onClick={() => handleTopup(2000000)}
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  +2.000.000 đ
+                </button>
+                <button
+                  type="button"
+                  disabled={isTopup}
+                  onClick={() => handleTopup(5000000)}
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  +5.000.000 đ
+                </button>
+                <button
+                  type="button"
+                  disabled={isTopup}
+                  onClick={() => handleTopup(10000000)}
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  +10.000.000 đ
+                </button>
+                <button
+                  type="button"
+                  disabled={isTopup}
+                  onClick={() => handleTopup(50000000)}
+                  className="py-1.5 px-2 bg-white/15 hover:bg-white/25 rounded-xl text-[11px] font-semibold text-center transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  +50.000.000 đ
+                </button>
               </div>
+
+              {/* Custom amount topup */}
+              <form onSubmit={handleCustomTopup} className="pt-2 border-t border-white/10 space-y-2">
+                <label className="text-[10px] text-blue-200 block font-medium">
+                  Hoặc nhập số tiền tùy chọn (đến 500.000.000 đ):
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min="10000"
+                    max="500000000"
+                    step="10000"
+                    placeholder="VD: 15000000"
+                    value={customTopupAmount}
+                    onChange={(e) => setCustomTopupAmount(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 bg-white/15 text-white placeholder-blue-300 text-xs rounded-xl border border-white/20 focus:outline-none focus:bg-white/25"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isTopup || !customTopupAmount}
+                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isTopup ? '...' : 'Nạp'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
 
@@ -189,7 +294,7 @@ export const ProfileView: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleUpdateInfo} className="space-y-4">
+          <form onSubmit={handleUpdateInfo} className="space-y-4" autoComplete="off">
             
             {/* Readonly Email */}
             <div>
@@ -221,6 +326,7 @@ export const ProfileView: React.FC = () => {
                   type="text"
                   value={hoTen}
                   onChange={(e) => setHoTen(e.target.value)}
+                  placeholder="Nhập họ và tên đầy đủ"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
                   required
                 />
@@ -238,66 +344,80 @@ export const ProfileView: React.FC = () => {
                   type="tel"
                   value={sdt}
                   onChange={(e) => setSdt(e.target.value)}
+                  placeholder="VD: 0912345678"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
                   required
                 />
               </div>
               <span className="text-[10px] text-slate-400 mt-1 block">
-                Dùng để chủ trọ và sinh viên liên lạc trực tiếp khi xem phòng.
+                Dùng để liên hệ trực tiếp khi xem phòng hoặc thực hiện thủ tục thuê phòng.
               </span>
             </div>
 
-            {/* Change password section */}
+            {/* Toggle Change Password */}
             <div className="pt-4 border-t border-slate-100">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                Đổi mật khẩu (Tùy chọn)
-              </h4>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Đổi mật khẩu
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsChangingPassword(!isChangingPassword)}
+                  className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                    isChangingPassword ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {isChangingPassword ? 'Hủy đổi mật khẩu' : 'Đổi mật khẩu'}
+                </button>
+              </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Mật khẩu hiện tại
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {isChangingPassword && (
+                <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Mật khẩu hiện tại <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="password"
                       value={matKhauCu}
                       onChange={(e) => setMatKhauCu(e.target.value)}
-                      placeholder="Chỉ nhập nếu bạn muốn đổi mật khẩu"
-                      className="w-full pl-10 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Mật khẩu mới
-                    </label>
-                    <input
-                      type="password"
-                      value={matKhauMoi}
-                      onChange={(e) => setMatKhauMoi(e.target.value)}
-                      placeholder="Tối thiểu 6 ký tự"
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
+                      placeholder="Nhập mật khẩu hiện tại"
+                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Xác nhận mật khẩu mới
-                    </label>
-                    <input
-                      type="password"
-                      value={xacNhanMatKhauMoi}
-                      onChange={(e) => setXacNhanMatKhauMoi(e.target.value)}
-                      placeholder="Nhập lại mật khẩu mới"
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Mật khẩu mới <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={matKhauMoi}
+                        onChange={(e) => setMatKhauMoi(e.target.value)}
+                        placeholder="Tối thiểu 6 ký tự"
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Xác nhận mật khẩu mới <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={xacNhanMatKhauMoi}
+                        onChange={(e) => setXacNhanMatKhauMoi(e.target.value)}
+                        placeholder="Nhập lại mật khẩu mới"
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-end">
@@ -315,6 +435,69 @@ export const ProfileView: React.FC = () => {
 
         </div>
 
+      </div>
+
+      {/* Full-width Lịch sử giao dịch ví (Lịch sử thanh toán & biến động số dư) */}
+      <div className="mt-8 bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <History className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                Lịch sử thanh toán & biến động số dư ví
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Ghi nhận mọi giao dịch nạp tiền, đặt cọc giữ phòng và hoàn tiền ví trên hệ thống
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+            {walletTransactions.length} giao dịch
+          </span>
+        </div>
+
+        {walletTransactions.length === 0 ? (
+          <div className="py-8 text-center text-slate-400 text-xs">
+            <Wallet className="w-8 h-8 mx-auto mb-2 text-slate-300 opacity-60" />
+            <p>Chưa có giao dịch nào được ghi nhận.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100 overflow-hidden">
+            {walletTransactions.map((tx) => {
+              const isPlus = tx.SoTien > 0;
+              return (
+                <div key={tx.Id} className="py-3 flex items-center justify-between gap-3 text-xs hover:bg-slate-50/50 px-2 rounded-xl transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                      isPlus ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                    }`}>
+                      {isPlus ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-800">{tx.NoiDung}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {formatDateTime(tx.NgayTao)} • Mã: <span className="font-mono">{tx.Id}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className={`font-bold tabular-nums text-sm ${
+                      isPlus ? 'text-emerald-600' : 'text-rose-600'
+                    }`}>
+                      {isPlus ? '+' : ''}{tx.SoTien.toLocaleString('vi-VN')} đ
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Số dư sau GD: {tx.SoDuSauGiaoDich.toLocaleString('vi-VN')} đ
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
     </div>
