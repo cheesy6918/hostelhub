@@ -191,7 +191,7 @@ export function getInitialData(): DatabaseSchema {
       MatKhau: hashPass123456,
       Sdt: '0912345678',
       VaiTro: 'SinhVien',
-      soDuVi: 2000000,
+      soDuVi: 10000000,
       NgayTao: now,
       TrangThai: 'HoatDong',
     },

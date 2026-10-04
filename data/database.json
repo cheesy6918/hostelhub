@@ -29,7 +29,7 @@
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0912345678",
       "VaiTro": "SinhVien",
-      "soDuVi": 2000000,
+      "soDuVi": 11000000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
     }
@@ -1027,5 +1027,6 @@
       "TrangThai": "ChuaDoc",
       "NgayTao": "2026-09-23T08:18:22.714Z"
     }
-  ]
+  ],
+  "favorites": []
 }

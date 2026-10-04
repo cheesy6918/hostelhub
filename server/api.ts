@@ -115,7 +115,7 @@ apiRouter.post('/auth/register', (req: Request, res: Response) => {
       MatKhau: hashedPassword,
       Sdt: cleanPhone,
       VaiTro,
-      soDuVi: 2000000, // Mặc định 2.000.000 VNĐ cho demo
+      soDuVi: 10000000, // Mặc định 2.000.000 VNĐ cho demo
       NgayTao: new Date().toISOString(),
       TrangThai: 'HoatDong',
     };
