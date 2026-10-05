@@ -1003,6 +1003,15 @@
   "deposits": [],
   "notifications": [
     {
+      "Id": "tb_1791173254286_5o7h",
+      "UserId": "usr_chutro",
+      "TieuDe": "Tin đăng phòng trọ đã được phê duyệt!",
+      "NoiDung": "Tin đăng \"Phòng trọ Test Admin Duyệt\" của bạn đã được kiểm duyệt và chuyển sang trạng thái \"Công khai\", sẵn sàng hiển thị trên trang tìm kiếm.",
+      "Loai": "PhongTro",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-05T04:07:34.286Z"
+    },
+    {
       "Id": "tb_1790151513737_xix2",
       "UserId": "usr_chutro",
       "TieuDe": "Tin đăng phòng trọ đã được phê duyệt!",

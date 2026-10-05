@@ -25,7 +25,8 @@ import {
   X,
   MapPin,
   Maximize2,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -85,11 +86,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     if (!token) return;
     try {
       setLoading(true);
-      // Fetch stats, users, all rooms (including pending/rejected) in parallel
+      // Fetch stats, users, all rooms directly from Admin API in parallel
       const [resStats, resUsers, resRooms] = await Promise.all([
         fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/rooms?status=all'),
+        fetch('/api/admin/rooms', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       const [dataStats, dataUsers, dataRooms] = await Promise.all([
@@ -108,9 +109,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     }
   };
 
+  // Tự động gọi lại API fetch danh sách phòng khi Admin chuyển tab hoặc khi token thay đổi
   useEffect(() => {
     fetchAdminData();
-  }, [token]);
+  }, [token, activeTab]);
 
   // Render Chart.js when stats are available and on 'stats' tab
   useEffect(() => {
@@ -475,11 +477,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     return matchSearch && matchRole;
   });
 
-  const pendingRooms = rooms.filter((r) => r.TrangThai === 'Chờ duyệt');
+  // Helper chuẩn hóa so sánh trạng thái phòng tránh lệch case hoặc dấu tiếng Việt
+  const isPendingRoom = (status?: string) => {
+    if (!status) return false;
+    const s = status.trim().toLowerCase();
+    return s === 'chờ duyệt' || s === 'choduyet' || s === 'cho_duyet' || s === 'pending';
+  };
+
+  const isApprovedRoom = (status?: string) => {
+    if (!status) return false;
+    const s = status.trim().toLowerCase();
+    return s === 'công khai' || s === 'congkhai' || s === 'còn phòng' || s === 'approved';
+  };
+
+  const isRejectedRoom = (status?: string) => {
+    if (!status) return false;
+    const s = status.trim().toLowerCase();
+    return s === 'từ chối' || s === 'tuchoi' || s === 'rejected';
+  };
+
+  const pendingRooms = rooms.filter((r) => isPendingRoom(r.TrangThai));
 
   const filteredModerationRooms = rooms.filter((r) => {
     if (roomStatusFilter === 'all') return true;
-    return r.TrangThai === roomStatusFilter;
+    if (roomStatusFilter === 'Chờ duyệt') return isPendingRoom(r.TrangThai);
+    if (roomStatusFilter === 'Công khai') return isApprovedRoom(r.TrangThai);
+    if (roomStatusFilter === 'Từ chối') return isRejectedRoom(r.TrangThai);
+    return (r.TrangThai || '').trim().toLowerCase() === roomStatusFilter.trim().toLowerCase();
   });
 
   return (
@@ -952,8 +976,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
               <div className="flex items-center gap-1.5 flex-wrap">
                 {[
                   { label: 'Chờ duyệt', value: 'Chờ duyệt', count: pendingRooms.length },
-                  { label: 'Công khai', value: 'Công khai', count: rooms.filter(r => r.TrangThai === 'Công khai').length },
-                  { label: 'Từ chối', value: 'Từ chối', count: rooms.filter(r => r.TrangThai === 'Từ chối').length },
+                  { label: 'Công khai', value: 'Công khai', count: rooms.filter(r => isApprovedRoom(r.TrangThai)).length },
+                  { label: 'Từ chối', value: 'Từ chối', count: rooms.filter(r => isRejectedRoom(r.TrangThai)).length },
                   { label: 'Tất cả', value: 'all', count: rooms.length },
                 ].map((tab) => (
                   <button
@@ -968,6 +992,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     {tab.label} ({tab.count})
                   </button>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={fetchAdminData}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Tải lại danh sách phòng"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Làm mới</span>
+                </button>
               </div>
             </div>
 

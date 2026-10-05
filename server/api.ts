@@ -59,6 +59,7 @@ import {
   getReviewsFromDb,
   createReviewInDb,
   canUserReviewRoomInDb,
+  parseRoomRow,
 } from './db.js';
 import { createSessionToken, getUserByToken, sanitizeUser } from './auth.js';
 import { handleChatMessage } from './chatService.js';
@@ -517,12 +518,24 @@ apiRouter.get('/rooms', async (req: Request, res: Response) => {
     }
   }
 
-  // Filter by status if specified, otherwise hide "Chờ duyệt" and "Từ chối" from public searches
-  if (status && typeof status === 'string' && status !== 'all') {
-    results = results.filter(r => r.TrangThai === status);
+  // Filter by status if specified. If status === 'all', do not exclude pending or rejected rooms
+  if (status && typeof status === 'string') {
+    if (status !== 'all') {
+      const targetStatus = status.trim().toLowerCase();
+      results = results.filter(r => {
+        const s = (r.TrangThai || '').trim().toLowerCase();
+        if (targetStatus === 'chờ duyệt' || targetStatus === 'choduyet' || targetStatus === 'cho_duyet' || targetStatus === 'pending') {
+          return s === 'chờ duyệt' || s === 'choduyet' || s === 'cho_duyet' || s === 'pending';
+        }
+        return s === targetStatus;
+      });
+    }
   } else if (!landlordId) {
     // When queried without landlordId or explicit status filter, show only approved rooms
-    results = results.filter(r => r.TrangThai !== 'Chờ duyệt' && r.TrangThai !== 'Từ chối');
+    results = results.filter(r => {
+      const s = (r.TrangThai || '').trim().toLowerCase();
+      return s !== 'chờ duyệt' && s !== 'choduyet' && s !== 'cho_duyet' && s !== 'pending' && s !== 'từ chối';
+    });
   }
 
   // Filter by room type
@@ -2112,61 +2125,194 @@ apiRouter.post('/notifications/test-generate', requireAuth, async (req: Request,
 // 6. ADMIN MANAGEMENT (DÀNH CHO ADMIN)
 // -------------------------------------------------------------
 
+// GET /api/admin/rooms - Lấy toàn bộ danh sách phòng cho Admin từ MySQL/TiDB (ORDER BY NgayDang DESC)
+apiRouter.get('/admin/rooms', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền xem danh sách phòng kiểm duyệt.' });
+      return;
+    }
+
+    const { status } = req.query;
+    let rooms: PhongTro[] = [];
+
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        let sql = 'SELECT * FROM rooms';
+        const params: any[] = [];
+
+        if (status && typeof status === 'string' && status !== 'all') {
+          const st = status.trim().toLowerCase();
+          if (st === 'chờ duyệt' || st === 'choduyet' || st === 'cho_duyet' || st === 'pending') {
+            sql += ' WHERE TrangThai = ? OR TrangThai = ? OR TrangThai = ? OR TrangThai = ?';
+            params.push('Chờ duyệt', 'ChoDuyet', 'cho_duyet', 'pending');
+          } else if (st === 'công khai' || st === 'congkhai' || st === 'approved') {
+            sql += ' WHERE TrangThai = ? OR TrangThai = ? OR TrangThai = ?';
+            params.push('Công khai', 'Còn phòng', 'approved');
+          } else if (st === 'từ chối' || st === 'tuchoi' || st === 'rejected') {
+            sql += ' WHERE TrangThai = ? OR TrangThai = ? OR TrangThai = ?';
+            params.push('Từ chối', 'TuChoi', 'rejected');
+          } else {
+            sql += ' WHERE TrangThai = ?';
+            params.push(status);
+          }
+        }
+
+        // Đảm bảo sắp xếp theo ngày tạo mới nhất (ORDER BY NgayDang DESC)
+        sql += ' ORDER BY COALESCE(NgayDang, Id) DESC';
+
+        const [rows] = await pool.query(sql, params);
+        rooms = (rows as any[]).map(parseRoomRow);
+
+        // Đồng bộ cache bộ nhớ
+        const db = readDb();
+        if (rooms.length > 0) {
+          db.rooms = rooms;
+        }
+      } catch (sqlErr) {
+        console.warn('[MySQL] Error querying /admin/rooms, falling back to local store:', sqlErr);
+        const db = readDb();
+        rooms = db.rooms || [];
+      }
+    } else {
+      const db = readDb();
+      rooms = db.rooms || [];
+    }
+
+    // Sắp xếp mới nhất lên đầu
+    rooms.sort((a, b) => {
+      const timeA = new Date(a.NgayDang || 0).getTime() || 0;
+      const timeB = new Date(b.NgayDang || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+
+    if (status && typeof status === 'string' && status !== 'all') {
+      const target = status.trim().toLowerCase();
+      rooms = rooms.filter(r => {
+        const s = (r.TrangThai || '').trim().toLowerCase();
+        if (target === 'chờ duyệt' || target === 'choduyet' || target === 'cho_duyet' || target === 'pending') {
+          return s === 'chờ duyệt' || s === 'choduyet' || s === 'cho_duyet' || s === 'pending';
+        }
+        if (target === 'công khai' || target === 'congkhai' || target === 'approved') {
+          return s === 'công khai' || s === 'còn phòng' || s === 'congkhai' || s === 'approved';
+        }
+        if (target === 'từ chối' || target === 'tuchoi' || target === 'rejected') {
+          return s === 'từ chối' || s === 'tuchoi' || s === 'rejected';
+        }
+        return s === target;
+      });
+    }
+
+    res.json({
+      success: true,
+      count: rooms.length,
+      data: rooms,
+    });
+  } catch (error: any) {
+    console.error('Lỗi lấy danh sách phòng cho Admin:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi truy vấn cơ sở dữ liệu' });
+  }
+});
+
 // PUT /api/admin/rooms/:id/moderate - Phê duyệt hoặc Từ chối phòng trọ
-apiRouter.put('/admin/rooms/:id/moderate', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  if (user.VaiTro !== 'Admin') {
-    res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền kiểm duyệt phòng trọ.' });
-    return;
-  }
+apiRouter.put('/admin/rooms/:id/moderate', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền kiểm duyệt phòng trọ.' });
+      return;
+    }
 
-  const { action, reason } = req.body; // 'approve' | 'reject'
-  const db = readDb();
-  const room = db.rooms.find(r => r.Id === req.params.id);
-  if (!room) {
-    res.status(404).json({ success: false, message: 'Phòng trọ không tồn tại.' });
-    return;
-  }
+    const { action, reason } = req.body; // 'approve' | 'reject'
+    const db = readDb();
+    let room = db.rooms.find(r => r.Id === req.params.id);
+    if (!room) {
+      room = (await getRoomByIdFromDb(req.params.id)) || undefined;
+    }
+    if (!room) {
+      res.status(404).json({ success: false, message: 'Phòng trọ không tồn tại.' });
+      return;
+    }
 
-  if (action === 'approve') {
-    room.TrangThai = 'Công khai';
-    room.LyDoTuChoi = undefined;
+    const isConn = await isMySqlConnected();
 
-    addNotification(
-      db,
-      room.IdChuTro || room.ChuTroId || '',
-      'Tin đăng phòng trọ đã được phê duyệt!',
-      `Tin đăng "${room.TieuDe}" của bạn đã được kiểm duyệt và chuyển sang trạng thái "Công khai", sẵn sàng hiển thị trên trang tìm kiếm.`,
-      'PhongTro'
-    );
+    if (action === 'approve') {
+      room.TrangThai = 'Công khai';
+      room.LyDoTuChoi = undefined;
 
-    writeDb(db);
-    res.json({
-      success: true,
-      message: 'Đã phê duyệt phòng trọ thành công! Phòng đã chuyển sang trạng thái "Công khai".',
-      room,
-    });
-  } else if (action === 'reject') {
-    const rejectReason = (reason || '').trim() || 'Thông tin phòng trọ chưa đạt tiêu chuẩn kiểm duyệt của hệ thống.';
-    room.TrangThai = 'Từ chối';
-    room.LyDoTuChoi = rejectReason;
+      if (isConn) {
+        try {
+          await pool.execute(
+            'UPDATE rooms SET TrangThai = ?, LyDoTuChoi = NULL WHERE Id = ?',
+            ['Công khai', room.Id]
+          );
+        } catch (err: any) {
+          if (err.code === 'ER_BAD_FIELD_ERROR') {
+            await pool.execute(
+              'UPDATE rooms SET trang_thai = ?, ly_do_tu_choi = NULL WHERE id = ?',
+              ['Công khai', room.Id]
+            );
+          }
+        }
+      }
 
-    addNotification(
-      db,
-      room.IdChuTro || room.ChuTroId || '',
-      'Tin đăng phòng trọ bị từ chối phê duyệt',
-      `Tin đăng "${room.TieuDe}" của bạn đã bị từ chối kiểm duyệt. Lý do: "${rejectReason}". Vui lòng kiểm tra và cập nhật lại thông tin.`,
-      'PhongTro'
-    );
+      addNotification(
+        db,
+        room.IdChuTro || room.ChuTroId || '',
+        'Tin đăng phòng trọ đã được phê duyệt!',
+        `Tin đăng "${room.TieuDe}" của bạn đã được kiểm duyệt và chuyển sang trạng thái "Công khai", sẵn sàng hiển thị trên trang tìm kiếm.`,
+        'PhongTro'
+      );
 
-    writeDb(db);
-    res.json({
-      success: true,
-      message: 'Đã từ chối bài đăng phòng trọ.',
-      room,
-    });
-  } else {
-    res.status(400).json({ success: false, message: 'Hành động không hợp lệ (approve hoặc reject).' });
+      writeDb(db);
+      res.json({
+        success: true,
+        message: 'Đã phê duyệt phòng trọ thành công! Phòng đã chuyển sang trạng thái "Công khai".',
+        room,
+      });
+    } else if (action === 'reject') {
+      const rejectReason = (reason || '').trim() || 'Thông tin phòng trọ chưa đạt tiêu chuẩn kiểm duyệt của hệ thống.';
+      room.TrangThai = 'Từ chối';
+      room.LyDoTuChoi = rejectReason;
+
+      if (isConn) {
+        try {
+          await pool.execute(
+            'UPDATE rooms SET TrangThai = ?, LyDoTuChoi = ? WHERE Id = ?',
+            ['Từ chối', rejectReason, room.Id]
+          );
+        } catch (err: any) {
+          if (err.code === 'ER_BAD_FIELD_ERROR') {
+            await pool.execute(
+              'UPDATE rooms SET trang_thai = ?, ly_do_tu_choi = ? WHERE id = ?',
+              ['Từ chối', rejectReason, room.Id]
+            );
+          }
+        }
+      }
+
+      addNotification(
+        db,
+        room.IdChuTro || room.ChuTroId || '',
+        'Tin đăng phòng trọ bị từ chối phê duyệt',
+        `Tin đăng "${room.TieuDe}" của bạn đã bị từ chối kiểm duyệt. Lý do: "${rejectReason}". Vui lòng kiểm tra và cập nhật lại thông tin.`,
+        'PhongTro'
+      );
+
+      writeDb(db);
+      res.json({
+        success: true,
+        message: 'Đã từ chối bài đăng phòng trọ.',
+        room,
+      });
+    } else {
+      res.status(400).json({ success: false, message: 'Hành động không hợp lệ (approve hoặc reject).' });
+    }
+  } catch (error: any) {
+    console.error('Lỗi khi kiểm duyệt phòng:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi khi cập nhật trạng thái phòng' });
   }
 });
 
