@@ -76,8 +76,8 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
   const [diaChi, setDiaChi] = useState('');
   const [quanHuyen, setQuanHuyen] = useState('Cầu Giấy, Hà Nội');
   const [giaThue, setGiaThue] = useState<number | ''>(2500000);
-  const [giaDien, setGiaDien] = useState('3.800 đ/kWh');
-  const [giaNuoc, setGiaNuoc] = useState('30.000 đ/khối');
+  const [giaDien, setGiaDien] = useState<number | ''>(3800);
+  const [giaNuoc, setGiaNuoc] = useState<number | ''>(30000);
   const [dienTich, setDienTich] = useState<number | ''>(25);
   const [loaiPhong, setLoaiPhong] = useState<'GacLung' | 'Studio' | 'ChungCuMini' | 'KyTucXa'>('GacLung');
   
@@ -173,7 +173,10 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
       setSubmitting(true);
       const authToken = token || localStorage.getItem('token') || '';
       if (!authToken) {
-        setErrorMessage('Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập lại tài khoản Chủ trọ.');
+        const authErr = 'Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập lại tài khoản Chủ trọ.';
+        console.error("Lỗi đăng tin:", authErr);
+        alert(authErr);
+        setErrorMessage(authErr);
         setSubmitting(false);
         return;
       }
@@ -185,6 +188,35 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
       // Đảm bảo request gửi kèm đầy đủ headers xác thực
       const authHeader = authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`;
 
+      // Ép kiểu Number() cho GiaThue, GiaDien, GiaNuoc, DienTich theo yêu cầu
+      const numGiaThue = Number(giaThue);
+      const numGiaDien = typeof giaDien === 'number' ? giaDien : (Number(String(giaDien).replace(/[^\d]/g, '')) || 3800);
+      const numGiaNuoc = typeof giaNuoc === 'number' ? giaNuoc : (Number(String(giaNuoc).replace(/[^\d]/g, '')) || 30000);
+      const numDienTich = Number(dienTich) || 20;
+
+      const payload = {
+        TieuDe: tieuDe.trim(),
+        DiaChiChiTiet: diaChi.trim(),
+        DiaChi: diaChi.trim(),
+        QuanHuyen: quanHuyen,
+        LoaiPhong: loaiPhong,
+        DienTich: numDienTich,
+        GiaThue: numGiaThue,
+        GiaDien: numGiaDien,
+        GiaNuoc: numGiaNuoc,
+        TienIch: selectedAmenities,
+        HinhAnh: images,
+        MoTa: moTa.trim(),
+        NoiQuy: noiQuy.trim(),
+        IdChuTro: landlordId,
+        ChuTroId: landlordId,
+        chu_tro_id: landlordId,
+        landlord_id: landlordId,
+        ChuTroTen: landlordName,
+        ChuTroSdt: landlordPhone,
+        VideoUrl: videoUrl.trim() || undefined,
+      };
+
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: {
@@ -192,27 +224,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
           'Accept': 'application/json',
           'Authorization': authHeader,
         },
-        body: JSON.stringify({
-          TieuDe: tieuDe.trim(),
-          DiaChi: diaChi.trim(),
-          QuanHuyen: quanHuyen,
-          GiaThue: Number(giaThue),
-          GiaDien: giaDien.trim(),
-          GiaNuoc: giaNuoc.trim(),
-          DienTich: Number(dienTich) || 20,
-          LoaiPhong: loaiPhong,
-          TienIch: selectedAmenities,
-          HinhAnh: images,
-          MoTa: moTa.trim(),
-          NoiQuy: noiQuy.trim(),
-          IdChuTro: landlordId,
-          ChuTroId: landlordId,
-          chu_tro_id: landlordId,
-          landlord_id: landlordId,
-          ChuTroTen: landlordName,
-          ChuTroSdt: landlordPhone,
-          VideoUrl: videoUrl.trim() || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       let responseData: any = {};
@@ -227,29 +239,31 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
         responseData = { message: readErr?.message || 'Không thể đọc phản hồi từ máy chủ' };
       }
 
-      // Nếu API trả về lỗi, ném error với response.data để catch xử lý đồng nhất
-      if (!res.ok || !responseData.success) {
-        const apiError: any = new Error(responseData?.message || `Lỗi từ máy chủ (${res.status})`);
-        apiError.response = {
-          status: res.status,
-          data: responseData,
-        };
-        throw apiError;
+      // Bắt buộc kiểm tra kết quả trả về status: 200/201 và responseData.success
+      if ((res.status !== 200 && res.status !== 201) || !responseData?.success) {
+        const errorMsg = responseData?.message || responseData?.error || `Lỗi máy chủ (HTTP ${res.status})`;
+        console.error("Lỗi đăng tin:", errorMsg, responseData);
+        alert(`Lỗi đăng tin: ${errorMsg}`);
+        setErrorMessage(errorMsg);
+        // KHÔNG tự ý navigate chuyển trang nếu chưa có kết quả trả về status: 200/201
+        return;
       }
 
-      setSuccessMessage(responseData.message || 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.');
+      const successMsg = responseData.message || 'Đăng phòng trọ thành công! Tin của bạn đang ở trạng thái Chờ duyệt.';
+      alert(successMsg);
+      setSuccessMessage(successMsg);
       setTimeout(() => {
         onSuccess();
-      }, 1200);
+      }, 1000);
     } catch (error: any) {
-      console.error('Lỗi khi gửi form đăng tin phòng:', error);
-      // Thay thế thông báo chung chung bằng chi tiết lỗi thực tế từ error.response.data.message
+      console.error("Lỗi đăng tin:", error);
       const actualErrorMessage =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
         error?.data?.message ||
         error?.message ||
         'Lỗi lưu dữ liệu phòng trọ vào cơ sở dữ liệu. Vui lòng kiểm tra lại.';
+      alert(`Lỗi đăng tin: ${actualErrorMessage}`);
       setErrorMessage(actualErrorMessage);
     } finally {
       setSubmitting(false);
@@ -427,35 +441,39 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Giá điện <span className="text-red-500">*</span>
+                Giá điện (VNĐ/kWh) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="number"
                   required
+                  min="0"
+                  step="100"
                   value={giaDien}
-                  onChange={(e) => setGiaDien(e.target.value)}
-                  placeholder="VD: 3.800 đ/kWh hoặc Miễn phí"
+                  onChange={(e) => setGiaDien(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="3800"
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
                 />
-                <Zap className="w-4 h-4 text-amber-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">đ/kWh</span>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Giá nước <span className="text-red-500">*</span>
+                Giá nước (VNĐ/tháng hoặc khối) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="number"
                   required
+                  min="0"
+                  step="1000"
                   value={giaNuoc}
-                  onChange={(e) => setGiaNuoc(e.target.value)}
-                  placeholder="VD: 30.000 đ/khối hoặc 100k/người"
+                  onChange={(e) => setGiaNuoc(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="30000"
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
                 />
-                <Droplets className="w-4 h-4 text-cyan-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">đ/tháng</span>
               </div>
             </div>
           </div>

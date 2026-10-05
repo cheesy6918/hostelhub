@@ -19,7 +19,7 @@ export interface NguoiDung {
   TrangThai: 'HoatDong' | 'BiKhoa';
 }
 
-export type TrangThaiPhong = 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'Chờ chủ trọ xác nhận cọc' | 'Đã cọc' | 'Từ chối';
+export type TrangThaiPhong = 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'ChoDuyet' | 'Chờ chủ trọ xác nhận cọc' | 'Đã cọc' | 'Từ chối';
 
 export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy';
 export type TrangThaiDatCoc = 'Chờ xác nhận' | 'Đã tiếp nhận thành công' | 'Đã xác nhận' | 'Đã hủy';
@@ -124,12 +124,13 @@ export interface PhongTro {
   Id: string;
   TieuDe: string;
   DiaChi: string;
+  DiaChiChiTiet?: string;
   QuanHuyen: string;
   GiaThue: number; // VNĐ / tháng
-  GiaDien: string; // VD: "3.800 đ/kWh"
-  GiaNuoc: string; // VD: "30.000 đ/khối" hoặc "100.000 đ/người/tháng"
+  GiaDien: string | number; // VD: 3800 hoặc "3.800 đ/kWh"
+  GiaNuoc: string | number; // VD: 30000 hoặc "30.000 đ/khối"
   TienIch: string[]; // Mảng: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', ...]
-  TrangThai: TrangThaiPhong; // 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'Đã cọc' | 'Từ chối'
+  TrangThai: TrangThaiPhong; // 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'ChoDuyet' | 'Đã cọc' | 'Từ chối'
   LyDoTuChoi?: string;
   IdChuTro: string;
   ChuTroId?: string; // alias
@@ -1203,6 +1204,11 @@ function locateExistingDbFile(): string | null {
 }
 
 export function readDb(): DatabaseSchema {
+  // If in-memory cache exists and has rooms, return it directly so shared state between Landlord and Admin is instantaneous
+  if (memoryDbCache && memoryDbCache.rooms && memoryDbCache.rooms.length > 0) {
+    return memoryDbCache;
+  }
+
   // Check candidate database files and select the one with the latest mtime
   let targetFile: string | null = null;
   let latestMtime = -1;
@@ -1429,130 +1435,178 @@ export async function getRoomByIdFromDb(id: string): Promise<PhongTro | null> {
 }
 
 export async function createRoomInDb(room: PhongTro): Promise<PhongTro> {
+  const finalId = room.Id || ('room_' + Date.now());
+  const finalTitle = (room.TieuDe || '').trim();
+  const finalAddress = (room.DiaChi || (room as any).DiaChiChiTiet || '').trim();
+  const finalDistrict = (room.QuanHuyen || 'Cầu Giấy, Hà Nội').trim();
+  const finalRentPrice = Number(room.GiaThue || 2000000);
+  const finalElectricityPrice = typeof room.GiaDien === 'number' ? room.GiaDien : (Number(String(room.GiaDien).replace(/[^\d]/g, '')) || 3800);
+  const finalWaterPrice = typeof room.GiaNuoc === 'number' ? room.GiaNuoc : (Number(String(room.GiaNuoc).replace(/[^\d]/g, '')) || 30000);
+  const finalStatus = room.TrangThai || 'ChoDuyet';
+  const finalRejectReason = room.LyDoTuChoi || null;
+  const finalLandlordId = room.IdChuTro || room.ChuTroId || 'usr_chutro';
+  const finalLandlordName = room.ChuTroTen || 'Trần Thị Bích (Chủ trọ)';
+  const finalLandlordPhone = room.ChuTroSdt || '0987654321';
+  const finalDescription = (room.MoTa || '').trim();
+  const finalHouseRules = (room.NoiQuy || '').trim();
+  const finalArea = Number(room.DienTich || 20);
+  const finalRoomType = room.LoaiPhong || 'GacLung';
+  const finalPostedDate = room.NgayDang || new Date().toISOString();
+
+  const finalAmenities = Array.isArray(room.TienIch)
+    ? JSON.stringify(room.TienIch)
+    : (typeof room.TienIch === 'string' ? room.TienIch : JSON.stringify(['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do']));
+
+  const finalImages = Array.isArray(room.HinhAnh) && room.HinhAnh.length > 0
+    ? JSON.stringify(room.HinhAnh)
+    : JSON.stringify([
+        'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1000&q=80'
+      ]);
+
+  const finalReviews = Array.isArray(room.DanhGia)
+    ? JSON.stringify(room.DanhGia)
+    : JSON.stringify([]);
+
   const isConn = await isMySqlConnected();
   if (isConn) {
-    const finalId = room.Id || ('room_' + Date.now());
-    const finalTitle = (room.TieuDe || '').trim();
-    const finalAddress = (room.DiaChi || '').trim();
-    const finalDistrict = (room.QuanHuyen || 'Cầu Giấy, Hà Nội').trim();
-    const finalRentPrice = Number(room.GiaThue || 2000000);
-    const finalElectricityPrice = String(room.GiaDien || '3.800 đ/kWh').trim();
-    const finalWaterPrice = String(room.GiaNuoc || '30.000 đ/khối').trim();
-    const finalStatus = room.TrangThai || 'Chờ duyệt';
-    const finalRejectReason = room.LyDoTuChoi || null;
-    const finalLandlordId = room.IdChuTro || room.ChuTroId || 'usr_chutro';
-    const finalLandlordName = room.ChuTroTen || 'Trần Thị Bích (Chủ trọ)';
-    const finalLandlordPhone = room.ChuTroSdt || '0987654321';
-    const finalDescription = (room.MoTa || '').trim();
-    const finalHouseRules = (room.NoiQuy || '').trim();
-    const finalArea = Number(room.DienTich || 20);
-    const finalRoomType = room.LoaiPhong || 'GacLung';
-    const finalPostedDate = room.NgayDang || new Date().toISOString();
-
-    const finalAmenities = Array.isArray(room.TienIch)
-      ? JSON.stringify(room.TienIch)
-      : (typeof room.TienIch === 'string' ? room.TienIch : JSON.stringify(['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do']));
-
-    const finalImages = Array.isArray(room.HinhAnh) && room.HinhAnh.length > 0
-      ? JSON.stringify(room.HinhAnh)
-      : JSON.stringify([
-          'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
-          'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1000&q=80'
-        ]);
-
-    const finalReviews = Array.isArray(room.DanhGia)
-      ? JSON.stringify(room.DanhGia)
-      : JSON.stringify([]);
-
     try {
-      // 1. Chuẩn theo cấu trúc bảng PascalCase trong database.sql
+      // 1. Thử INSERT với đúng tên cột: TieuDe, DiaChiChiTiet, QuanHuyen, LoaiPhong, DienTich, GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, TrangThai
       await pool.execute(
         `INSERT INTO rooms (
-          Id, TieuDe, DiaChi, QuanHuyen, GiaThue, GiaDien, GiaNuoc, 
-          TienIch, TrangThai, LyDoTuChoi, IdChuTro, ChuTroId, ChuTroTen, 
-          ChuTroSdt, HinhAnh, MoTa, NoiQuy, DienTich, LoaiPhong, 
-          NgayDang, DanhGia
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          Id, TieuDe, DiaChiChiTiet, QuanHuyen, LoaiPhong, DienTich, 
+          GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, 
+          TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           finalId,
           finalTitle,
           finalAddress,
           finalDistrict,
+          finalRoomType,
+          finalArea,
           finalRentPrice,
           finalElectricityPrice,
           finalWaterPrice,
           finalAmenities,
-          finalStatus,
-          finalRejectReason,
-          finalLandlordId,
-          finalLandlordId,
-          finalLandlordName,
-          finalLandlordPhone,
           finalImages,
+          finalLandlordId,
+          finalStatus,
           finalDescription,
           finalHouseRules,
-          finalArea,
-          finalRoomType,
+          finalLandlordName,
+          finalLandlordPhone,
           finalPostedDate,
           finalReviews,
         ]
       );
     } catch (err: any) {
-      // 2. Fallback nếu người dùng tạo bảng với tên cột snake_case
-      if (err.code === 'ER_BAD_FIELD_ERROR') {
-        try {
+      try {
+        // 2. Fallback nếu database dùng cột DiaChi thay vì DiaChiChiTiet
+        await pool.execute(
+          `INSERT INTO rooms (
+            Id, TieuDe, DiaChi, QuanHuyen, LoaiPhong, DienTich, 
+            GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, 
+            TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            finalId,
+            finalTitle,
+            finalAddress,
+            finalDistrict,
+            finalRoomType,
+            finalArea,
+            finalRentPrice,
+            finalElectricityPrice,
+            finalWaterPrice,
+            finalAmenities,
+            finalImages,
+            finalLandlordId,
+            finalStatus,
+            finalDescription,
+            finalHouseRules,
+            finalLandlordName,
+            finalLandlordPhone,
+            finalPostedDate,
+            finalReviews,
+          ]
+        );
+      } catch (err2: any) {
+        // 3. Fallback nếu dùng snake_case
+        if (err2.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_BAD_FIELD_ERROR') {
           await pool.execute(
             `INSERT INTO rooms (
-              id, tieu_de, dia_chi, quan_huyen, gia_thue, gia_dien, gia_nuoc, 
-              tien_ich, trang_thai, ly_do_tu_choi, chu_tro_id, chu_tro_ten, 
-              chu_tro_sdt, hinh_anh, mo_ta, noi_quy, dien_tich, loai_phong, 
-              ngay_dang, danh_gia
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              id, tieu_de, dia_chi, quan_huyen, loai_phong, dien_tich, 
+              gia_thue, gia_dien, gia_nuoc, tien_ich, hinh_anh, chu_tro_id, 
+              trang_thai, mo_ta, noi_quy, chu_tro_ten, chu_tro_sdt, ngay_dang, danh_gia
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               finalId,
               finalTitle,
               finalAddress,
               finalDistrict,
+              finalRoomType,
+              finalArea,
               finalRentPrice,
               finalElectricityPrice,
               finalWaterPrice,
               finalAmenities,
-              finalStatus,
-              finalRejectReason,
-              finalLandlordId,
-              finalLandlordName,
-              finalLandlordPhone,
               finalImages,
+              finalLandlordId,
+              finalStatus,
               finalDescription,
               finalHouseRules,
-              finalArea,
-              finalRoomType,
+              finalLandlordName,
+              finalLandlordPhone,
               finalPostedDate,
               finalReviews,
             ]
           );
-        } catch (fallbackErr) {
-          console.error("Lỗi đăng tin phòng:", fallbackErr);
-          throw fallbackErr;
+        } else {
+          console.error("Lỗi đăng tin phòng:", err2);
+          throw err2;
         }
-      } else {
-        console.error("Lỗi đăng tin phòng:", err);
-        throw err;
       }
     }
   }
 
-  // Cập nhật bộ nhớ cục bộ
+  const roomToSave: PhongTro = {
+    ...room,
+    Id: finalId,
+    TieuDe: finalTitle,
+    DiaChi: finalAddress,
+    DiaChiChiTiet: finalAddress,
+    QuanHuyen: finalDistrict,
+    GiaThue: finalRentPrice,
+    GiaDien: finalElectricityPrice,
+    GiaNuoc: finalWaterPrice,
+    DienTich: finalArea,
+    LoaiPhong: finalRoomType,
+    TrangThai: finalStatus as any,
+    ChuTroId: finalLandlordId,
+    IdChuTro: finalLandlordId,
+    ChuTroTen: finalLandlordName,
+    ChuTroSdt: finalLandlordPhone,
+    HinhAnh: Array.isArray(room.HinhAnh) ? room.HinhAnh : [],
+    TienIch: Array.isArray(room.TienIch) ? room.TienIch : [],
+    MoTa: finalDescription,
+    NoiQuy: finalHouseRules,
+    NgayDang: finalPostedDate,
+    DanhGia: Array.isArray(room.DanhGia) ? room.DanhGia : [],
+  };
+
+  // Cập nhật bộ nhớ cục bộ (Mock data dùng chung giữa Chủ trọ và Admin)
   const db = readDb();
-  const existingIdx = db.rooms.findIndex(r => r.Id === room.Id);
+  if (!db.rooms) db.rooms = [];
+  const existingIdx = db.rooms.findIndex(r => r.Id === finalId);
   if (existingIdx >= 0) {
-    db.rooms[existingIdx] = room;
+    db.rooms[existingIdx] = roomToSave;
   } else {
-    db.rooms.unshift(room);
+    db.rooms.unshift(roomToSave);
   }
   writeDb(db);
 
-  return room;
+  return roomToSave;
 }
 
 export async function updateRoomInDb(id: string, updates: Partial<PhongTro>): Promise<PhongTro | null> {

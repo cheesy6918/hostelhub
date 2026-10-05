@@ -574,7 +574,7 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
 
   const availableCount = rooms.filter((r) => r.TrangThai === 'Còn phòng').length;
   const occupiedCount = rooms.filter((r) => r.TrangThai === 'Hết phòng').length;
-  const pendingCount = rooms.filter((r) => r.TrangThai === 'Chờ duyệt').length;
+  const pendingCount = rooms.filter((r) => r.TrangThai === 'Chờ duyệt' || r.TrangThai === 'ChoDuyet' || (r.TrangThai as string)?.toLowerCase() === 'choduyet').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1020,7 +1020,7 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
                               : 'bg-amber-500/90 text-white border-amber-400'
                           }`}
                         >
-                          {room.TrangThai}
+                          {room.TrangThai === 'ChoDuyet' ? 'Chờ duyệt' : room.TrangThai}
                         </span>
                       </div>
 
