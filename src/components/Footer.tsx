@@ -1,85 +1,145 @@
 import React from 'react';
-import { Home, ShieldCheck, Mail, Phone, Info } from 'lucide-react';
+import { Home, ShieldCheck, Phone, Mail, CheckCircle2, Lock, FileText, Sparkles } from 'lucide-react';
 
-export const Footer: React.FC<{ onSelectView?: (view: string) => void }> = () => {
+interface FooterProps {
+  onSelectView?: (view: string) => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onSelectView }) => {
   return (
-    <footer className="bg-white border-t border-slate-200 mt-16 text-slate-600 text-sm">
+    <footer className="bg-white border-t border-slate-100 text-slate-600 text-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 items-start">
           
-          {/* Col 1: Brand info */}
-          <div className="md:col-span-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
+          {/* Cột 1: Thông tin thương hiệu HostelHub */}
+          <div className="md:col-span-4 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-2xs">
                 <Home className="w-4 h-4" />
               </div>
-              <span className="text-lg font-bold text-slate-900">
+              <span className="text-lg font-black tracking-tight text-slate-900">
                 Hostel<span className="text-blue-600">Hub</span>
               </span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Cổng thông tin kết nối và quản lý phòng trọ sinh viên tiện nghi, bảo mật, minh bạch giá cả tại các làng đại học.
+
+            <p className="text-xs text-slate-500 leading-relaxed max-w-sm">
+              Nền tảng công nghệ kết nối trực tiếp sinh viên và chủ nhà trọ tại Hà Nội. Cam kết minh bạch giá thuê, hỗ trợ khảo sát thực tế và bảo vệ an toàn dòng tiền cọc.
             </p>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg w-fit">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Dữ liệu phòng trọ xác thực 100%</span>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-[11px] font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Hệ thống phòng trọ kiểm duyệt thực tế</span>
             </div>
           </div>
 
-          {/* Col 2: Quick Demo Accounts */}
-          <div className="md:col-span-2 bg-blue-50/70 border border-blue-100 rounded-2xl p-4">
-            <div className="flex items-center gap-2 font-semibold text-blue-900 text-xs mb-2">
-              <Info className="w-4 h-4 text-blue-600" />
-              <span>3 TÀI KHOẢN MẪU KIỂM THỬ (MẬT KHẨU SẴN SÀNG)</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-xs">
-                <div className="font-semibold text-slate-900">🎓 Sinh viên</div>
-                <div className="text-slate-500 font-mono mt-0.5 truncate text-[11px]">sinhvien@hostelhub.vn</div>
-                <div className="text-blue-600 font-mono text-[11px] font-semibold mt-0.5">pass: 123456</div>
-                <div className="text-[10px] text-slate-400 mt-1">Tìm & đặt cọc phòng</div>
+          {/* Cột 2: Khối thay thế 3 tài khoản mẫu - CAM KẾT VẬN HÀNH AN TOÀN */}
+          <div className="md:col-span-5 bg-slate-50/80 border border-slate-200/70 rounded-2xl p-5 space-y-3">
+            <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              Tiêu chuẩn bảo vệ sinh viên thuê trọ
+            </span>
+
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-slate-800 font-semibold text-xs block">Minh bạch chi phí điện nước:</strong>
+                  <span className="text-slate-500 text-[11px] leading-tight block">
+                    Đơn giá điện, nước, internet và phí dịch vụ được công khai rõ ràng trên hợp đồng.
+                  </span>
+                </div>
               </div>
-              <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-xs">
-                <div className="font-semibold text-slate-900">🏢 Chủ trọ</div>
-                <div className="text-slate-500 font-mono mt-0.5 truncate text-[11px]">chutro@hostelhub.vn</div>
-                <div className="text-blue-600 font-mono text-[11px] font-semibold mt-0.5">pass: 123456</div>
-                <div className="text-[10px] text-slate-400 mt-1">Đăng & quản lý phòng</div>
+
+              <div className="flex items-start gap-2.5">
+                <Lock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-slate-800 font-semibold text-xs block">Giữ cọc an toàn có biên nhận:</strong>
+                  <span className="text-slate-500 text-[11px] leading-tight block">
+                    Bảo lưu chỗ ở uy tín, có lịch hẹn xem phòng và xác nhận từ chủ nhà trọ.
+                  </span>
+                </div>
               </div>
-              <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-xs">
-                <div className="font-semibold text-slate-900">⚡ Quản trị viên</div>
-                <div className="text-slate-500 font-mono mt-0.5 truncate text-[11px]">admin@hostelhub.vn</div>
-                <div className="text-purple-600 font-mono text-[11px] font-semibold mt-0.5">pass: admin123</div>
-                <div className="text-[10px] text-slate-400 mt-1">Quản trị toàn hệ thống</div>
+
+              <div className="flex items-start gap-2.5">
+                <FileText className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-slate-800 font-semibold text-xs block">Hỗ trợ pháp lý thuê nhà:</strong>
+                  <span className="text-slate-500 text-[11px] leading-tight block">
+                    Cung cấp sẵn mẫu hợp đồng chuẩn quy định pháp luật giúp hạn chế tranh chấp.
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Col 3: Support */}
-          <div className="space-y-2 text-xs">
-            <div className="font-semibold text-slate-900 mb-2">Hỗ trợ sinh viên 24/7</div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <Phone className="w-3.5 h-3.5 text-blue-600" />
-              <span>Hotline: 1900 8899 (Miễn cước)</span>
+          {/* Cột 3: Hỗ trợ sinh viên 24/7 (Đã lược bỏ dòng khu vực nhiều tỉnh thành) */}
+          <div className="md:col-span-3 space-y-3.5">
+            <span className="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+              Trung tâm hỗ trợ sinh viên
+            </span>
+
+            <div className="space-y-2.5 text-xs">
+              <a
+                href="tel:19008899"
+                className="flex items-center gap-2.5 text-slate-700 hover:text-blue-600 transition-colors group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <Phone className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Tổng đài giải đáp (Miễn cước)</span>
+                  <span className="font-bold text-slate-900 text-sm">1900 8899</span>
+                </div>
+              </a>
+
+              <a
+                href="mailto:hotro@hostelhub.vn"
+                className="flex items-center gap-2.5 text-slate-700 hover:text-blue-600 transition-colors group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <Mail className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Hộp thư hỗ trợ sự cố</span>
+                  <span className="font-semibold text-slate-800">hotro@hostelhub.vn</span>
+                </div>
+              </a>
             </div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <Mail className="w-3.5 h-3.5 text-blue-600" />
-              <span>hotro@hostelhub.vn</span>
+
+            <div className="pt-2 text-[11px] text-slate-400">
+              Thời gian trực hotline: 08:00 - 21:00 hàng ngày (kể cả Thứ 7 & CN).
             </div>
-            <p className="text-slate-400 pt-2 text-[11px]">
-              Khu vực hỗ trợ: Hà Nội, TP. Hồ Chí Minh, Đà Nẵng, Cần Thơ.
-            </p>
           </div>
 
         </div>
 
-        <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
-          <p>© {new Date().getFullYear()} HostelHub. Nền tảng công nghệ tìm và quản lý trọ sinh viên.</p>
-          <div className="flex gap-4">
-            <span>Quy định bảo mật</span>
-            <span>·</span>
-            <span>Điều khoản sử dụng</span>
-            <span>·</span>
-            <span>Hướng dẫn an toàn thuê phòng</span>
+        {/* Thanh bản quyền & Liên kết điều khoản chân trang */}
+        <div className="mt-10 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-400 text-[11px]">
+          <div>
+            © 2026 HostelHub. Nền tảng công nghệ tìm và quản lý trọ sinh viên Hà Nội.
+          </div>
+          <div className="flex items-center gap-5">
+            <button 
+              type="button" 
+              onClick={() => onSelectView && onSelectView('guide')} 
+              className="hover:text-slate-600 transition-colors cursor-pointer"
+            >
+              Quy định bảo mật
+            </button>
+            <button 
+              type="button" 
+              onClick={() => onSelectView && onSelectView('guide')} 
+              className="hover:text-slate-600 transition-colors cursor-pointer"
+            >
+              Điều khoản sử dụng
+            </button>
+            <button 
+              type="button" 
+              onClick={() => onSelectView && onSelectView('guide')} 
+              className="hover:text-slate-600 transition-colors cursor-pointer"
+            >
+              Hướng dẫn an toàn thuê phòng
+            </button>
           </div>
         </div>
       </div>
