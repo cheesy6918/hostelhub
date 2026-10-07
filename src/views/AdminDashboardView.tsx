@@ -1032,16 +1032,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                         className="w-full h-full object-cover"
                       />
                       <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-xs ${
-                        room.TrangThai === 'Công khai'
-                          ? 'bg-emerald-600 text-white'
-                          : room.TrangThai === 'Chờ duyệt'
-                          ? 'bg-amber-500 text-white'
-                          : room.TrangThai === 'Từ chối'
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-slate-800 text-white'
-                      }`}>
-                        {room.TrangThai}
-                      </span>
+  (room.TrangThai as any) === 'Công khai' || (room.TrangThai as any) === 'CongKhai'
+    ? 'bg-emerald-600 text-white'
+    : (room.TrangThai as any) === 'Chờ duyệt' || (room.TrangThai as any) === 'ChoDuyet'
+    ? 'bg-amber-500 text-white'
+    : (room.TrangThai as any) === 'Từ chối' || (room.TrangThai as any) === 'TuChoi'
+    ? 'bg-rose-600 text-white'
+    : 'bg-slate-800 text-white'
+}`}>
+  {(room.TrangThai as any) === 'ChoDuyet' ? 'Chờ duyệt' : 
+   (room.TrangThai as any) === 'CongKhai' ? 'Công khai' : 
+   (room.TrangThai as any) === 'TuChoi' ? 'Từ chối' : room.TrangThai}
+</span>
                     </div>
 
                     {/* Room Info */}
@@ -1098,7 +1100,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
 
                     {/* Actions */}
                     <div className="flex md:flex-col items-center gap-2 w-full md:w-auto shrink-0 pt-2 md:pt-0">
-                      {room.TrangThai === 'Chờ duyệt' ? (
+                      {isPendingRoom(room.TrangThai) ? (
                         <>
                           <button
                             onClick={() => handleApproveRoom(room.Id, room.TieuDe)}
@@ -1116,7 +1118,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                             Từ chối duyệt
                           </button>
                         </>
-                      ) : room.TrangThai === 'Từ chối' ? (
+                      ) : isRejectedRoom(room.TrangThai) ? (
                         <button
                           onClick={() => handleApproveRoom(room.Id, room.TieuDe)}
                           className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl cursor-pointer"

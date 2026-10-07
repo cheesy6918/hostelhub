@@ -20,6 +20,9 @@ import { StudentHistoryView } from './views/StudentHistoryView';
 import { NotificationsView } from './views/NotificationsView';
 import { ChatWidget } from './components/ChatWidget';
 import { Heart, CheckCircle2, ArrowLeftRight } from 'lucide-react';
+import { GuideView } from './views/GuideView';
+import { RoommateView } from './views/RoommateView';
+import { MapView } from './views/MapView';
 
 const MainContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -32,6 +35,7 @@ const MainContent: React.FC = () => {
     clearCompareToast
   } = useComparison();
   const [currentView, setCurrentView] = useState<string>('home');
+  const isAuthPage = currentView === 'login' || currentView === 'register';
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [previousView, setPreviousView] = useState<string>('home');
 
@@ -89,7 +93,7 @@ const MainContent: React.FC = () => {
     switch (currentView) {
       case 'home':
         return <HomeLandingView onNavigate={setCurrentView} />;
-      
+
       case 'find-rooms-public':
       case 'student-rooms':
       case 'student-inquiries':
@@ -112,6 +116,14 @@ const MainContent: React.FC = () => {
 
       case 'student-history-transactions':
         return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} initialTab="transactions" />;
+
+      case 'guide':
+        return <GuideView />;
+      case 'roommate':
+        return <RoommateView />;
+
+      case 'map':
+        return <MapView onSelectRoomDetail={navigateToRoomDetail} />;
 
       case 'landlord-rooms':
       case 'landlord-inquiries':
@@ -159,40 +171,6 @@ const MainContent: React.FC = () => {
       case 'register':
         return <RegisterView onNavigate={setCurrentView} />;
 
-      case 'about':
-        return (
-          <div className="max-w-4xl mx-auto px-4 py-12">
-            <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-xs space-y-6">
-              <h1 className="text-2xl font-bold text-slate-900">Về nền tảng HostelHub</h1>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                HostelHub là hệ thống công nghệ kết nối trực tiếp sinh viên và chủ nhà trọ tại các khu vực làng đại học trọng điểm trên toàn quốc. Sứ mệnh của chúng tôi là xóa bỏ vấn nạn lừa đảo tiền cọc, chèo kéo giá ảo và môi giới trung gian bất hợp pháp.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-                <div className="p-4 bg-blue-50 rounded-2xl">
-                  <div className="font-bold text-blue-900 text-sm">Xác thực chính chủ</div>
-                  <p className="text-xs text-slate-500 mt-1">100% tin đăng được kiểm duyệt số điện thoại và địa chỉ thực tế.</p>
-                </div>
-                <div className="p-4 bg-emerald-50 rounded-2xl">
-                  <div className="font-bold text-emerald-900 text-sm">Ví cọc bảo đảm</div>
-                  <p className="text-xs text-slate-500 mt-1">Sinh viên được bảo lưu tiền cọc cho tới khi kiểm tra phòng ưng ý.</p>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-2xl">
-                  <div className="font-bold text-purple-900 text-sm">Miễn phí hoàn toàn</div>
-                  <p className="text-xs text-slate-500 mt-1">Không thu bất kỳ phụ phí dịch vụ nào từ phía sinh viên.</p>
-                </div>
-              </div>
-              <div className="pt-4 border-t border-slate-100 flex justify-end">
-                <button
-                  onClick={() => setCurrentView(user ? (user.VaiTro === 'ChuTro' ? 'landlord-rooms' : 'student-rooms') : 'login')}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-sm hover:bg-blue-700"
-                >
-                  Bắt đầu trải nghiệm ngay
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-
       default:
         return <HomeLandingView onNavigate={setCurrentView} />;
     }
@@ -200,12 +178,11 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-blue-600 selection:text-white relative">
-      <Navbar currentView={currentView} setCurrentView={setCurrentView} />
-      
-      {/* Floating Room Comparison Dock */}
-      <RoomComparisonDock onOpenModal={openComparisonModal} />
+      {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
+      {!isAuthPage && <Navbar currentView={currentView} setCurrentView={setCurrentView} />}
 
-      {/* Side-by-Side Room Comparison Modal */}
+      {/* Floating Room Comparison Dock & Modal */}
+      {!isAuthPage && <RoomComparisonDock onOpenModal={openComparisonModal} />}
       <RoomComparisonModal
         isOpen={isComparisonModalOpen}
         onClose={closeComparisonModal}
@@ -242,16 +219,20 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {/* Floating AI Chatbot Assistant Widget */}
-      <ChatWidget
-        onViewRoomDetail={navigateToRoomDetail}
-        onNavigate={setCurrentView}
-      />
+      {/* Chỉ hiển thị nút Trợ lý AI khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
+      {!isAuthPage && (
+        <ChatWidget
+          onViewRoomDetail={navigateToRoomDetail}
+          onNavigate={setCurrentView}
+        />
+      )}
 
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col justify-center">
         {renderView()}
       </main>
-      <Footer onSelectView={setCurrentView} />
+
+      {/* Chỉ hiển thị chân trang Footer khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
+      {!isAuthPage && <Footer onSelectView={setCurrentView} />}
     </div>
   );
 };
