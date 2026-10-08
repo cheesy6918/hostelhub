@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Sparkles, CheckCircle2, ArrowLeft } from 'lucide-react';
+
 
 interface LoginViewProps {
   onNavigate: (view: string) => void;
@@ -73,18 +74,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen w-full flex items-center justify-center px-4 py-12 relative bg-cover bg-center bg-no-repeat selection:bg-blue-600 selection:text-white"
       style={{
         backgroundImage: `url('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=2000&q=80')`
       }}
     >
+
+      {/* Nút thoát quay về trang chủ đặt ở góc trên bên trái */}
+      <button
+        type="button"
+        onClick={() => onNavigate('home')}
+        className="absolute top-6 left-6 z-20 flex items-center gap-2 px-3.5 py-2 bg-white/80 hover:bg-white text-slate-700 hover:text-blue-600 rounded-2xl text-xs font-semibold backdrop-blur-md border border-white/40 shadow-md transition-all cursor-pointer active:scale-95"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Về trang chủ</span>
+      </button>
+
       {/* Lớp phủ tối và mờ nhẹ giúp form nổi bật, dễ đọc chữ */}
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" />
 
       {/* Khối chứa toàn bộ form đăng nhập */}
       <div className="relative z-10 max-w-md w-full">
-        
+
         {/* Header card */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md text-white mb-3 shadow-lg border border-white/20">

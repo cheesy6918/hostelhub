@@ -100,8 +100,8 @@ const POPULAR_ADDRESS_SHORTCUTS = [
   { label: 'Cầu Diễn (ĐH Công Nghiệp)', query: 'Cầu Diễn' },
   { label: 'Ao Sen (Kiến Trúc & PTIT)', query: 'Ao Sen' },
   { label: 'Tây Sơn (Thủy Lợi & Công Đoàn)', query: 'Tây Sơn' },
-  { label: 'Làng ĐH Thủ Đức (TP.HCM)', query: 'Thủ Đức' },
-  { label: 'Hòa Hảo (Quận 10 TP.HCM)', query: 'Hòa Hảo' },
+  { label: 'Xuân Thủy (Sư Phạm)', query: 'Xuân Thủy' },
+  { label: 'Hồ Tùng Mậu (Thương Mại)', query: 'Hồ Tùng Mậu' },
 ];
 
 export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSelectRoomDetail, initialTab }) => {
@@ -492,25 +492,7 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-      {/* Breadcrumb Navigation */}
-<nav className="flex items-center gap-2 text-xs text-slate-500 mb-5">
-  <button 
-    type="button"
-    onClick={() => setActiveTab('browse')} 
-    className="hover:text-blue-600 transition-colors cursor-pointer"
-  >
-    Trang chủ
-  </button>
-  <span className="text-slate-300">/</span>
-  <span className="text-slate-700 font-medium">Hà Nội</span>
-  <span className="text-slate-300">/</span>
-  <span className="text-blue-600 font-bold">
-    {appliedFilters.keyword ? `Khu vực ${appliedFilters.keyword}` : 'Cho thuê phòng trọ'}
-  </span>
-</nav>
-      
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">     
       {/* Student Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 rounded-3xl p-6 sm:p-8 text-white shadow-sm mb-8">
         <div className="max-w-3xl">

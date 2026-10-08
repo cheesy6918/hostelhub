@@ -93,6 +93,16 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
+  const requireAuth = (actionCallback: () => void) => {
+    if (!user) {
+      alert('Vui lòng đăng nhập để sử dụng tính năng này!');
+      if (onNavigate) {
+        onNavigate('login');
+      }
+      return;
+    }
+    actionCallback();
+  };
 
   // Modals state
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -261,15 +271,17 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
 
   // Mở modal đặt lịch hẹn
   const handleOpenAppointmentModal = () => {
-    setAppointmentError('');
-    setAppointmentSuccess(false);
-    // Mặc định gợi ý ngày mai lúc 09:00
-    const tomorrow = new Date(Date.now() + 86400000);
-    tomorrow.setHours(9, 0, 0, 0);
-    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
-    const localISOTime = new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
-    setAppointmentDate(localISOTime);
-    setShowAppointmentModal(true);
+    requireAuth(() => {
+      setAppointmentError('');
+      setAppointmentSuccess(false);
+      // Mặc định gợi ý ngày mai lúc 09:00
+      const tomorrow = new Date(Date.now() + 86400000);
+      tomorrow.setHours(9, 0, 0, 0);
+      const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
+      setAppointmentDate(localISOTime);
+      setShowAppointmentModal(true);
+    });
   };
 
   // Gửi đặt lịch hẹn
@@ -320,9 +332,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
 
   // Mở modal đặt cọc
   const handleOpenDepositModal = () => {
-    setDepositError('');
-    setDepositSuccess(false);
-    setShowDepositModal(true);
+    requireAuth(() => {
+      setDepositError('');
+      setDepositSuccess(false);
+      setShowDepositModal(true);
+    });
   };
 
   // Gửi yêu cầu xác nhận thuê phòng
@@ -545,23 +559,23 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const reviewsList = (room.DanhGia && room.DanhGia.length > 0)
     ? room.DanhGia
     : [
-        {
-          id: 'rev_1',
-          tenNguoiDanhGia: 'Nguyễn Tiến Dũng',
-          truongHoc: 'Sinh viên năm 3 - ĐH Bách Khoa',
-          soSao: 5,
-          nhanXet: 'Phòng sạch sẽ, gác lửng cao đứng thoải mái. Bác chủ trọ tốt bụng, có hỏng bóng đèn báo là bác thay ngay.',
-          ngay: '14/09/2026',
-        },
-        {
-          id: 'rev_2',
-          tenNguoiDanhGia: 'Trần Thị Mai',
-          truongHoc: 'Sinh viên năm 2 - ĐH Kinh Tế',
-          soSao: 5,
-          nhanXet: 'Khu vực an ninh tốt, đi bộ ra chợ rất gần, mạng internet khỏe tha hồ học online.',
-          ngay: '02/09/2026',
-        },
-      ];
+      {
+        id: 'rev_1',
+        tenNguoiDanhGia: 'Nguyễn Tiến Dũng',
+        truongHoc: 'Sinh viên năm 3 - ĐH Bách Khoa',
+        soSao: 5,
+        nhanXet: 'Phòng sạch sẽ, gác lửng cao đứng thoải mái. Bác chủ trọ tốt bụng, có hỏng bóng đèn báo là bác thay ngay.',
+        ngay: '14/09/2026',
+      },
+      {
+        id: 'rev_2',
+        tenNguoiDanhGia: 'Trần Thị Mai',
+        truongHoc: 'Sinh viên năm 2 - ĐH Kinh Tế',
+        soSao: 5,
+        nhanXet: 'Khu vực an ninh tốt, đi bộ ra chợ rất gần, mạng internet khỏe tha hồ học online.',
+        ngay: '02/09/2026',
+      },
+    ];
 
   const averageRating = reviewsList.length > 0
     ? (reviewsList.reduce((sum, r) => sum + (r.soSao || 5), 0) / reviewsList.length).toFixed(1)
@@ -584,27 +598,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => {
-              if (room) toggleComparison(room);
-            }}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${
-              room && isInComparison(room.Id)
-                ? 'bg-blue-600 text-white border-blue-600 shadow-blue-500/20 hover:bg-blue-700'
-                : 'bg-white text-slate-700 border-slate-200 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50'
-            }`}
-          >
-            <ArrowLeftRight className={`w-4 h-4 ${room && isInComparison(room.Id) ? 'text-white' : 'text-slate-400'}`} />
-            <span>{room && isInComparison(room.Id) ? 'Đang trong danh sách so sánh' : 'Thêm vào so sánh'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => toggleFavorite(room.Id, room)}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${
-              isFavorite(room.Id)
+            onClick={() => requireAuth(() => toggleFavorite(room.Id, room))}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${isFavorite(room.Id)
                 ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                 : 'bg-white text-slate-700 border-slate-200 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50/50'
-            }`}
+              }`}
           >
             <Heart className={`w-4 h-4 ${isFavorite(room.Id) ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
             <span>{isFavorite(room.Id) ? 'Đã lưu yêu thích' : 'Lưu vào mục yêu thích'}</span>
@@ -614,10 +612,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
 
       {/* Main Container */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left 2 Columns: Gallery, Info, Rules, Reviews */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* Gallery / Carousel */}
           <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs">
             {/* Big Main Image */}
@@ -674,11 +672,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   <button
                     key={idx}
                     onClick={() => setSelectedImgIndex(idx)}
-                    className={`relative shrink-0 w-20 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
-                      selectedImgIndex === idx
+                    className={`relative shrink-0 w-20 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${selectedImgIndex === idx
                         ? 'border-blue-600 ring-2 ring-blue-500/20 scale-102'
                         : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
+                      }`}
                   >
                     <img
                       src={img}
@@ -994,9 +991,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                             title={`${star} sao`}
                           >
                             <Star
-                              className={`w-6 h-6 transition-colors ${
-                                isFilled ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
-                              }`}
+                              className={`w-6 h-6 transition-colors ${isFilled ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                                }`}
                             />
                           </button>
                         );
@@ -1095,7 +1091,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   </div>
 
                   <p className="text-xs text-slate-700 leading-relaxed pl-0.5">"{rev.nhanXet}"</p>
-                  
+
                   <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 text-[10px] text-slate-400">
                     <span>Thời gian đánh giá: {rev.ngay}</span>
                     <span className="text-emerald-600 font-medium flex items-center gap-1">
@@ -1110,7 +1106,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
 
         {/* Right Column: Pricing Summary, Landlord Contact, Action Buttons */}
         <div className="space-y-6">
-          
+
           {/* Main Action Card */}
           <div className="bg-white rounded-3xl border border-blue-100 shadow-sm p-6 sticky top-24 space-y-6">
             <div>
@@ -1156,12 +1152,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
             {/* Quick bookmark to favorites */}
             <button
               type="button"
-              onClick={() => toggleFavorite(room.Id, room)}
-              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all cursor-pointer shadow-xs ${
-                isFavorite(room.Id)
+              onClick={() => requireAuth(() => toggleFavorite(room.Id, room))}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all cursor-pointer shadow-xs ${isFavorite(room.Id)
                   ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                   : 'bg-white text-slate-700 border-slate-200 hover:text-rose-600 hover:border-rose-200 hover:bg-slate-50'
-              }`}
+                }`}
             >
               <Heart className={`w-4 h-4 ${isFavorite(room.Id) ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
               <span>{isFavorite(room.Id) ? 'Đã lưu trong mục yêu thích' : 'Lưu vào mục yêu thích'}</span>
@@ -1262,7 +1257,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   {(!contractInfo || contractInfo.status === 'cancelled' || contractInfo.status === 'completed') && (
                     <button
                       type="button"
-                      onClick={() => setShowRentalModal(true)}
+                      onClick={() => requireAuth(() => setShowRentalModal(true))}
                       className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
                     >
                       <ShieldCheck className="w-4 h-4" />
@@ -1652,11 +1647,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                       setQrImageError(false);
                       setQrRefreshKey(k => k + 1);
                     }}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                      selectedBankIndex === idx
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${selectedBankIndex === idx
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                         : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
+                      }`}
                   >
                     <span>{b.shortName}</span>
                   </button>
@@ -1685,11 +1679,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                       setQrImageError(false);
                       setQrRefreshKey(k => k + 1);
                     }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${
-                      qrAmount === amt && !customQrAmount
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${qrAmount === amt && !customQrAmount
                         ? 'bg-blue-50 text-blue-700 border-blue-400 shadow-2xs ring-1 ring-blue-400'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
+                      }`}
                   >
                     <span>{amt.toLocaleString('vi-VN')} đ</span>
                     {amt === 500000 && (
