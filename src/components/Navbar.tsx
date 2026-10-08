@@ -196,20 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView }) =
                 >
                   Tìm phòng trọ
                 </button>
-                {comparisonRooms.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={openComparisonModal}
-                    className="flex items-center gap-1.5 cursor-pointer text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full border border-blue-200 text-xs font-bold transition-all"
-                    title="Mở bảng so sánh phòng trọ"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
-                    <span>So sánh</span>
-                    <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-extrabold tabular-nums">
-                      {comparisonRooms.length}
-                    </span>
-                  </button>
-                )}
+                
                 <button
                   onClick={() => setCurrentView('student-favorites')}
                   className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'student-favorites' ? 'text-rose-600 font-bold' : 'hover:text-rose-600'
