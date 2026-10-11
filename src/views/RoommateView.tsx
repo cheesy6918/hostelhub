@@ -1,136 +1,734 @@
 import React, { useState } from 'react';
-import { Users, Search, MapPin, Clock, Phone, Sparkles } from 'lucide-react';
+import { 
+  MapPin, 
+  ChevronRight, 
+  ChevronLeft, 
+  DollarSign, 
+  Maximize2, 
+  Phone,
+  MessageCircle,
+  Filter,
+  PlusCircle,
+  X,
+  Clock,
+  CheckCircle2,
+  AlertTriangle
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { mockRoommates, TinOGhep } from '../utils/roommatesData';
+import { RoommateDetailView } from './RoommateDetailView';
 
-export const RoommateView: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterGender, setFilterGender] = useState('all');
+interface RoommateViewProps {
+  onNavigate?: (view: string) => void;
+}
 
-  const roommates = [
-    {
-      id: 'rm_1',
-      author: 'Nguyễn Thảo Ly',
-      school: 'ĐH Ngoại Thương (FTU)',
-      gender: 'Nữ',
-      targetPrice: '1.400.000 đ/tháng/người',
-      location: 'Khu vực Chùa Láng, Đống Đa',
-      timeHabit: 'Giờ giấc tự do, ngủ trước 23h30',
-      note: 'Phòng đã có sẵn điều hòa, tủ lạnh, máy giặt. Cần tìm 1 bạn nữ sạch sẽ, gọn gàng, không hút thuốc.',
-      phone: '0912.345.892',
-      badge: 'Cần tìm 1 nữ'
-    },
-    {
-      id: 'rm_2',
-      author: 'Trần Hoàng Nam',
-      school: 'ĐH Bách Khoa Hà Nội (HUST)',
-      gender: 'Nam',
-      targetPrice: '1.600.000 đ/tháng/người',
-      location: 'Tạ Quang Bửu - Trần Đại Nghĩa, Hai Bà Trưng',
-      timeHabit: 'Thức khuya học bài, không ồn ào',
-      note: 'Phòng khép kín tầng 3, ban công rộng, có bếp nấu riêng. Tìm bạn nam chia tiền phòng và điện nước hàng tháng.',
-      phone: '0988.765.341',
-      badge: 'Cần tìm 1 nam'
-    },
-    {
-      id: 'rm_3',
-      author: 'Lê Minh Anh',
-      school: 'ĐH Quốc Gia Hà Nội (VNU)',
-      gender: 'Nữ',
-      targetPrice: '1.200.000 đ/tháng/người',
-      location: 'Ngõ 336 Nguyễn Trãi, Thanh Xuân',
-      timeHabit: 'Yên tĩnh, ngăn nắp',
-      note: 'Chung cư mini mới xây, khóa vân tay, gần trạm xe buýt và ga tàu điện. Tìm bạn ở ghép tính tình vui vẻ, hòa đồng.',
-      phone: '0971.234.620',
-      badge: 'Cần tìm 1 nữ'
-    }
-  ];
+const DISTRICTS = [
+  'Cầu Giấy',
+  'Đống Đa',
+  'Hai Bà Trưng',
+  'Ba Đình',
+  'Thanh Xuân',
+  'Nam Từ Liêm',
+  'Bắc Từ Liêm',
+  'Hà Đông'
+];
 
-  const filteredRoommates = roommates.filter(r => {
-    const matchSearch = r.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        r.school.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchGender = filterGender === 'all' || r.gender === filterGender;
-    return matchSearch && matchGender;
+const PRICE_RANGES = [
+  { label: 'Dưới 1 triệu', min: 0, max: 1000000 },
+  { label: 'Từ 1 - 2 triệu', min: 1000000, max: 2000000 },
+  { label: 'Từ 2 - 3 triệu', min: 2000000, max: 3000000 },
+  { label: 'Từ 3 - 5 triệu', min: 3000000, max: 5000000 },
+  { label: 'Từ 5 - 7 triệu', min: 5000000, max: 7000000 }
+];
+
+const AREA_RANGES = [
+  { label: 'Dưới 20 m²', min: 0, max: 20 },
+  { label: 'Từ 20 - 30 m²', min: 20, max: 30 },
+  { label: 'Từ 30 - 50 m²', min: 30, max: 50 }
+];
+
+export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  const [selectedPost, setSelectedPost] = useState<TinOGhep | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('Tất cả');
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string>('Tất cả');
+  const [selectedAreaRange, setSelectedAreaRange] = useState<string>('Tất cả');
+  const [sortTab, setSortTab] = useState<'recommend' | 'newest'>('recommend');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 4;
+
+  // Modal Đăng tin & Toast thông báo
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' } | null>(null);
+
+  // Form đăng tin mới
+  const [formData, setFormData] = useState({
+    title: '',
+    district: 'Cầu Giấy',
+    address: '',
+    price: '',
+    area: '',
+    gender: 'Tất cả' as 'Nam' | 'Nữ' | 'Tất cả',
+    description: '',
+    phone: '',
+    zalo: '',
+    imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
   });
 
+  const showToast = (message: string, type: 'success' | 'warning') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleOpenCreateModal = () => {
+    if (!user) {
+      showToast('Vui lòng đăng nhập tài khoản để đăng tin tìm ở ghép!', 'warning');
+      setTimeout(() => {
+        if (onNavigate) onNavigate('login');
+      }, 1200);
+      return;
+    }
+    // Nếu đã đăng nhập thì mở modal
+    setFormData((prev) => ({
+      ...prev,
+      phone: (user as any)?.Sdt || '',
+      zalo: (user as any)?.Sdt || ''
+    }));
+    setIsModalOpen(true);
+  };
+
+  const handleSubmitPost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title || !formData.price || !formData.area || !formData.address) {
+      showToast('Vui lòng điền đầy đủ các thông tin cơ bản!', 'warning');
+      return;
+    }
+
+    // Đóng modal & hiển thị trạng thái chờ duyệt
+    setIsModalOpen(false);
+    showToast('Tin đăng của bạn đã được gửi thành công và đang chờ ban quản trị duyệt!', 'success');
+
+    // Reset form
+    setFormData({
+      title: '',
+      district: 'Cầu Giấy',
+      address: '',
+      price: '',
+      area: '',
+      gender: 'Tất cả',
+      description: '',
+      phone: '',
+      zalo: '',
+      imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
+    });
+  };
+
+  // Xem chi tiết bài viết
+  if (selectedPost) {
+    return (
+      <RoommateDetailView
+        post={selectedPost}
+        allPosts={mockRoommates}
+        onBack={() => {
+          setSelectedPost(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onSelectPost={(post) => {
+          setSelectedPost(post);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onSelectDistrict={(district) => {
+          setSelectedDistrict(district);
+          setSelectedPost(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
+    );
+  }
+
+  // Logic sắp xếp bài mới
+  const getRecencyScore = (timeStr: string) => {
+    if (!timeStr) return 99;
+    const lower = timeStr.toLowerCase();
+    if (lower.includes('hôm nay') || lower.includes('vừa xong') || lower.includes('giờ') || lower.includes('phút')) return 0;
+    if (lower.includes('1 ngày')) return 1;
+    if (lower.includes('2 ngày')) return 2;
+    if (lower.includes('3 ngày')) return 3;
+    if (lower.includes('4 ngày')) return 4;
+    return 10;
+  };
+
+  const filteredList = mockRoommates.filter((post) => {
+    if (selectedDistrict !== 'Tất cả' && post.QuanHuyen !== selectedDistrict) return false;
+    
+    if (selectedPriceRange !== 'Tất cả') {
+      const pRange = PRICE_RANGES.find((r) => r.label === selectedPriceRange);
+      if (pRange && (post.GiaThue < pRange.min || post.GiaThue > pRange.max)) return false;
+    }
+
+    if (selectedAreaRange !== 'Tất cả') {
+      const aRange = AREA_RANGES.find((r) => r.label === selectedAreaRange);
+      if (aRange && (post.DienTich < aRange.min || post.DienTich > aRange.max)) return false;
+    }
+
+    return true;
+  });
+
+  const filteredPosts = [...filteredList].sort((a, b) => {
+    if (sortTab === 'newest') {
+      return getRecencyScore(a.NgayCapNhat) - getRecencyScore(b.NgayCapNhat);
+    }
+    return 0;
+  });
+
+  const totalPages = Math.ceil(filteredPosts.length / itemsPerPage) || 1;
+  const currentPosts = filteredPosts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleResetFilter = () => {
+    setSelectedDistrict('Tất cả');
+    setSelectedPriceRange('Tất cả');
+    setSelectedAreaRange('Tất cả');
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-      <div className="bg-slate-900 rounded-3xl p-6 sm:p-8 text-white mb-8 shadow-sm">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold mb-3">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Cộng đồng kết nối</span>
+    <div className="bg-slate-50 min-h-screen py-8 relative">
+      {/* Toast thông báo */}
+      {toast && (
+        <div className={`fixed top-20 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold animate-in fade-in slide-in-from-top-4 ${
+          toast.type === 'success' 
+            ? 'bg-emerald-600 text-white' 
+            : 'bg-amber-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+          )}
+          <span>{toast.message}</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Tìm bạn ở ghép cùng phòng</h1>
-        <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-          Không gian dành riêng cho sinh viên tìm kiếm người ở chung phù hợp thói quen sinh hoạt, chia sẻ chi phí thuê phòng.
-        </p>
-      </div>
+      )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs mb-6">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo khu vực, trường ĐH..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs text-slate-500 font-medium">Giới tính:</span>
-          <select
-            value={filterGender}
-            onChange={(e) => setFilterGender(e.target.value)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
-          >
-            <option value="all">Tất cả</option>
-            <option value="Nữ">Tìm bạn Nữ</option>
-            <option value="Nam">Tìm bạn Nam</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {filteredRoommates.map((item) => (
-          <div key={item.id} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        
+        {/* 1. Header Banner & NÚT ĐĂNG TIN */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
-                  {item.badge}
-                </span>
-                <span className="text-xs font-bold text-emerald-600">{item.targetPrice}</span>
-              </div>
-              <h3 className="font-bold text-slate-900 text-sm">{item.author}</h3>
-              <p className="text-[11px] text-blue-600 font-semibold">{item.school}</p>
-
-              <div className="mt-3 space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="line-clamp-1">{item.location}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{item.timeHabit}</span>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-2xl border border-slate-100 mt-3 line-clamp-3 leading-relaxed">
-                "{item.note}"
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Tìm Người Ở Ghép Hà Nội Giá Rẻ, Uy Tín, Mới Nhất
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
+                Kênh kết nối bạn cùng phòng tin cậy dành riêng cho sinh viên tại các trường Đại học khu vực Hà Nội.
               </p>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">Liên hệ:</span>
-              <a
-                href={`tel:${item.phone.replace(/[^0-9]/g, '')}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs"
+            {/* NÚT ĐĂNG TIN MỚI */}
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-bold rounded-2xl shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Đăng tin tìm ở ghép</span>
+            </button>
+          </div>
+
+          {/* Danh sách 8 Quận trọng điểm */}
+          <div className="pt-3 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-700 block mb-3">
+              Khu vực trọng điểm sinh viên:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDistrict('Tất cả');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  selectedDistrict === 'Tất cả'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                <Phone className="w-3 h-3" />
-                <span>{item.phone}</span>
-              </a>
+                Tất cả Hà Nội
+              </button>
+
+              {DISTRICTS.map((district) => (
+                <button
+                  key={district}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDistrict(district);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    selectedDistrict === district
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                  }`}
+                >
+                  {district}
+                </button>
+              ))}
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* 2. Bố cục 2 cột chính */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* CỘT TRÁI (8/12) */}
+          <div className="lg:col-span-8 space-y-4">
+            
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 mr-2">Sắp xếp:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortTab('recommend');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    sortTab === 'recommend'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Đề xuất
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortTab('newest');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    sortTab === 'newest'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Mới đăng
+                </button>
+              </div>
+
+              {(selectedDistrict !== 'Tất cả' || selectedPriceRange !== 'Tất cả' || selectedAreaRange !== 'Tất cả') && (
+                <button
+                  type="button"
+                  onClick={handleResetFilter}
+                  className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
+            </div>
+
+            {/* Danh sách thẻ bài đăng */}
+            {currentPosts.length > 0 ? (
+              <div className="space-y-4">
+                {currentPosts.map((post) => (
+                  <div
+                    key={post.Id}
+                    onClick={() => {
+                      setSelectedPost(post);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-md transition-all p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:gap-5 group cursor-pointer"
+                  >
+                    <div className="w-full sm:w-56 h-48 sm:h-auto shrink-0 relative rounded-xl overflow-hidden bg-slate-100">
+                      <img
+                        src={post.HinhAnh[0]}
+                        alt={post.TieuDe}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <span className="absolute top-2.5 left-2.5 bg-blue-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-md shadow-xs">
+                        Ghép {post.DoiTuongGhep}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 flex flex-col justify-between space-y-2.5">
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+                          {post.TieuDe}
+                        </h2>
+
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="text-base sm:text-lg font-black text-rose-600 tabular-nums">
+                            {post.GiaThue.toLocaleString('vi-VN')} đ/tháng
+                          </span>
+                          <span className="text-xs text-slate-500 font-semibold flex items-center gap-1">
+                            <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                            {post.DienTich} m²
+                          </span>
+                          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md">
+                            Quận {post.QuanHuyen}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="line-clamp-1">{post.DiaChi}</span>
+                        </div>
+
+                        <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
+                          {post.MoTa}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                            {post.TacGia.Ten[0]}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700">{post.TacGia.Ten}</span>
+                          <span className="text-[11px] text-slate-400">• {post.NgayCapNhat}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`https://zalo.me/${post.TacGia.Zalo}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Zalo</span>
+                          </a>
+                          <a
+                            href={`tel:${post.TacGia.Sdt}`}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            <span>Gọi điện</span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/80 shadow-2xs space-y-3">
+                <Filter className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-sm font-semibold text-slate-600">
+                  Không tìm thấy bài đăng nào phù hợp với bộ lọc hiện tại.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResetFilter}
+                  className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer hover:bg-blue-700"
+                >
+                  Xem tất cả tin ở ghép
+                </button>
+              </div>
+            )}
+
+            {/* Phân trang */}
+            {totalPages > 1 && (
+              <div className="pt-4 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => {
+                    setCurrentPage((prev) => Math.max(1, prev - 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center transition-all ${
+                    currentPage === 1
+                      ? 'opacity-30 cursor-not-allowed text-slate-300'
+                      : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
+                  }`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => {
+                      setCurrentPage(pageNum);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`w-9 h-9 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'hover:bg-slate-100 text-slate-600 border border-transparent'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => {
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center transition-all ${
+                    currentPage === totalPages
+                      ? 'opacity-30 cursor-not-allowed text-slate-300'
+                      : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
+                  }`}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* CỘT PHẢI (4/12) */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* Box 1: Khoảng giá */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-blue-600" />
+                <span>Xem theo khoảng giá</span>
+              </h3>
+              <div className="space-y-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPriceRange('Tất cả');
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                    selectedPriceRange === 'Tất cả'
+                      ? 'bg-blue-50 text-blue-600 font-bold'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Tất cả mức giá</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                {PRICE_RANGES.map((range) => (
+                  <button
+                    key={range.label}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPriceRange(range.label);
+                      setCurrentPage(1);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                      selectedPriceRange === range.label
+                        ? 'bg-blue-50 text-blue-600 font-bold'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{range.label}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Box 2: Diện tích */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Maximize2 className="w-4 h-4 text-blue-600" />
+                <span>Xem theo diện tích</span>
+              </h3>
+              <div className="space-y-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAreaRange('Tất cả');
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                    selectedAreaRange === 'Tất cả'
+                      ? 'bg-blue-50 text-blue-600 font-bold'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Tất cả diện tích</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                {AREA_RANGES.map((range) => (
+                  <button
+                    key={range.label}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAreaRange(range.label);
+                      setCurrentPage(1);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                      selectedAreaRange === range.label
+                        ? 'bg-blue-50 text-blue-600 font-bold'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{range.label}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL ĐĂNG BÀI TÌM Ở GHÉP                                  */}
+      {/* ========================================================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">
+                  Đăng tin tìm bạn ở ghép
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tin đăng sẽ được duyệt trong vòng 2-4 giờ bởi ban quản trị HostelHub.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPost} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Tiêu đề bài viết <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Tìm bạn nữ ở ghép CCMN ngõ 138 Triều Khúc..."
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Quận/Huyện <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formData.district}
+                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600 bg-white"
+                  >
+                    {DISTRICTS.map((d) => (
+                      <option key={d} value={d}>Quận {d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Đối tượng ghép <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600 bg-white"
+                  >
+                    <option value="Tất cả">Tất cả (Nam hoặc Nữ)</option>
+                    <option value="Nam">Chỉ tìm Nam</option>
+                    <option value="Nữ">Chỉ tìm Nữ</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Giá thuê (đ/tháng/người) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="Ví dụ: 1500000"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Diện tích phòng (m²) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="Ví dụ: 25"
+                    value={formData.area}
+                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Địa chỉ chi tiết <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Số nhà, tên ngõ, phố, phường..."
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Thông tin mô tả & yêu cầu ở ghép
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Mô tả về phòng: điều hòa, nóng lạnh, giờ giấc, tiền điện nước, yêu cầu tính cách bạn cùng phòng..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Gửi tin để duyệt</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

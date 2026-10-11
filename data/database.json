@@ -925,6 +925,46 @@
       "created_at": "2026-09-23T08:18:22.714Z"
     }
   ],
+  
+  "articles": [
+    {
+      "Id": "art_1",
+      "TieuDe": "5 thủ đoạn lừa cọc phòng trọ tân sinh viên hay gặp nhất",
+      "Tag": "Cảnh báo lừa đảo",
+      "MoTaNgan": "Cảnh báo các bẫy cọc giữ chỗ qua mạng xã hội, phòng không chính chủ, ép ký hợp đồng ma nhằm chiếm đoạt tài sản sinh viên.",
+      "TacGia": "Ban Quản trị HostelHub",
+      "ThoiGianDoc": "4 phút đọc",
+      "NoiDung": "Kẻ lừa đảo đăng ảnh căn hộ đẹp như khách sạn với mức giá rẻ khó tin (chỉ từ 1.5 - 2 triệu/tháng). Khi sinh viên liên hệ, đối tượng viện cớ đang có rất nhiều người muốn thuê và yêu cầu chuyển cọc ngay từ 500k - 1 triệu để 'giữ phòng'..."
+    },
+    {
+      "Id": "art_2",
+      "TieuDe": "Cách chốt số điện nước & công tơ chính xác ngày đầu dọn vào",
+      "Tag": "Kinh nghiệm nhận phòng",
+      "MoTaNgan": "Quy trình chụp ảnh công tơ điện, lập biên bản bàn giao thiết bị điều hòa, bình nóng lạnh để không phải đền bù oan cho người trước.",
+      "TacGia": "Cố vấn HostelHub",
+      "ThoiGianDoc": "5 phút đọc",
+      "NoiDung": "Ngay trong buổi đầu tiên nhận chìa khóa, bạn phải yêu cầu chủ nhà hoặc quản lý cùng có mặt tại vị trí công tơ điện và đồng hồ nước..."
+    },
+    {
+      "Id": "art_3",
+      "TieuDe": "Mẫu hợp đồng thuê trọ chuẩn pháp lý kèm lưu ý đặt cọc",
+      "Tag": "Pháp lý hợp đồng",
+      "MoTaNgan": "Tải mẫu hợp đồng thuê nhà theo quy định pháp luật mới nhất, checklist 10 điều khoản cốt lõi sinh viên cần đọc kỹ trước khi đặt bút ký.",
+      "TacGia": "Luật sư cộng tác",
+      "ThoiGianDoc": "7 phút đọc",
+      "NoiDung": "Hợp đồng cần ghi rõ thông tin nhân thân 2 bên, thời hạn thuê, điều kiện hoàn tiền cọc..."
+    },
+    {
+      "Id": "art_4",
+      "TieuDe": "Tiêu chí kiểm tra lối thoát hiểm và PCCC ở chung cư mini",
+      "Tag": "An toàn phòng cháy",
+      "MoTaNgan": "Checklist quan trọng giúp bạn nhận diện các rủi ro cháy nổ, thang thoát hiểm, thiết bị báo khói trước khi quyết định đặt cọc phòng.",
+      "TacGia": "Đội Kỹ thuật HostelHub",
+      "ThoiGianDoc": "6 phút đọc",
+      "NoiDung": "Chung cư mini hoặc nhà trọ nhiều tầng bắt buộc phải có lối thoát hiểm thứ 2, bình chữa cháy còn hạn sử dụng..."
+    }
+  ],
   "favorites": [],
   "wallet_transactions": []
 }
+

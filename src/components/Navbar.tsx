@@ -24,9 +24,10 @@ import { NotificationDropdown } from './NotificationDropdown';
 interface NavbarProps {
   currentView: string;
   setCurrentView: (view: string) => void;
+  onSelectDistrict?: (districtName: string) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onSelectDistrict }) => {
   const { user, logout } = useAuth();
   const { favoriteRoomIds } = useFavorites();
   const { comparisonRooms, openComparisonModal } = useComparison();
@@ -98,24 +99,27 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView }) =
                       <MapPin className="w-3.5 h-3.5 text-blue-600" />
                       <span>Khu vực cho thuê trọ phổ biến tại Hà Nội</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-xs text-slate-600">
+                    <div className="grid grid-cols-2 gap-2 p-2">
                       {[
-                        'Cho thuê phòng trọ Quận Cầu Giấy',
-                        'Cho thuê phòng trọ Quận Đống Đa',
-                        'Cho thuê phòng trọ Quận Thanh Xuân',
-                        'Cho thuê phòng trọ Quận Hai Bà Trưng',
-                        'Cho thuê phòng trọ Quận Nam Từ Liêm',
-                        'Cho thuê phòng trọ Quận Bắc Từ Liêm',
-                        'Cho thuê phòng trọ Quận Ba Đình',
-                        'Cho thuê phòng trọ Quận Hà Đông',
-                      ].map((loc, idx) => (
+                        { name: 'Quận Cầu Giấy', query: 'Cầu Giấy' },
+                        { name: 'Quận Đống Đa', query: 'Đống Đa' },
+                        { name: 'Quận Hai Bà Trưng', query: 'Hai Bà Trưng' },
+                        { name: 'Quận Thanh Xuân', query: 'Thanh Xuân' },
+                        { name: 'Quận Nam Từ Liêm', query: 'Nam Từ Liêm' },
+                        { name: 'Quận Bắc Từ Liêm', query: 'Bắc Từ Liêm' },
+                        { name: 'Quận Hà Đông', query: 'Hà Đông' },
+                        { name: 'Quận Ba Đình', query: 'Ba Đình' },
+                      ].map((item) => (
                         <button
-                          key={idx}
+                          key={item.query}
                           type="button"
-                          onClick={() => setCurrentView('find-rooms-public')}
-                          className="text-left py-1 hover:text-blue-600 transition-colors cursor-pointer truncate"
+                          onClick={() => {
+                            // Gọi hàm truyền tên quận lên App.tsx
+                            onSelectDistrict?.(item.query);
+                          }}
+                          className="text-left text-xs text-slate-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-xl transition-all font-medium cursor-pointer"
                         >
-                          {loc}
+                          Cho thuê phòng trọ {item.name}
                         </button>
                       ))}
                     </div>
@@ -196,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView }) =
                 >
                   Tìm phòng trọ
                 </button>
-                
+
                 <button
                   onClick={() => setCurrentView('student-favorites')}
                   className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'student-favorites' ? 'text-rose-600 font-bold' : 'hover:text-rose-600'

@@ -251,3 +251,54 @@ INSERT INTO `rental_contracts` (`id`, `room_id`, `renter_id`, `landlord_id`, `st
 INSERT INTO `reviews` (`id`, `room_id`, `renter_id`, `contract_id`, `tenNguoiDanhGia`, `truongHoc`, `soSao`, `nhanXet`, `is_verified`, `created_at`) VALUES
   (1, 'room_1', 'usr_sinhvien', 1, 'Nguyễn Văn Sinh (SV Bách Khoa)', 'Sinh viên đã xác minh thuê phòng', 5, 'Phòng ngủ sạch sẽ, cô chú chủ trọ nhiệt tình hỗ trợ! An ninh tốt, khóa vân tay tiện lợi.', 1, '2026-09-23 08:18:22');
 
+-- ========================================================
+-- BẢNG CẨM NANG & BÀI VIẾT KINH NGHIỆM THUÊ TRÒ (ARTICLES)
+-- ========================================================
+CREATE TABLE IF NOT EXISTS articles (
+  Id VARCHAR(50) PRIMARY KEY,
+  TieuDe VARCHAR(255) NOT NULL,
+  Tag VARCHAR(50),
+  MoTaNgan TEXT,
+  NoiDung LONGTEXT NOT NULL,
+  TacGia VARCHAR(100) DEFAULT 'Ban Quản trị HostelHub',
+  ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
+  NgayTao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO articles (Id, TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc) VALUES
+(
+  'art_1',
+  '5 thủ đoạn lừa cọc phòng trọ tân sinh viên hay gặp nhất',
+  'Cảnh báo lừa đảo',
+  'Cảnh báo các bẫy cọc giữ chỗ qua mạng xã hội, phòng không chính chủ, ép ký hợp đồng ma nhằm chiếm đoạt tài sản sinh viên.',
+  '1. Yêu cầu chuyển cọc giữ phòng gấp khi chưa xem trực tiếp\n2. Giả danh chủ nhà hoặc môi giới không có giấy tờ\n3. Không minh bạch giá dịch vụ trong hợp đồng',
+  'Ban Quản trị HostelHub',
+  '4 phút đọc'
+),
+(
+  'art_2',
+  'Cách chốt số điện nước & công tơ chính xác ngày đầu dọn vào',
+  'Kinh nghiệm nhận phòng',
+  'Quy trình chụp ảnh công tơ điện, lập biên bản bàn giao thiết bị điều hòa, bình nóng lạnh để không phải đền bù oan cho người trước.',
+  '1. Chụp ảnh rõ nét số công tơ điện và đồng hồ nước\n2. Kiểm tra tính hoạt động của công tơ\n3. Lập biên bản bàn giao hiện trạng thiết bị',
+  'Cố vấn HostelHub',
+  '5 phút đọc'
+),
+(
+  'art_3',
+  'Mẫu hợp đồng thuê trọ chuẩn pháp lý kèm lưu ý đặt cọc',
+  'Pháp lý hợp đồng',
+  'Tải mẫu hợp đồng thuê nhà theo quy định pháp luật mới nhất, checklist 10 điều khoản cốt lõi sinh viên cần đọc kỹ trước khi đặt bút ký.',
+  '1. Các điều khoản bắt buộc phải có trong hợp đồng\n2. Lưu ý về việc tăng giá thuê\n3. Trách nhiệm sửa chữa hư hỏng',
+  'Luật sư cộng tác',
+  '7 phút đọc'
+),
+(
+  'art_4',
+  'Tiêu chí kiểm tra lối thoát hiểm và PCCC ở chung cư mini',
+  'An toàn phòng cháy',
+  'Checklist quan trọng giúp bạn nhận diện các rủi ro cháy nổ, thang thoát hiểm, thiết bị báo khói trước khi quyết định đặt cọc phòng.',
+  '1. Kiểm tra cầu thang bộ và thang thoát hiểm thứ 2\n2. Hệ thống báo cháy và chữa cháy ban đầu\n3. Khu vực sạc xe máy điện ở tầng 1',
+  'Đội Kỹ thuật HostelHub',
+  '6 phút đọc'
+);

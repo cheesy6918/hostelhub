@@ -9,9 +9,10 @@ import {
   ChevronDown, 
   HelpCircle 
 } from 'lucide-react';
+import { ARTICLES_DATA } from '../utils/articlesData';
 
 interface HomeLandingViewProps {
-  onNavigate: (view: string) => void;
+  onNavigate: (view: string, param?: string) => void; 
 }
 
 export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) => {
@@ -34,79 +35,11 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
       .catch(() => { });
   }, []);
 
-  // Danh sách 9 bài cẩm nang mẫu (đủ chia đều đúng 3 trang)
-  const allGuides = [
-    // Trang 1
-    {
-      id: 1,
-      date: '03/10/2026',
-      image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80',
-      title: '10 Kinh Nghiệm Thuê Phòng Trọ Hay Không Nên Bỏ Qua',
-      desc: 'Tại các đô thị lớn như Hà Nội, nhu cầu thuê trọ rất lớn. Việc tìm thuê phòng trọ đối với tân sinh viên cần đặc biệt lưu ý kiểm tra thực tế...'
-    },
-    {
-      id: 2,
-      date: '28/09/2026',
-      image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
-      title: 'Cảnh Giác Các Thủ Đoạn Lừa Cọc Phòng Trọ Sinh Viên',
-      desc: 'Tổng hợp các chiêu trò giả danh chủ nhà trọ yêu cầu chuyển cọc giữ chỗ khi chưa ký hợp đồng và cách phòng tránh an toàn nhất...'
-    },
-    {
-      id: 3,
-      date: '25/09/2026',
-      image: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=800&q=80',
-      title: 'Checklist Kiểm Tra Công Tơ Điện Nước Ngày Đầu Nhận Phòng',
-      desc: 'Quy trình chụp ảnh chỉ số đồng hồ điện nước, biên bản bàn giao điều hòa, bình nóng lạnh giúp bạn tránh bị tính tiền oan khi dọn đi...'
-    },
-    // Trang 2
-    {
-      id: 4,
-      date: '20/09/2026',
-      image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
-      title: 'Cách Nhận Biết Phòng Trọ Đảm Bảo Tiêu Chuẩn Phòng Cháy Chữa Cháy',
-      desc: 'Hướng dẫn kiểm tra lối thoát hiểm thứ 2, thang dây thoát hiểm và hệ thống báo cháy tự động tại các khu chung cư mini sinh viên...'
-    },
-    {
-      id: 5,
-      date: '15/09/2026',
-      image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80',
-      title: 'Kinh Nghiệm Chọn Bạn Cùng Phòng Hợp Tính Cách, Không Xích Mích',
-      desc: 'Những thỏa thuận cần thống nhất trước: phân chia tiền sinh hoạt, trực nhật vệ sinh phòng, giờ giấc đi lại và quy định tiếp khách...'
-    },
-    {
-      id: 6,
-      date: '10/09/2026',
-      image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
-      title: 'Những Điều Khoản Bắt Buộc Phải Có Trong Hợp Đồng Thuê Nhà',
-      desc: 'Quy định rõ thời hạn hoàn trả tiền cọc khi chấm dứt hợp đồng, trách nhiệm sửa chữa đường ống nước và cam kết không tăng giá bất ngờ...'
-    },
-    // Trang 3
-    {
-      id: 7,
-      date: '05/09/2026',
-      image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=800&q=80',
-      title: 'Bí Quyết Decor Phòng Trọ Nhỏ Đẹp Tiết Kiệm Dưới 500k',
-      desc: 'Gợi ý sắm kệ treo đồ thông minh, đèn ngủ decor ấm cúng và cách sắp xếp gác xép giúp tối ưu không gian sinh hoạt của sinh viên...'
-    },
-    {
-      id: 8,
-      date: '01/09/2026',
-      image: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80',
-      title: 'Mẹo Tiết Kiệm Điện Hiệu Quả Cho Sinh Viên Thuê Trọ',
-      desc: 'Cài đặt nhiệt độ điều hòa hợp lý từ 26-28 độ, ngắt cầu dao bình nóng lạnh sau khi bật 15 phút giúp giảm một nửa tiền điện hàng tháng...'
-    },
-    {
-      id: 9,
-      date: '28/08/2026',
-      image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=800&q=80',
-      title: 'Quy Trình Đăng Ký Tạm Trú Tạm Vắng Dành Cho Sinh Viên Mới',
-      desc: 'Thủ tục khai báo online trên Cổng Dịch vụ công Quốc gia, các giấy tờ cần chủ nhà cung cấp để tránh bị xử phạt hành chính...'
-    }
-  ];
-
+  
   // Cắt danh sách theo trang hiện tại (3 mục mỗi trang)
   const currentRooms = allRooms.slice(roomPage * 3, roomPage * 3 + 3);
-  const currentGuides = allGuides.slice(guidePage * 3, guidePage * 3 + 3);
+  // Lấy trực tiếp từ nguồn chung ARTICLES_DATA
+  const currentGuides = ARTICLES_DATA.slice(guidePage * 3, guidePage * 3 + 3);
 
   return (
     <div className="space-y-16">
@@ -333,28 +266,34 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-300">
             {currentGuides.map((item) => (
               <div 
-                key={item.id}
-                onClick={() => onNavigate('guide')}
-                className="group cursor-pointer flex flex-col overflow-hidden rounded-3xl transition-transform hover:-translate-y-1 duration-200 shadow-xs hover:shadow-md"
+                key={item.Id}
+                onClick={() => onNavigate('guide', item.Id)}
+                className="group cursor-pointer flex flex-col overflow-hidden rounded-3xl transition-transform hover:-translate-y-1 duration-200 shadow-xs hover:shadow-md active:scale-[0.99]"
               >
                 <div className="relative h-56 w-full overflow-hidden rounded-t-3xl bg-slate-100">
                   <img
-                    src={item.image}
-                    alt={item.title}
+                    src={item.HinhAnh}
+                    alt={item.TieuDe}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <span className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-semibold text-slate-700 shadow-xs">
-                    {item.date}
+                    {item.NgayDang}
                   </span>
                 </div>
                 {/* Phần chân thẻ màu xanh biển chuẩn đồng bộ web */}
                 <div className="bg-blue-600 p-5 text-white rounded-b-3xl flex-1 flex flex-col justify-between">
                   <h3 className="font-bold text-sm sm:text-base leading-snug line-clamp-2">
-                    {item.title}
+                    {item.TieuDe}
                   </h3>
                   <p className="text-xs text-white/90 mt-2 line-clamp-2 leading-relaxed">
-                    {item.desc}
+                    {item.MoTaNgan}
                   </p>
+                  <div className="pt-3 mt-2 border-t border-blue-500/50 flex items-center justify-between text-xs text-blue-100">
+                    <span>{item.Tag}</span>
+                    <span className="font-semibold text-white group-hover:translate-x-1 transition-transform">
+                      Đọc tiếp →
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}

@@ -23,6 +23,7 @@ import { Heart, CheckCircle2, ArrowLeftRight } from 'lucide-react';
 import { GuideView } from './views/GuideView';
 import { RoommateView } from './views/RoommateView';
 import { MapView } from './views/MapView';
+import { DistrictRoomListView } from './views/DistrictRoomListView';
 
 const MainContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -35,9 +36,37 @@ const MainContent: React.FC = () => {
     clearCompareToast
   } = useComparison();
   const [currentView, setCurrentView] = useState<string>('home');
+  const [selectedDistrictName, setSelectedDistrictName] = useState<string>('Quận Cầu Giấy');
+  const [roomsData, setRoomsData] = useState<any[]>([]);
+  useEffect(() => {
+    fetch('/api/rooms')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setRoomsData(data.data);
+        }
+      })
+      .catch(() => { });
+  }, []);
   const isAuthPage = currentView === 'login' || currentView === 'register';
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [previousView, setPreviousView] = useState<string>('home');
+
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+
+  const handleNavigateFromHome = (view: string, param?: string) => {
+    setCurrentView(view);
+    if (view === 'guide') {
+      setSelectedArticleId(param || null);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNavigateDistrict = (districtName: string) => {
+    setSelectedDistrictName(districtName);
+    setCurrentView('district-rooms');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const navigateToRoomDetail = (roomId: string) => {
     setSelectedRoomId(roomId);
@@ -91,8 +120,23 @@ const MainContent: React.FC = () => {
 
   const renderView = () => {
     switch (currentView) {
+
+      case 'district-rooms':
+        return (
+          <DistrictRoomListView
+            district={selectedDistrictName}
+            rooms={roomsData}
+            onSelectRoom={navigateToRoomDetail}
+            onNavigateDistrict={(districtName) => {
+              setSelectedDistrictName(districtName);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onBackToHome={() => setCurrentView('home')}
+          />
+        );
+
       case 'home':
-        return <HomeLandingView onNavigate={setCurrentView} />;
+        return <HomeLandingView onNavigate={handleNavigateFromHome} />;
 
       case 'find-rooms-public':
       case 'student-rooms':
@@ -118,9 +162,14 @@ const MainContent: React.FC = () => {
         return <StudentHistoryView onViewRoom={navigateToRoomDetail} onNavigate={setCurrentView} initialTab="transactions" />;
 
       case 'guide':
-        return <GuideView />;
+        return (
+          <GuideView 
+            initialArticleId={selectedArticleId}
+            onClearInitialArticle={() => setSelectedArticleId(null)}
+          />
+        );
       case 'roommate':
-        return <RoommateView />;
+        return <RoommateView onNavigate={setCurrentView} />;
 
       case 'map':
         return <MapView onSelectRoomDetail={navigateToRoomDetail} />;
@@ -179,7 +228,13 @@ const MainContent: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-blue-600 selection:text-white relative">
       {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
-      {!isAuthPage && <Navbar currentView={currentView} setCurrentView={setCurrentView} />}
+      {!isAuthPage && (
+  <Navbar 
+    currentView={currentView} 
+    setCurrentView={setCurrentView} 
+    onSelectDistrict={handleNavigateDistrict} 
+  />
+)}
 
       {/* Floating Room Comparison Dock & Modal */}
       {!isAuthPage && <RoomComparisonDock onOpenModal={openComparisonModal} />}
