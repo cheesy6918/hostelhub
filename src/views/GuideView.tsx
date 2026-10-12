@@ -3,14 +3,25 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GuideDetailView, Article } from './GuideDetailView';
 import { ARTICLES_DATA } from '../utils/articlesData';
 
-const CATEGORIES = ['Tất cả bài viết', 'Cảnh báo lừa đảo', 'Kinh nghiệm thuê phòng', 'Kinh nghiệm nhận phòng', 'Pháp lý hợp đồng', 'An toàn PCCC'];
+const CATEGORIES = [
+  'Tất cả bài viết',
+  'Kinh nghiệm thuê phòng',
+  'Kinh nghiệm cho thuê',
+  'Cảnh báo lừa đảo đặt cọc',
+  'Mẹo tiết kiệm & Decor phòng'
+];
 
 interface GuideViewProps {
   initialArticleId?: string | null;
   onClearInitialArticle?: () => void;
+  initialCategory?: string; // 👈 Thêm để nhận từ Navbar
 }
 
-export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearInitialArticle }) => {
+export const GuideView: React.FC<GuideViewProps> = ({
+  initialArticleId,
+  onClearInitialArticle,
+  initialCategory
+}) => {
   // Tự động tìm và mở bài viết nếu được truyền ID từ trang chủ vào
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(() => {
     if (initialArticleId) {
@@ -19,14 +30,27 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
     return null;
   });
 
-  const [selectedCategory, setSelectedCategory] = useState('Tất cả bài viết');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const ITEMS_PER_PAGE = 9; // 9 bài
+  // Khởi tạo danh mục theo prop truyền vào từ Navbar (mặc định là 'Tất cả bài viết')
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    initialCategory && initialCategory !== 'Tất cả' ? initialCategory : 'Tất cả bài viết'
+  );
 
-  // 1. Khai báo filteredArticles TRƯỚC
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 9;
+
+  // Tự động cập nhật danh mục & reset trang khi bấm chọn mục khác trên Navbar
+  React.useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory === 'Tất cả' ? 'Tất cả bài viết' : initialCategory);
+      setCurrentPage(1);
+      setSelectedArticle(null); // Đóng bài chi tiết nếu đang mở để hiển thị danh sách
+    }
+  }, [initialCategory]);
+
+  // Lọc bài viết chính xác 100% theo Tag đã chuẩn hóa
   const filteredArticles = selectedCategory === 'Tất cả bài viết'
     ? ARTICLES_DATA
-    : ARTICLES_DATA.filter((a) => a.Tag.toLowerCase().includes(selectedCategory.toLowerCase()));
+    : ARTICLES_DATA.filter((a) => a.Tag === selectedCategory);
 
   // 2. Rồi mới tính totalPages và paginatedArticles dựa trên filteredArticles
   const totalPages = Math.ceil(filteredArticles.length / ITEMS_PER_PAGE) || 1;
@@ -80,7 +104,7 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
       <div className="flex items-center justify-between pb-4 border-b border-slate-200/80">
         <div className="flex items-center gap-2">
           <span className="text-base font-extrabold text-slate-900 tracking-tight">
-            Tất cả bài viết
+            {selectedCategory}
           </span>
           <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
             {filteredArticles.length} bài
@@ -102,47 +126,63 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {paginatedArticles.map((article) => (
-          <div
-            key={article.Id}
-            onClick={() => {
-              setSelectedArticle(article);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className="rounded-3xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer group active:scale-[0.99]"
+      {/* Danh sách bài viết hoặc thông báo trống */}
+      {filteredArticles.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {paginatedArticles.map((article) => (
+            <div
+              key={article.Id}
+              onClick={() => {
+                setSelectedArticle(article);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="rounded-3xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer group active:scale-[0.99]"
+            >
+              <div className="relative aspect-16/10 w-full overflow-hidden bg-slate-100">
+                <img
+                  src={article.HinhAnh}
+                  alt={article.TieuDe}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-semibold text-slate-800 shadow-xs flex items-center gap-1.5">
+                  <span>{article.NgayDang}</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-600 text-white p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3">
+                <div className="space-y-2">
+                  <h3 className="text-base font-bold leading-snug line-clamp-2 group-hover:text-blue-100 transition-colors">
+                    {article.TieuDe}
+                  </h3>
+                  <p className="text-xs text-blue-100 line-clamp-3 leading-relaxed">
+                    {article.MoTaNgan}
+                  </p>
+                </div>
+
+                <div className="pt-2 text-[11px] text-blue-200 flex items-center justify-between border-t border-blue-500/50">
+                  <span>{article.Tag}</span>
+                  <span className="font-semibold text-white group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                    Đọc tiếp →
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-2xs space-y-3">
+          <p className="text-sm font-bold text-slate-700">
+            Hiện chưa có bài viết nào trong chuyên mục này.
+          </p>
+          <button
+            type="button"
+            onClick={() => handleCategoryChange('Tất cả bài viết')}
+            className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer hover:bg-blue-700 transition-colors"
           >
-            <div className="relative aspect-16/10 w-full overflow-hidden bg-slate-100">
-              <img
-                src={article.HinhAnh}
-                alt={article.TieuDe}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-semibold text-slate-800 shadow-xs flex items-center gap-1.5">
-                <span>{article.NgayDang}</span>
-              </div>
-            </div>
-
-            <div className="bg-blue-600 text-white p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3">
-              <div className="space-y-2">
-                <h3 className="text-base font-bold leading-snug line-clamp-2 group-hover:text-blue-100 transition-colors">
-                  {article.TieuDe}
-                </h3>
-                <p className="text-xs text-blue-100 line-clamp-3 leading-relaxed">
-                  {article.MoTaNgan}
-                </p>
-              </div>
-
-              <div className="pt-2 text-[11px] text-blue-200 flex items-center justify-between border-t border-blue-500/50">
-                <span>{article.Tag}</span>
-                <span className="font-semibold text-white group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
-                  Đọc tiếp →
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            Xem tất cả bài viết
+          </button>
+        </div>
+      )}
 
       {/* Phân trang động hoạt động thực tế */}
       <div className="pt-6 flex items-center justify-center gap-2">
@@ -154,11 +194,10 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
             setCurrentPage((prev) => Math.max(1, prev - 1));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${
-            currentPage === 1
+          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${currentPage === 1
               ? 'opacity-30 cursor-not-allowed text-slate-300'
               : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
-          }`}
+            }`}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -172,11 +211,10 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
               setCurrentPage(pageNum);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              currentPage === pageNum
+            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${currentPage === pageNum
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'hover:bg-slate-100 text-slate-600 border border-transparent'
-            }`}
+              }`}
           >
             {pageNum}
           </button>
@@ -190,11 +228,10 @@ export const GuideView: React.FC<GuideViewProps> = ({ initialArticleId, onClearI
             setCurrentPage((prev) => Math.min(totalPages, prev + 1));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${
-            currentPage === totalPages
+          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${currentPage === totalPages
               ? 'opacity-30 cursor-not-allowed text-slate-300'
               : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
-          }`}
+            }`}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

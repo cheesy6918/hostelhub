@@ -29,11 +29,10 @@
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0912345699",
       "VaiTro": "SinhVien",
-      "soDuVi": 2000000,
+      "soDuVi": 2500000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
     }
-    
   ],
   "rooms": [
     {
@@ -813,6 +812,24 @@
   "deposits": [],
   "notifications": [
     {
+      "Id": "tb_1791772571395_q531",
+      "UserId": "usr_sinhvien",
+      "TieuDe": "Đã gửi yêu cầu thuê phòng",
+      "NoiDung": "Yêu cầu thuê phòng \"ahihi\" đã được gửi tới chủ trọ Trần Thị Bích. Vui lòng chờ chủ trọ duyệt.",
+      "Loai": "PhongTro",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-12T02:36:11.395Z"
+    },
+    {
+      "Id": "tb_1791772571366_ur4o",
+      "UserId": "usr_chutro",
+      "TieuDe": "Yêu cầu xác nhận thuê phòng mới!",
+      "NoiDung": "Sinh viên Nguyễn Văn Sinh đã gửi yêu cầu xác nhận thuê phòng \"ahihi\". Vui lòng vào mục Quản lý hợp đồng để kiểm tra và xác nhận đồng ý thuê.",
+      "Loai": "PhongTro",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-12T02:36:11.366Z"
+    },
+    {
       "Id": "tb_1791258447796_ecyd",
       "UserId": "usr_sinhvien",
       "TieuDe": "Đề xuất thuê phòng đã bị hủy / từ chối",
@@ -878,6 +895,17 @@
   ],
   "rental_contracts": [
     {
+      "id": 1791772571335,
+      "room_id": "room_1791256776630",
+      "renter_id": "usr_sinhvien",
+      "landlord_id": "usr_chutro",
+      "status": "pending_landlord",
+      "start_date": "2026-10-12T00:00:00.000Z",
+      "end_date": null,
+      "created_at": "2026-10-12T02:36:11.335Z",
+      "updated_at": "2026-10-12T02:36:11.335Z"
+    },
+    {
       "id": 1,
       "room_id": "room_1",
       "renter_id": "usr_sinhvien",
@@ -925,7 +953,6 @@
       "created_at": "2026-09-23T08:18:22.714Z"
     }
   ],
-  
   "articles": [
     {
       "Id": "art_1",
@@ -965,6 +992,15 @@
     }
   ],
   "favorites": [],
-  "wallet_transactions": []
+  "wallet_transactions": [
+    {
+      "Id": "tx_1791771908197_ay1a",
+      "UserId": "usr_sinhvien",
+      "LoaiGiaoDich": "NapTien",
+      "SoTien": 500000,
+      "SoDuSauGiaoDich": 2500000,
+      "NoiDung": "Nạp tiền vào ví điện tử: +500.000 VNĐ",
+      "NgayTao": "2026-10-12T02:25:08.212Z"
+    }
+  ]
 }
-

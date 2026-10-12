@@ -43,13 +43,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
       setSuccessMsg('Đăng nhập thành công! Đang điều hướng theo vai trò...');
       setTimeout(() => {
         if (res.role === 'SinhVien') {
-          onNavigate('student-rooms');
+          onNavigate('home'); // 👈 Đổi thành 'home' để chuyển về Trang chủ
         } else if (res.role === 'ChuTro') {
           onNavigate('landlord-rooms');
         } else if (res.role === 'Admin') {
           onNavigate('admin-dashboard');
         } else {
-          onNavigate('student-rooms');
+          onNavigate('home'); // 👈 Trường hợp mặc định cũng về 'home'
         }
       }, 500);
     } else {

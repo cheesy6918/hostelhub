@@ -54,6 +54,15 @@ const MainContent: React.FC = () => {
 
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
+  const [selectedGuideCategory, setSelectedGuideCategory] = useState<string>('Tất cả bài viết');
+
+  const handleNavigateGuideCategory = (categoryName: string) => {
+    setSelectedGuideCategory(categoryName);
+    setSelectedArticleId(null);
+    setCurrentView('guide');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleNavigateFromHome = (view: string, param?: string) => {
     setCurrentView(view);
     if (view === 'guide') {
@@ -74,11 +83,11 @@ const MainContent: React.FC = () => {
     setCurrentView('room-detail');
   };
 
-  // Auto-redirect if logged in and on home/login/register
+  // Auto-redirect if logged in and on login/register
   useEffect(() => {
     if (!loading && user) {
-      if (currentView === 'home' || currentView === 'login' || currentView === 'register') {
-        if (user.VaiTro === 'SinhVien') setCurrentView('student-rooms');
+      if (currentView === 'login' || currentView === 'register') {
+        if (user.VaiTro === 'SinhVien') setCurrentView('home');
         else if (user.VaiTro === 'ChuTro') setCurrentView('landlord-rooms');
         else if (user.VaiTro === 'Admin') setCurrentView('admin-dashboard');
       }
@@ -166,6 +175,7 @@ const MainContent: React.FC = () => {
           <GuideView 
             initialArticleId={selectedArticleId}
             onClearInitialArticle={() => setSelectedArticleId(null)}
+            initialCategory={selectedGuideCategory}
           />
         );
       case 'roommate':
@@ -229,12 +239,13 @@ const MainContent: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-blue-600 selection:text-white relative">
       {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
       {!isAuthPage && (
-  <Navbar 
-    currentView={currentView} 
-    setCurrentView={setCurrentView} 
-    onSelectDistrict={handleNavigateDistrict} 
-  />
-)}
+        <Navbar 
+          currentView={currentView} 
+          setCurrentView={setCurrentView} 
+          onSelectDistrict={handleNavigateDistrict}
+          onSelectGuideCategory={handleNavigateGuideCategory}
+        />
+      )}
 
       {/* Floating Room Comparison Dock & Modal */}
       {!isAuthPage && <RoomComparisonDock onOpenModal={openComparisonModal} />}

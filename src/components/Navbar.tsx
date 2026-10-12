@@ -25,9 +25,15 @@ interface NavbarProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   onSelectDistrict?: (districtName: string) => void;
+  onSelectGuideCategory?: (category: string) => void; // 👈 Thêm dòng này để hết lỗi ở App.tsx
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onSelectDistrict }) => {
+export const Navbar: React.FC<NavbarProps> = ({ 
+  currentView, 
+  setCurrentView, 
+  onSelectDistrict,
+  onSelectGuideCategory // 👈 Nhận thêm prop này
+}) => {
   const { user, logout } = useAuth();
   const { favoriteRoomIds } = useFavorites();
   const { comparisonRooms, openComparisonModal } = useComparison();
@@ -54,12 +60,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
         {/* Nhóm bên trái: Logo & Menu điều hướng */}
         <div className="flex items-center gap-8 lg:gap-10">
           {/* Logo HostelHub giữ nguyên màu xanh thương hiệu */}
+          {/* Logo HostelHub giữ nguyên màu xanh thương hiệu */}
           <button
             onClick={() => {
-              if (!user) {
+              if (!user || user.VaiTro === 'SinhVien') {
                 setCurrentView('home');
-              } else if (user.VaiTro === 'SinhVien') {
-                setCurrentView('student-rooms');
               } else if (user.VaiTro === 'ChuTro') {
                 setCurrentView('landlord-rooms');
               } else if (user.VaiTro === 'Admin') {
@@ -79,6 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
           </button>
 
           {/* Menu chính có Dropdown khi Hover */}
+          {/* Menu chính có Dropdown khi Hover */}
           <nav className="hidden md:flex items-center gap-6 text-[13.5px] font-medium text-slate-700">
             {!user ? (
               <>
@@ -92,7 +98,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                     <span>Tìm phòng trọ</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
                   </button>
-
                   {/* Hộp menu thả xuống 2 cột */}
                   <div className="absolute top-full left-0 hidden group-hover:block w-[460px] bg-white rounded-2xl shadow-xl border border-slate-100 p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
@@ -114,7 +119,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                           key={item.query}
                           type="button"
                           onClick={() => {
-                            // Gọi hàm truyền tên quận lên App.tsx
                             onSelectDistrict?.(item.query);
                           }}
                           className="text-left text-xs text-slate-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-xl transition-all font-medium cursor-pointer"
@@ -136,38 +140,31 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                     <span>Cẩm nang</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
                   </button>
-
                   {/* Hộp menu thả xuống của Cẩm nang */}
                   <div className="absolute top-full left-0 hidden group-hover:block w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="space-y-1 text-xs text-slate-600">
-                      <button
-                        type="button"
-                        onClick={() => setCurrentView('guide')}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 font-medium transition-colors cursor-pointer flex items-center justify-between"
-                      >
-                        <span>Kinh nghiệm thuê phòng</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentView('guide')}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 font-medium transition-colors cursor-pointer flex items-center justify-between"
-                      >
-                        <span>Kinh nghiệm cho thuê</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentView('guide')}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 hover:text-rose-600 font-medium transition-colors cursor-pointer"
-                      >
-                        <span>Cảnh báo lừa đảo đặt cọc</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentView('guide')}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 font-medium transition-colors cursor-pointer"
-                      >
-                        <span>Mẫu hợp đồng thuê trọ</span>
-                      </button>
+                      {[
+                        'Kinh nghiệm thuê phòng',
+                        'Kinh nghiệm cho thuê',
+                        'Cảnh báo lừa đảo đặt cọc',
+                        'Mẹo tiết kiệm & Decor phòng'
+                      ].map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            onSelectGuideCategory?.(item);
+                            setCurrentView('guide');
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
+                            item.includes('lừa đảo') 
+                              ? 'hover:bg-rose-50 hover:text-rose-600' 
+                              : 'hover:bg-blue-50 hover:text-blue-600'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -190,56 +187,117 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                   Bản đồ phòng trọ
                 </button>
               </>
-
             ) : user.VaiTro === 'SinhVien' ? (
               <>
+                {/* 1. MỤC TÌM PHÒNG TRỌ SINH VIÊN (GIỐNG HỆT TRANG KHÁCH) */}
+                <div className="relative group py-4">
+                  <button
+                    onClick={() => setCurrentView('student-rooms')}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'student-rooms' || currentView === 'district-rooms' 
+                        ? 'text-blue-600 font-bold' 
+                        : 'group-hover:text-blue-600'
+                    }`}
+                  >
+                    <span>Tìm phòng trọ</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
+                  </button>
+
+                  <div className="absolute top-full left-0 hidden group-hover:block w-[460px] bg-white rounded-2xl shadow-xl border border-slate-100 p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Khu vực cho thuê trọ phổ biến tại Hà Nội</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 p-2">
+                      {[
+                        { name: 'Quận Cầu Giấy', query: 'Cầu Giấy' },
+                        { name: 'Quận Đống Đa', query: 'Đống Đa' },
+                        { name: 'Quận Hai Bà Trưng', query: 'Hai Bà Trưng' },
+                        { name: 'Quận Thanh Xuân', query: 'Thanh Xuân' },
+                        { name: 'Quận Nam Từ Liêm', query: 'Nam Từ Liêm' },
+                        { name: 'Quận Bắc Từ Liêm', query: 'Bắc Từ Liêm' },
+                        { name: 'Quận Hà Đông', query: 'Hà Đông' },
+                        { name: 'Quận Ba Đình', query: 'Ba Đình' },
+                      ].map((item) => (
+                        <button
+                          key={item.query}
+                          type="button"
+                          onClick={() => {
+                            onSelectDistrict?.(item.query);
+                          }}
+                          className="text-left text-xs text-slate-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-xl transition-all font-medium cursor-pointer"
+                        >
+                          Cho thuê phòng trọ {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. MỤC CẨM NANG (DROPDOWN Y HỆT TRANG KHÁCH) */}
+                <div className="relative group py-4">
+                  <button
+                    onClick={() => setCurrentView('guide')}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'guide' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
+                      }`}
+                  >
+                    <span>Cẩm nang</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
+                  </button>
+
+                  <div className="absolute top-full left-0 hidden group-hover:block w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="space-y-1 text-xs text-slate-600">
+                      {[
+                        'Kinh nghiệm thuê phòng',
+                        'Kinh nghiệm cho thuê',
+                        'Cảnh báo lừa đảo đặt cọc',
+                        'Mẹo tiết kiệm & Decor phòng'
+                      ].map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            onSelectGuideCategory?.(item);
+                            setCurrentView('guide');
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
+                            item.includes('lừa đảo') 
+                              ? 'hover:bg-rose-50 hover:text-rose-600' 
+                              : 'hover:bg-blue-50 hover:text-blue-600'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. MỤC TÌM Ở GHÉP */}
                 <button
-                  onClick={() => setCurrentView('student-rooms')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'student-rooms' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  onClick={() => setCurrentView('roommate')}
+                  className={`transition-colors cursor-pointer py-1 ${currentView === 'roommate' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
                     }`}
                 >
-                  Tìm phòng trọ
+                  Tìm ở ghép
                 </button>
 
+                {/* 4. MỤC BẢN ĐỒ PHÒNG TRỌ */}
                 <button
-                  onClick={() => setCurrentView('student-favorites')}
-                  className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'student-favorites' ? 'text-rose-600 font-bold' : 'hover:text-rose-600'
+                  onClick={() => setCurrentView('map')}
+                  className={`transition-colors cursor-pointer py-1 ${currentView === 'map' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
                     }`}
                 >
-                  <Heart className={`w-3.5 h-3.5 ${favoriteRoomIds.length > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-400'}`} />
-                  <span>Yêu thích</span>
-                  {favoriteRoomIds.length > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 text-[10px] font-extrabold tabular-nums">
-                      {favoriteRoomIds.length}
-                    </span>
-                  )}
+                  Bản đồ phòng trọ
                 </button>
+
+                {/* 5. MỤC LỊCH SỬ CỦA TÔI */}
                 <button
                   onClick={() => setCurrentView('student-history')}
                   className={`transition-colors cursor-pointer py-1 ${currentView === 'student-history' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
                     }`}
                 >
                   Lịch sử của tôi
-                </button>
-                <button
-                  onClick={() => setCurrentView('notifications')}
-                  className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'notifications' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>Thông báo</span>
-                  {unreadCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-extrabold tabular-nums animate-pulse">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setCurrentView('profile')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'profile' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  Ví cá nhân & Hồ sơ
                 </button>
               </>
             ) : user.VaiTro === 'ChuTro' ? (
@@ -265,26 +323,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                 >
                   Yêu cầu xem phòng
                 </button>
-                <button
-                  onClick={() => setCurrentView('notifications')}
-                  className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'notifications' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>Thông báo</span>
-                  {unreadCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-extrabold tabular-nums animate-pulse">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setCurrentView('profile')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'profile' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  Ví doanh thu
-                </button>
               </>
             ) : (
               <>
@@ -308,19 +346,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
                     }`}
                 >
                   Kiểm duyệt phòng
-                </button>
-                <button
-                  onClick={() => setCurrentView('notifications')}
-                  className={`flex items-center gap-1.5 cursor-pointer py-1 transition-colors ${currentView === 'notifications' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>Thông báo</span>
-                  {unreadCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-extrabold tabular-nums animate-pulse">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
                 </button>
               </>
             )}
@@ -356,19 +381,25 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onS
             </>
           ) : (
             <div className="flex items-center gap-3">
-              {/* Số dư ví dạng capsule nhỏ gọn */}
-              <button
-                onClick={() => setCurrentView('profile')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer ${user.VaiTro === 'SinhVien'
-                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
-                  }`}
-                title="Số dư ví hiện tại - Nhấn để xem chi tiết"
-              >
-                <Wallet className={`w-3.5 h-3.5 ${user.VaiTro === 'SinhVien' ? 'text-emerald-600' : 'text-blue-600'}`} />
-                <span className="hidden sm:inline text-slate-500">Ví:</span>
-                <span className="tabular-nums font-bold">{(user.soDuVi || 0).toLocaleString('vi-VN')} đ</span>
-              </button>
+              {/* Icon Trái tim Yêu thích dành cho Sinh viên */}
+              {user.VaiTro === 'SinhVien' && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('student-favorites')}
+                  title="Danh sách phòng yêu thích"
+                  className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${currentView === 'student-favorites'
+                      ? 'bg-rose-50 text-rose-600'
+                      : 'text-slate-500 hover:text-rose-600 hover:bg-slate-50'
+                    }`}
+                >
+                  <Heart className={`w-4 h-4 ${favoriteRoomIds.length > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500'}`} />
+                  {favoriteRoomIds.length > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1.5 min-w-[17px] h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                      {favoriteRoomIds.length > 9 ? '9+' : favoriteRoomIds.length}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Dropdown thông báo */}
               <NotificationDropdown
