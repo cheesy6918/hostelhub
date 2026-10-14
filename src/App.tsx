@@ -84,11 +84,18 @@ const MainContent: React.FC = () => {
   };
 
   // Auto-redirect if logged in and on login/register
+  // Auto-redirect if logged in and on login/register or home
   useEffect(() => {
     if (!loading && user) {
       if (currentView === 'login' || currentView === 'register') {
         if (user.VaiTro === 'SinhVien') setCurrentView('home');
         else if (user.VaiTro === 'ChuTro') setCurrentView('landlord-rooms');
+        else if (user.VaiTro === 'Admin') setCurrentView('admin-dashboard');
+      }
+
+      // Chặn Chủ trọ và Admin vào trang Home tìm kiếm phòng
+      if (currentView === 'home') {
+        if (user.VaiTro === 'ChuTro') setCurrentView('landlord-rooms');
         else if (user.VaiTro === 'Admin') setCurrentView('admin-dashboard');
       }
     } else if (!loading && !user) {
@@ -114,7 +121,7 @@ const MainContent: React.FC = () => {
         setCurrentView('login');
       }
     }
-  }, [user, loading]);
+  }, [user, loading, currentView]);
 
   if (loading) {
     return (
@@ -145,6 +152,15 @@ const MainContent: React.FC = () => {
         );
 
       case 'home':
+        if (user?.VaiTro === 'ChuTro') {
+          return (
+            <LandlordManageView
+              onNavigateToCreate={() => setCurrentView('landlord-create-room')}
+              onViewRoomDetail={navigateToRoomDetail}
+              initialTab="rooms"
+            />
+          );
+        }
         return <HomeLandingView onNavigate={handleNavigateFromHome} />;
 
       case 'find-rooms-public':
@@ -285,8 +301,8 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {/* Chỉ hiển thị nút Trợ lý AI khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
-      {!isAuthPage && (
+      {/* Chỉ hiển thị nút Trợ lý AI cho Sinh viên hoặc khách chưa đăng nhập, ẩn với Chủ trọ */}
+      {!isAuthPage && user?.VaiTro !== 'ChuTro' && (
         <ChatWidget
           onViewRoomDetail={navigateToRoomDetail}
           onNavigate={setCurrentView}
@@ -297,8 +313,8 @@ const MainContent: React.FC = () => {
         {renderView()}
       </main>
 
-      {/* Chỉ hiển thị chân trang Footer khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
-      {!isAuthPage && <Footer onSelectView={setCurrentView} />}
+      {/* Chỉ hiển thị chân trang Footer khi KHÔNG PHẢI trang đăng nhập/đăng ký VÀ KHÔNG PHẢI Chủ trọ */}
+      {!isAuthPage && user?.VaiTro !== 'ChuTro' && <Footer onSelectView={setCurrentView} />}
     </div>
   );
 };

@@ -8,6 +8,8 @@ export interface User {
   VaiTro: VaiTro;
   soDuVi: number;
   NgayTao: string;
+  SoDuVi?: number; // 👈 Thêm dòng này để hết lỗi ở cả 3 file
+  [key: string]: any; // (Tùy chọn: thêm dòng này để linh hoạt nhận thêm các thuộc tính khác)
   TrangThai: 'HoatDong' | 'BiKhoa';
 }
 

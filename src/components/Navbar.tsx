@@ -63,16 +63,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo HostelHub giữ nguyên màu xanh thương hiệu */}
           <button
             onClick={() => {
-              if (!user || user.VaiTro === 'SinhVien') {
-                setCurrentView('home');
-              } else if (user.VaiTro === 'ChuTro') {
+              if (user?.VaiTro === 'ChuTro') {
                 setCurrentView('landlord-rooms');
-              } else if (user.VaiTro === 'Admin') {
+              } else if (user?.VaiTro === 'Admin') {
                 setCurrentView('admin-dashboard');
+              } else {
+                setCurrentView('home');
               }
             }}
             className="flex items-center gap-2.5 text-left focus:outline-none group cursor-pointer"
           >
+            
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs transition-transform group-hover:scale-105">
               <Home className="w-5 h-5" />
             </div>
@@ -399,6 +400,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </span>
                   )}
                 </button>
+              )}
+
+              {/* Ví tiền dành riêng cho Chủ trọ */}
+              {user.VaiTro === 'ChuTro' && (
+                <div 
+                  onClick={() => setCurrentView('landlord-rooms')}
+                  title="Số dư ví chủ trọ"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-xs font-bold shadow-2xs cursor-pointer hover:bg-emerald-100 transition-colors"
+                >
+                  <Wallet className="w-4 h-4 text-emerald-600" />
+                  <span>{(user.SoDuVi || 0).toLocaleString('vi-VN')} đ</span>
+                </div>
               )}
 
               {/* Dropdown thông báo */}

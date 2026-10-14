@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Room, Inquiry, TrangThaiPhong, LichHen, DatCoc, RentalContract } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { LandlordRoomFilter } from '../components/landlord/LandlordRoomFilter';
+import { LandlordRoomCard } from '../components/landlord/LandlordRoomCard';
+import { LandlordWalletModal } from '../components/landlord/LandlordWalletModal';
+import { LandlordCreateArticleModal } from '../components/landlord/LandlordCreateArticleModal';
+import { BookOpen } from 'lucide-react';
+
 import {
   Building2,
   Plus,
@@ -55,11 +61,12 @@ const AVAILABLE_AMENITIES_LIST = [
   'Ban công',
 ];
 
-export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
+  export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   onNavigateToCreate,
   onViewRoomDetail,
   initialTab,
 }) => {
+  // 👇 ĐẢM BẢO LẤY ĐỦ CẢ 3 BIẾN NÀY:
   const { user, token, refreshUser } = useAuth();
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -68,7 +75,99 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
   const [contracts, setContracts] = useState<RentalContract[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>(initialTab || 'rooms');
+
+  // Khai báo activeTab ở đây:
+  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>(
+    initialTab || 'rooms'
+  );
+
+  // State modal ví & bài viết:
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showArticleModal, setShowArticleModal] = useState(false);
+
+  // Các biến tính toán doanh thu & cọc:
+  const totalDepositReceived = deposits
+    .filter((d) => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận')
+    .reduce((sum, d) => sum + (d.SoTienCoc || 500000), 0);
+
+  const expectedMonthlyRevenue = rooms
+    .filter((r) => r.TrangThai === 'Hết phòng' || (r.TrangThai as string)?.toLowerCase().includes('dathue'))
+    .reduce((sum, r) => sum + (r.GiaThue || 0), 0);
+
+  // State bộ lọc phòng:
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [districtFilter, setDistrictFilter] = useState('all'); // 👈 THÊM DÒNG NÀY
+  const [sortBy, setSortBy] = useState('newest');
+
+  // Trích xuất danh sách các quận/huyện hiện có của chủ trọ
+  const availableDistricts = Array.from(
+    new Set(rooms.map((r) => r.QuanHuyen).filter(Boolean))
+  ) as string[];
+
+  // Kiểm tra xem người dùng có đang áp dụng bộ lọc nào không
+  const isFiltered = searchTerm.trim() !== '' || statusFilter !== 'all' || districtFilter !== 'all';
+
+  // Hàm đặt lại toàn bộ bộ lọc
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setDistrictFilter('all');
+    setSortBy('newest');
+  };
+
+  // 1. Khai báo state phân trang
+  const [currentPage, setCurrentPage] = useState(1);
+  const roomsPerPage = 6; // 6 phòng/trang (2 hàng x 3 cột)
+
+  // 2. Lọc và sắp xếp danh sách phòng (PHẢI NẰM Ở ĐÂY để có filteredRooms trước)
+  const filteredRooms = rooms
+    .filter((room) => {
+      const title = (room.TieuDe || '').toLowerCase();
+      const address = (room.DiaChi || '').toLowerCase();
+      const district = (room.QuanHuyen || '').toLowerCase();
+      const matchesSearch =
+        title.includes(searchTerm.toLowerCase()) ||
+        address.includes(searchTerm.toLowerCase()) ||
+        district.includes(searchTerm.toLowerCase());
+
+      // Lọc theo trạng thái
+      const rawStatus = (room.TrangThai || '').toLowerCase();
+      let matchesStatus = true;
+      if (statusFilter === 'available') {
+        matchesStatus = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
+      } else if (statusFilter === 'rented') {
+        matchesStatus = rawStatus.includes('hết phòng') || rawStatus.includes('dathue');
+      } else if (statusFilter === 'pending') {
+        matchesStatus = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
+      }
+
+      // Lọc theo quận/huyện
+      let matchesDistrict = true;
+      if (districtFilter !== 'all') {
+        matchesDistrict = room.QuanHuyen === districtFilter;
+      }
+
+      return matchesSearch && matchesStatus && matchesDistrict;
+    })
+    .sort((a, b) => {
+      const priceA = a.GiaThue || 0;
+      const priceB = b.GiaThue || 0;
+      if (sortBy === 'price-asc') return priceA - priceB;
+      if (sortBy === 'price-desc') return priceB - priceA;
+      return 0;
+    });
+
+  // Reset về trang 1 khi đổi bất kỳ tiêu chí lọc nào
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, districtFilter, sortBy]);
+
+  // 4. Cắt mảng phòng hiển thị cho trang hiện tại (lúc này filteredRooms đã có sẵn)
+  const totalPages = Math.ceil(filteredRooms.length / roomsPerPage);
+  const indexOfLastRoom = currentPage * roomsPerPage;
+  const indexOfFirstRoom = indexOfLastRoom - roomsPerPage;
+  const currentRooms = filteredRooms.slice(indexOfFirstRoom, indexOfLastRoom);
 
   useEffect(() => {
     if (initialTab) {
@@ -594,20 +693,32 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
             </p>
           </div>
 
-          {/* Prominent Action Button: Đăng tin phòng mới */}
-          {onNavigateToCreate && (
+          <div className="flex items-center gap-2.5">
+            {/* Nút Viết cẩm nang */}
             <button
-              onClick={onNavigateToCreate}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all whitespace-nowrap cursor-pointer active:scale-98"
+              type="button"
+              onClick={() => setShowArticleModal(true)}
+              className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Đăng tin phòng mới</span>
+              <BookOpen className="w-4 h-4 text-blue-600" />
+              <span>+ Viết cẩm nang</span>
             </button>
-          )}
+
+            {/* Nút Đăng tin phòng mới */}
+            {onNavigateToCreate && (
+              <button
+                onClick={onNavigateToCreate}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all whitespace-nowrap cursor-pointer active:scale-98"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Đăng tin phòng mới</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Stats strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+        {/* Stats strip kèm Thống kê Tài chính Ví */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mt-6 pt-6 border-t border-slate-100">
           <div className="bg-slate-50 p-3.5 rounded-2xl">
             <span className="text-xs text-slate-400 block">Tổng số phòng</span>
             <span className="text-xl font-bold text-slate-900 tabular-nums">{rooms.length}</span>
@@ -620,9 +731,31 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
             <span className="text-xs text-slate-400 block">Đã cho thuê</span>
             <span className="text-xl font-bold text-slate-700 tabular-nums">{occupiedCount}</span>
           </div>
-          <div className="bg-amber-50/70 p-3.5 rounded-2xl">
-            <span className="text-xs text-amber-700 block">Đang chờ duyệt</span>
-            <span className="text-xl font-bold text-amber-800 tabular-nums">{pendingCount}</span>
+          
+          {/* Thẻ tiền cọc đang giữ */}
+          <div className="bg-blue-50/70 p-3.5 rounded-2xl">
+            <span className="text-xs text-blue-700 block">Tiền cọc giữ chỗ</span>
+            <span className="text-lg font-bold text-blue-900 tabular-nums">
+              {totalDepositReceived.toLocaleString('vi-VN')} đ
+            </span>
+          </div>
+
+          {/* Thẻ Số dư ví khả dụng & Nút mở ví */}
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3.5 rounded-2xl text-white flex flex-col justify-between shadow-xs col-span-2 sm:col-span-1">
+            <div>
+              <span className="text-[11px] text-emerald-100 block font-medium">Số dư ví chủ trọ</span>
+              <span className="text-lg font-extrabold tabular-nums">
+                {(user?.SoDuVi || 0).toLocaleString('vi-VN')} đ
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWalletModal(true)}
+              className="mt-2 py-1 px-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-lg text-[10px] font-bold text-white transition-colors cursor-pointer w-fit flex items-center gap-1"
+            >
+              <Wallet className="w-3 h-3" />
+              <span>Rút / Nạp ví</span>
+            </button>
           </div>
         </div>
 
@@ -961,6 +1094,22 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
       {/* Tab 1: Rooms List */}
       {activeTab === 'rooms' ? (
         <>
+          {/* Thanh tìm kiếm và bộ lọc nhanh */}
+          <LandlordRoomFilter
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            districtFilter={districtFilter}
+            onDistrictFilterChange={setDistrictFilter}
+            districts={availableDistricts}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            totalFilteredCount={filteredRooms.length}
+            isFiltered={isFiltered}
+            onReset={handleResetFilters}
+          />
+
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3].map((n) => (
@@ -983,157 +1132,95 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
                 </button>
               )}
             </div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
+              <p className="text-sm font-bold text-slate-700">Không tìm thấy phòng trọ nào phù hợp với bộ lọc.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                }}
+                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-blue-700"
+              >
+                Đặt lại bộ lọc
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rooms.map((room) => {
-                const coverImage =
-                  room.HinhAnh && room.HinhAnh.length > 0
-                    ? room.HinhAnh[0]
-                    : 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80';
-
-                return (
-                  <div
+            <div className="space-y-6">
+              {/* Lưới danh sách phòng phân trang */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {currentRooms.map((room) => (
+                  <LandlordRoomCard
                     key={room.Id}
-                    className="bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col overflow-hidden group"
-                  >
-                    {/* Visual Card Image */}
-                    <div className="relative aspect-16/10 overflow-hidden bg-slate-100">
-                      <img
-                        src={coverImage}
-                        alt={room.TieuDe}
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.onerror = null;
-                          target.src = 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80';
+                    room={room}
+                    onViewDetail={(id) => onViewRoomDetail?.(id)}
+                    onEditRoom={() => handleOpenEditModal(room)}
+                    onToggleStatus={() => handleToggleRoomStatus(room)}
+                    onDeleteRoom={() => handleDeleteRoom(room.Id, room.TieuDe)}
+                  />
+                ))}
+              </div>
+
+              {/* Thanh điều hướng phân trang (chỉ hiện khi có trên 1 trang) */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">
+                  <span className="text-xs text-slate-500 font-medium">
+                    Hiển thị <strong>{indexOfFirstRoom + 1} - {Math.min(indexOfLastRoom, filteredRooms.length)}</strong> trên tổng số <strong>{filteredRooms.length}</strong> phòng
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Nút Trước */}
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => {
+                        setCurrentPage((prev) => Math.max(prev - 1, 1));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang trước
+                    </button>
+
+                    {/* Danh sách các số trang */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => {
+                          setCurrentPage(page);
+                          window.scrollTo({ top: 350, behavior: 'smooth' });
                         }}
-                        className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
-                      />
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
 
-                      {/* Status Badge */}
-                      <div className="absolute top-3 left-3">
-                        <span
-                          className={`text-xs font-bold px-2.5 py-1 rounded-xl shadow-xs border backdrop-blur-md ${
-                            room.TrangThai === 'Còn phòng'
-                              ? 'bg-emerald-500/90 text-white border-emerald-400'
-                              : room.TrangThai === 'Hết phòng'
-                              ? 'bg-slate-700/90 text-white border-slate-600'
-                              : 'bg-amber-500/90 text-white border-amber-400'
-                          }`}
-                        >
-                          {room.TrangThai === 'ChoDuyet' ? 'Chờ duyệt' : room.TrangThai}
-                        </span>
-                      </div>
-
-                      {/* Price Tag over image */}
-                      <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-xl text-white">
-                        <span className="text-base font-bold tabular-nums">
-                          {room.GiaThue.toLocaleString('vi-VN')}
-                        </span>{' '}
-                        <span className="text-[10px] text-blue-200">đ/tháng</span>
-                      </div>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 line-clamp-2 mb-1.5 group-hover:text-blue-600 transition-colors">
-                          {room.TieuDe}
-                        </h3>
-
-                        <div className="flex items-start gap-1.5 text-xs text-slate-500 mb-2">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-1">{room.DiaChi}, {room.QuanHuyen}</span>
-                        </div>
-
-                        {/* Specs strip */}
-                        <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-                          <span>⚡ {room.GiaDien || '3.800 đ/kWh'}</span>
-                          <span>·</span>
-                          <span>💧 {room.GiaNuoc || '30.000 đ/khối'}</span>
-                          <span>·</span>
-                          <span>📐 {room.DienTich || 20} m²</span>
-                        </div>
-
-                        {/* Amenities pills */}
-                        <div className="mt-2.5 flex flex-wrap gap-1">
-                          {room.TienIch &&
-                            room.TienIch.slice(0, 3).map((item, idx) => (
-                              <span
-                                key={idx}
-                                className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md"
-                              >
-                                {item}
-                              </span>
-                            ))}
-                          {room.TienIch && room.TienIch.length > 3 && (
-                            <span className="text-[10px] text-slate-400">+{room.TienIch.length - 3}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action Buttons: Status Toggle, Edit, Delete */}
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                        {/* Toggle Status button */}
-                        <button
-                          onClick={() => handleToggleRoomStatus(room)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                            room.TrangThai === 'Còn phòng'
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-700'
-                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                          }`}
-                          title="Bấm để đổi trạng thái Còn phòng / Hết phòng"
-                        >
-                          {room.TrangThai === 'Còn phòng' ? (
-                            <>
-                              <XCircle className="w-3.5 h-3.5" />
-                              <span>Đổi: Hết phòng</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              <span>Đổi: Còn phòng</span>
-                            </>
-                          )}
-                        </button>
-
-                        <div className="flex items-center gap-1.5">
-                          {/* View details */}
-                          {onViewRoomDetail && (
-                            <button
-                              onClick={() => onViewRoomDetail(room.Id)}
-                              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
-                              title="Xem chi tiết tin đăng"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {/* Sửa tin button */}
-                          <button
-                            onClick={() => handleOpenEditModal(room)}
-                            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
-                            title="Chỉnh sửa tin phòng"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-
-                          {/* Xóa tin button */}
-                          <button
-                            onClick={() => handleDeleteRoom(room.Id, room.TieuDe)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                            title="Xóa phòng trọ"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    {/* Nút Sau */}
+                    <button
+                      type="button"
+                      disabled={currentPage === totalPages}
+                      onClick={() => {
+                        setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang sau
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           )}
         </>
+        
       ) : activeTab === 'appointments' ? (
         /* Tab 2: Appointments List */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
@@ -1708,6 +1795,25 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
         </div>
       )}
 
+      {/* Modal Quản lý ví nạp / rút */}
+      <LandlordWalletModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        onSuccess={() => {
+          fetchLandlordData();
+          refreshUser();
+        }}
+      />
+
+      {/* Modal Đăng cẩm nang mới */}
+      <LandlordCreateArticleModal
+        isOpen={showArticleModal}
+        onClose={() => setShowArticleModal(false)}
+        onSuccess={() => {
+          setActionMessage('Đăng bài viết cẩm nang thành công!');
+          setTimeout(() => setActionMessage(''), 3500);
+        }}
+      />
     </div>
   );
 };
