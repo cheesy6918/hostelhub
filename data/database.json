@@ -29,7 +29,7 @@
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0912345699",
       "VaiTro": "SinhVien",
-      "soDuVi": 2500000,
+      "soDuVi": 6500000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
     }
@@ -110,7 +110,7 @@
         "Giờ tự do",
         "Chỗ để xe"
       ],
-      "TrangThai": "Còn phòng",
+      "TrangThai": "Chờ chủ trọ xác nhận cọc",
       "IdChuTro": "usr_chutro",
       "ChuTroId": "usr_chutro",
       "ChuTroTen": "Trần Thị Bích",
@@ -152,7 +152,7 @@
         "Thang máy",
         "Khóa vân tay"
       ],
-      "TrangThai": "Còn phòng",
+      "TrangThai": "Chờ chủ trọ xác nhận cọc",
       "IdChuTro": "usr_chutro",
       "ChuTroId": "usr_chutro",
       "ChuTroTen": "Trần Thị Bích",
@@ -809,8 +809,59 @@
       "LyDoTuChoi": "Chủ trọ bận đột xuất vào khung giờ này"
     }
   ],
-  "deposits": [],
+  "deposits": [
+    {
+      "Id": "coc_1791970312136_oyfq",
+      "IdSinhVien": "usr_sinhvien",
+      "IdPhong": "room_14",
+      "SoTienCoc": 500000,
+      "NgayCoc": "2026-10-14T09:31:52.136Z",
+      "TrangThaiCoc": "Chờ xác nhận",
+      "TieuDePhong": "Chung cư mini cao cấp có thang máy gần ĐH Thủy Lợi & ĐH Công Đoàn",
+      "DiaChiPhong": "Số 25 Ngõ 167 Tây Sơn, Phường Quang Trung, Đống Đa, Hà Nội",
+      "SinhVienTen": "Nguyễn Văn Sinh",
+      "SinhVienSdt": "0912345699",
+      "ChuTroId": "usr_chutro",
+      "ChuTroTen": "Trần Thị Bích",
+      "ThoiHanGiuCho": "48 giờ sau khi chủ trọ xác nhận",
+      "NgayTao": "2026-10-14T09:31:52.136Z"
+    },
+    {
+      "Id": "coc_1791970209215_g8uf",
+      "IdSinhVien": "usr_sinhvien",
+      "IdPhong": "room_13",
+      "SoTienCoc": 500000,
+      "NgayCoc": "2026-10-14T09:30:09.215Z",
+      "TrangThaiCoc": "Chờ xác nhận",
+      "TieuDePhong": "Phòng trọ sinh viên giá rẻ cách cổng ĐH Giao Thông Vận Tải 300m",
+      "DiaChiPhong": "Ngõ 102 Cầu Giấy, Phường Quan Hoa, Cầu Giấy, Hà Nội",
+      "SinhVienTen": "Nguyễn Văn Sinh",
+      "SinhVienSdt": "0912345699",
+      "ChuTroId": "usr_chutro",
+      "ChuTroTen": "Trần Thị Bích",
+      "ThoiHanGiuCho": "48 giờ sau khi chủ trọ xác nhận",
+      "NgayTao": "2026-10-14T09:30:09.215Z"
+    }
+  ],
   "notifications": [
+    {
+      "Id": "tb_1791970312168_erg6",
+      "UserId": "usr_chutro",
+      "TieuDe": "Có đơn đặt cọc mới!",
+      "NoiDung": "Sinh viên Nguyễn Văn Sinh vừa đặt cọc 500.000 VNĐ giữ chỗ cho phòng \"Chung cư mini cao cấp có thang máy gần ĐH Thủy Lợi & ĐH Công Đoàn\". Vui lòng xử lý đơn trong mục Quản lý yêu cầu.",
+      "Loai": "DatCoc",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-14T09:31:52.168Z"
+    },
+    {
+      "Id": "tb_1791970209248_hoxh",
+      "UserId": "usr_chutro",
+      "TieuDe": "Có đơn đặt cọc mới!",
+      "NoiDung": "Sinh viên Nguyễn Văn Sinh vừa đặt cọc 500.000 VNĐ giữ chỗ cho phòng \"Phòng trọ sinh viên giá rẻ cách cổng ĐH Giao Thông Vận Tải 300m\". Vui lòng xử lý đơn trong mục Quản lý yêu cầu.",
+      "Loai": "DatCoc",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-14T09:30:09.248Z"
+    },
     {
       "Id": "tb_1791772571395_q531",
       "UserId": "usr_sinhvien",
@@ -993,6 +1044,35 @@
   ],
   "favorites": [],
   "wallet_transactions": [
+    {
+      "Id": "tx_1791970358705_2jyb",
+      "UserId": "usr_sinhvien",
+      "LoaiGiaoDich": "NapTien",
+      "SoTien": 5000000,
+      "SoDuSauGiaoDich": 6500000,
+      "NoiDung": "Nạp tiền vào ví điện tử: +5.000.000 VNĐ",
+      "NgayTao": "2026-10-14T09:32:38.705Z"
+    },
+    {
+      "Id": "tx_1791970312074_mk5m",
+      "UserId": "usr_sinhvien",
+      "LoaiGiaoDich": "DatCoc",
+      "SoTien": -500000,
+      "SoDuSauGiaoDich": 1500000,
+      "NoiDung": "Đặt cọc 500.000 VNĐ giữ chỗ phòng \"Chung cư mini cao cấp có thang máy gần ĐH Thủy Lợi & ĐH Công Đoàn\"",
+      "MaThamChieu": "room_14",
+      "NgayTao": "2026-10-14T09:31:52.074Z"
+    },
+    {
+      "Id": "tx_1791970209151_od1w",
+      "UserId": "usr_sinhvien",
+      "LoaiGiaoDich": "DatCoc",
+      "SoTien": -500000,
+      "SoDuSauGiaoDich": 2000000,
+      "NoiDung": "Đặt cọc 500.000 VNĐ giữ chỗ phòng \"Phòng trọ sinh viên giá rẻ cách cổng ĐH Giao Thông Vận Tải 300m\"",
+      "MaThamChieu": "room_13",
+      "NgayTao": "2026-10-14T09:30:09.151Z"
+    },
     {
       "Id": "tx_1791771908197_ay1a",
       "UserId": "usr_sinhvien",

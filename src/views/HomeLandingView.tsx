@@ -1,21 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Room } from '../types';
-import { 
-  Search, 
-  MapPin, 
-  Maximize2, 
-  ChevronRight, 
+import {
+  Search,
+  MapPin,
+  Maximize2,
+  ChevronRight,
   ChevronLeft,
-  ChevronDown, 
-  HelpCircle 
+  ChevronDown,
+  HelpCircle
 } from 'lucide-react';
 import { ARTICLES_DATA } from '../utils/articlesData';
 
 interface HomeLandingViewProps {
-  onNavigate: (view: string, param?: string) => void; 
+  onNavigate: (view: string, param?: string) => void;
+  onSelectRoom?: (roomId: string) => void; // 👈 Thêm prop này
 }
 
-export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) => {
+export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate, onSelectRoom }) => {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
@@ -35,7 +36,7 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
       .catch(() => { });
   }, []);
 
-  
+
   // Cắt danh sách theo trang hiện tại (3 mục mỗi trang)
   const currentRooms = allRooms.slice(roomPage * 3, roomPage * 3 + 3);
   // Lấy trực tiếp từ nguồn chung ARTICLES_DATA
@@ -52,17 +53,17 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
       >
         <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/95 backdrop-blur-[1.5px]" />
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-blue-400/15 rounded-full blur-3xl pointer-events-none" />
-        
+
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-50/90 text-blue-700 border border-blue-200/80 rounded-full text-xs font-bold shadow-2xs">
             <span>Nền tảng tìm phòng trọ dành cho sinh viên Hà Nội</span>
           </div>
-          
+
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15]">
             Tìm phòng trọ sinh viên tiện nghi,{' '}
             <span className="text-blue-600 block sm:inline">giá chuẩn – không qua trung gian</span>
           </h1>
-          
+
           <div className="pt-2 flex justify-center">
             <button
               type="button"
@@ -101,11 +102,10 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
             type="button"
             disabled={roomPage === 0}
             onClick={() => setRoomPage((prev) => Math.max(0, prev - 1))}
-            className={`absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${
-              roomPage === 0 
-                ? 'opacity-30 cursor-not-allowed text-slate-300' 
+            className={`absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${roomPage === 0
+                ? 'opacity-30 cursor-not-allowed text-slate-300'
                 : 'hover:bg-slate-50 text-slate-700 hover:scale-105 cursor-pointer'
-            }`}
+              }`}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -115,11 +115,10 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
             type="button"
             disabled={roomPage === 2}
             onClick={() => setRoomPage((prev) => Math.min(2, prev + 1))}
-            className={`absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${
-              roomPage === 2 
-                ? 'opacity-30 cursor-not-allowed text-slate-300' 
+            className={`absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${roomPage === 2
+                ? 'opacity-30 cursor-not-allowed text-slate-300'
                 : 'hover:bg-slate-50 text-slate-700 hover:scale-105 cursor-pointer'
-            }`}
+              }`}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -151,13 +150,12 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
                     <span className="text-[11px] font-semibold px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-lg">
                       {room.LoaiPhong}
                     </span>
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-md shadow-xs ${
-                      room.TrangThai === 'Còn phòng' || room.TrangThai === 'Công khai'
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-md shadow-xs ${room.TrangThai === 'Còn phòng' || room.TrangThai === 'Công khai'
                         ? 'bg-emerald-600/90 text-white'
                         : room.TrangThai === 'Hết phòng'
                           ? 'bg-rose-600/90 text-white'
                           : 'bg-amber-500/90 text-white'
-                    }`}>
+                      }`}>
                       {room.TrangThai === 'Còn phòng' || room.TrangThai === 'Công khai'
                         ? 'Còn trống'
                         : room.TrangThai === 'Đã cọc' || room.TrangThai === 'Chờ chủ trọ xác nhận cọc'
@@ -188,7 +186,15 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs text-slate-500">Chủ trọ: <strong>{room.ChuTroTen}</strong></span>
                     <button
-                      onClick={() => onNavigate('login')}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (onSelectRoom) {
+                          onSelectRoom(room.Id);
+                        } else {
+                          onNavigate('room-detail', room.Id);
+                        }
+                      }}
                       className="px-3 py-1.5 bg-blue-50 text-blue-600 font-semibold rounded-xl text-xs hover:bg-blue-600 hover:text-white transition-colors cursor-pointer"
                     >
                       Xem chi tiết
@@ -207,9 +213,8 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
               key={idx}
               type="button"
               onClick={() => setRoomPage(idx)}
-              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                roomPage === idx ? 'w-8 bg-blue-600' : 'w-2.5 bg-slate-200 hover:bg-slate-300'
-              }`}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${roomPage === idx ? 'w-8 bg-blue-600' : 'w-2.5 bg-slate-200 hover:bg-slate-300'
+                }`}
               title={`Trang ${idx + 1}`}
             />
           ))}
@@ -239,11 +244,10 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
             type="button"
             disabled={guidePage === 0}
             onClick={() => setGuidePage((prev) => Math.max(0, prev - 1))}
-            className={`absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${
-              guidePage === 0 
-                ? 'opacity-30 cursor-not-allowed text-slate-300' 
+            className={`absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${guidePage === 0
+                ? 'opacity-30 cursor-not-allowed text-slate-300'
                 : 'hover:bg-slate-50 text-slate-700 hover:scale-105 cursor-pointer'
-            }`}
+              }`}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -253,11 +257,10 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
             type="button"
             disabled={guidePage === 2}
             onClick={() => setGuidePage((prev) => Math.min(2, prev + 1))}
-            className={`absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${
-              guidePage === 2 
-                ? 'opacity-30 cursor-not-allowed text-slate-300' 
+            className={`absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center transition-all ${guidePage === 2
+                ? 'opacity-30 cursor-not-allowed text-slate-300'
                 : 'hover:bg-slate-50 text-slate-700 hover:scale-105 cursor-pointer'
-            }`}
+              }`}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -265,7 +268,7 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
           {/* Grid 3 thẻ của trang hiện tại */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-300">
             {currentGuides.map((item) => (
-              <div 
+              <div
                 key={item.Id}
                 onClick={() => onNavigate('guide', item.Id)}
                 className="group cursor-pointer flex flex-col overflow-hidden rounded-3xl transition-transform hover:-translate-y-1 duration-200 shadow-xs hover:shadow-md active:scale-[0.99]"
@@ -307,9 +310,8 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
               key={idx}
               type="button"
               onClick={() => setGuidePage(idx)}
-              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                guidePage === idx ? 'w-8 bg-blue-600' : 'w-2.5 bg-slate-200 hover:bg-slate-300'
-              }`}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${guidePage === idx ? 'w-8 bg-blue-600' : 'w-2.5 bg-slate-200 hover:bg-slate-300'
+                }`}
               title={`Trang ${idx + 1}`}
             />
           ))}
@@ -365,9 +367,8 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate }) 
                     {faq.q}
                   </span>
                   <ChevronDown
-                    className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
-                      isOpen ? 'rotate-180 text-blue-600' : ''
-                    }`}
+                    className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''
+                      }`}
                   />
                 </button>
                 {isOpen && (

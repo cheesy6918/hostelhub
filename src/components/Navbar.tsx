@@ -28,9 +28,9 @@ interface NavbarProps {
   onSelectGuideCategory?: (category: string) => void; // 👈 Thêm dòng này để hết lỗi ở App.tsx
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  currentView, 
-  setCurrentView, 
+export const Navbar: React.FC<NavbarProps> = ({
+  currentView,
+  setCurrentView,
   onSelectDistrict,
   onSelectGuideCategory // 👈 Nhận thêm prop này
 }) => {
@@ -73,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className="flex items-center gap-2.5 text-left focus:outline-none group cursor-pointer"
           >
-            
+
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs transition-transform group-hover:scale-105">
               <Home className="w-5 h-5" />
             </div>
@@ -157,11 +157,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onSelectGuideCategory?.(item);
                             setCurrentView('guide');
                           }}
-                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
-                            item.includes('lừa đảo') 
-                              ? 'hover:bg-rose-50 hover:text-rose-600' 
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${item.includes('lừa đảo')
+                              ? 'hover:bg-rose-50 hover:text-rose-600'
                               : 'hover:bg-blue-50 hover:text-blue-600'
-                          }`}
+                            }`}
                         >
                           {item}
                         </button>
@@ -194,11 +193,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="relative group py-4">
                   <button
                     onClick={() => setCurrentView('student-rooms')}
-                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
-                      currentView === 'student-rooms' || currentView === 'district-rooms' 
-                        ? 'text-blue-600 font-bold' 
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'student-rooms' || currentView === 'district-rooms'
+                        ? 'text-blue-600 font-bold'
                         : 'group-hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     <span>Tìm phòng trọ</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
@@ -261,11 +259,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onSelectGuideCategory?.(item);
                             setCurrentView('guide');
                           }}
-                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
-                            item.includes('lừa đảo') 
-                              ? 'hover:bg-rose-50 hover:text-rose-600' 
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${item.includes('lừa đảo')
+                              ? 'hover:bg-rose-50 hover:text-rose-600'
                               : 'hover:bg-blue-50 hover:text-blue-600'
-                          }`}
+                            }`}
                         >
                           {item}
                         </button>
@@ -304,18 +301,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             ) : user.VaiTro === 'ChuTro' ? (
               <>
                 <button
-                  onClick={() => setCurrentView('landlord-rooms')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'landlord-rooms' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  Quản lý phòng
-                </button>
-                <button
                   onClick={() => setCurrentView('landlord-create-room')}
                   className={`transition-colors cursor-pointer py-1 ${currentView === 'landlord-create-room' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
                     }`}
                 >
-                  + Đăng tin mới
+                  Đăng tin mới
                 </button>
                 <button
                   onClick={() => setCurrentView('landlord-inquiries')}
@@ -386,11 +376,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               {user.VaiTro === 'SinhVien' && (
                 <button
                   type="button"
-                  onClick={() => setCurrentView('student-favorites')}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentView('student-favorites');
+                  }}
                   title="Danh sách phòng yêu thích"
                   className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${currentView === 'student-favorites'
-                      ? 'bg-rose-50 text-rose-600'
-                      : 'text-slate-500 hover:text-rose-600 hover:bg-slate-50'
+                    ? 'bg-rose-50 text-rose-600'
+                    : 'text-slate-500 hover:text-rose-600 hover:bg-slate-50'
                     }`}
                 >
                   <Heart className={`w-4 h-4 ${favoriteRoomIds.length > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500'}`} />
@@ -404,13 +397,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Ví tiền dành riêng cho Chủ trọ */}
               {user.VaiTro === 'ChuTro' && (
-                <div 
+                <div
                   onClick={() => setCurrentView('landlord-rooms')}
                   title="Số dư ví chủ trọ"
                   className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-xs font-bold shadow-2xs cursor-pointer hover:bg-emerald-100 transition-colors"
                 >
                   <Wallet className="w-4 h-4 text-emerald-600" />
-                  <span>{(user.SoDuVi || 0).toLocaleString('vi-VN')} đ</span>
+                  <span>{((user.soDuVi ?? (user as any).SoDuVi ?? 0)).toLocaleString('vi-VN')} đ</span>
                 </div>
               )}
 

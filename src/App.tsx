@@ -35,9 +35,18 @@ const MainContent: React.FC = () => {
     compareToast,
     clearCompareToast
   } = useComparison();
-  const [currentView, setCurrentView] = useState<string>('home');
+// 1. Lưu và khôi phục view hiện tại (tránh bị reset khi Provider re-render)
+  const [currentView, setCurrentView] = useState<string>(() => {
+    return localStorage.getItem('hostelhub_current_view') || 'home';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('hostelhub_current_view', currentView);
+  }, [currentView]);
+
   const [selectedDistrictName, setSelectedDistrictName] = useState<string>('Quận Cầu Giấy');
   const [roomsData, setRoomsData] = useState<any[]>([]);
+
   useEffect(() => {
     fetch('/api/rooms')
       .then((res) => res.json())
@@ -48,12 +57,16 @@ const MainContent: React.FC = () => {
       })
       .catch(() => { });
   }, []);
+
   const isAuthPage = currentView === 'login' || currentView === 'register';
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+
+  // 2. Lưu và khôi phục ID phòng đang xem
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(() => {
+    return localStorage.getItem('hostelhub_selected_room_id') || null;
+  });
+
   const [previousView, setPreviousView] = useState<string>('home');
-
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
-
   const [selectedGuideCategory, setSelectedGuideCategory] = useState<string>('Tất cả bài viết');
 
   const handleNavigateGuideCategory = (categoryName: string) => {
@@ -64,6 +77,10 @@ const MainContent: React.FC = () => {
   };
 
   const handleNavigateFromHome = (view: string, param?: string) => {
+    if (view === 'room-detail' && param) {
+      navigateToRoomDetail(param);
+      return;
+    }
     setCurrentView(view);
     if (view === 'guide') {
       setSelectedArticleId(param || null);
@@ -79,6 +96,7 @@ const MainContent: React.FC = () => {
 
   const navigateToRoomDetail = (roomId: string) => {
     setSelectedRoomId(roomId);
+    localStorage.setItem('hostelhub_selected_room_id', roomId);
     setPreviousView(currentView);
     setCurrentView('room-detail');
   };
@@ -161,7 +179,13 @@ const MainContent: React.FC = () => {
             />
           );
         }
-        return <HomeLandingView onNavigate={handleNavigateFromHome} />;
+        // 👉 TRUYỀN THÊM onSelectRoom vào HomeLandingView:
+        return (
+          <HomeLandingView
+            onNavigate={handleNavigateFromHome}
+            onSelectRoom={navigateToRoomDetail}
+          />
+        );
 
       case 'find-rooms-public':
       case 'student-rooms':
@@ -188,7 +212,7 @@ const MainContent: React.FC = () => {
 
       case 'guide':
         return (
-          <GuideView 
+          <GuideView
             initialArticleId={selectedArticleId}
             onClearInitialArticle={() => setSelectedArticleId(null)}
             initialCategory={selectedGuideCategory}
@@ -255,9 +279,9 @@ const MainContent: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-blue-600 selection:text-white relative">
       {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
       {!isAuthPage && (
-        <Navbar 
-          currentView={currentView} 
-          setCurrentView={setCurrentView} 
+        <Navbar
+          currentView={currentView}
+          setCurrentView={setCurrentView}
           onSelectDistrict={handleNavigateDistrict}
           onSelectGuideCategory={handleNavigateGuideCategory}
         />
@@ -288,16 +312,9 @@ const MainContent: React.FC = () => {
 
       {/* Global Toast for Favorites & Quick actions */}
       {toastMessage && (
-        <div className="fixed bottom-20 sm:bottom-24 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-slate-900/95 text-white text-xs font-semibold rounded-2xl shadow-xl backdrop-blur-md border border-slate-700/60 animate-in fade-in slide-in-from-bottom-5">
-          <Heart className="w-4 h-4 text-rose-400 fill-rose-400 animate-pulse shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900/95 text-white text-xs font-semibold rounded-2xl shadow-xl border border-slate-700/50 backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
-          <button
-            type="button"
-            onClick={clearToast}
-            className="ml-2 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
-          >
-            ✕
-          </button>
         </div>
       )}
 

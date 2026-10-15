@@ -1115,9 +1115,12 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                 {favoriteRooms.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       if (window.confirm('Bạn có chắc chắn muốn xóa tất cả phòng khỏi danh sách yêu thích?')) {
-                        clearAllFavorites();
+                        await clearAllFavorites();
+                        setActiveTab('favorites');
                       }
                     }}
                     className="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"

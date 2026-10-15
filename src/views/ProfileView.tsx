@@ -281,7 +281,7 @@ export const ProfileView: React.FC = () => {
               </div>
 
               <div className="text-2xl font-bold tabular-nums tracking-tight">
-                {(user?.SoDuVi || 0).toLocaleString('vi-VN')}{' '}
+                {((user?.soDuVi ?? (user as any)?.SoDuVi ?? 0)).toLocaleString('vi-VN')}{' '}
                 <span className="text-xs font-normal text-blue-200">VNĐ</span>
               </div>
               <p className="text-[11px] text-blue-200 mt-1">

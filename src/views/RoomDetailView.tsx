@@ -425,7 +425,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
       return;
     }
 
-    const currentBalance = user?.soDuVi || 0;
+    const currentBalance = (user?.soDuVi ?? (user as any)?.SoDuVi ?? 0);
     if (currentBalance < 500000) {
       setDepositError('Số dư không đủ');
       return;
@@ -598,7 +598,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => requireAuth(() => toggleFavorite(room.Id, room))}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              requireAuth(() => toggleFavorite(room.Id, room));
+            }}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${isFavorite(room.Id)
                 ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                 : 'bg-white text-slate-700 border-slate-200 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50/50'
@@ -673,8 +677,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     key={idx}
                     onClick={() => setSelectedImgIndex(idx)}
                     className={`relative shrink-0 w-20 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${selectedImgIndex === idx
-                        ? 'border-blue-600 ring-2 ring-blue-500/20 scale-102'
-                        : 'border-transparent opacity-70 hover:opacity-100'
+                      ? 'border-blue-600 ring-2 ring-blue-500/20 scale-102'
+                      : 'border-transparent opacity-70 hover:opacity-100'
                       }`}
                   >
                     <img
@@ -1152,7 +1156,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
             {/* Quick bookmark to favorites */}
             <button
               type="button"
-              onClick={() => requireAuth(() => toggleFavorite(room.Id, room))}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                requireAuth(() => toggleFavorite(room.Id, room));
+              }}
               className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all cursor-pointer shadow-xs ${isFavorite(room.Id)
                   ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                   : 'bg-white text-slate-700 border-slate-200 hover:text-rose-600 hover:border-rose-200 hover:bg-slate-50'
@@ -1246,13 +1254,34 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     <span>Đặt lịch hẹn xem phòng</span>
                   </button>
 
-                  <button
-                    onClick={handleOpenDepositModal}
-                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Đặt cọc giữ phòng (500.000 VNĐ)</span>
-                  </button>
+                  {/* Kiểm tra nếu phòng đang ở trạng thái Chờ chủ trọ xác nhận cọc */}
+                  {room.TrangThai === 'Chờ chủ trọ xác nhận cọc' ? (
+                    <div className="space-y-2">
+                      <button
+                        disabled
+                        className="w-full py-3 px-4 bg-amber-50 border border-amber-200 text-amber-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-2xs"
+                      >
+                        <Clock className="w-4 h-4 text-amber-600 animate-spin" />
+                        <span>Đang chờ chủ trọ xác nhận cọc (Đã cọc)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate?.('student-history-deposits')}
+                        className="w-full py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <span>Kiểm tra tiến độ đơn cọc tại Lịch sử của bạn</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleOpenDepositModal}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Đặt cọc giữ phòng (500.000 VNĐ)</span>
+                    </button>
+                  )}
 
                   {(!contractInfo || contractInfo.status === 'cancelled' || contractInfo.status === 'completed') && (
                     <button
@@ -1274,7 +1303,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                           <span>Ví sinh viên:</span>
                         </div>
                         <span className="text-xs font-black text-blue-700 tabular-nums">
-                          {(user?.soDuVi || 0).toLocaleString('vi-VN')} đ
+                          {((user?.soDuVi ?? (user as any)?.SoDuVi ?? 0)).toLocaleString('vi-VN')} đ
                         </span>
                       </div>
                       <button
@@ -1469,42 +1498,57 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 </div>
               </div>
             ) : depositSuccess ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-8 h-8" />
+              <div className="py-6 text-center space-y-4 animate-in fade-in zoom-in-95">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto shadow-xs">
+                  <CheckCircle2 className="w-9 h-9" />
                 </div>
                 <div className="space-y-1.5">
-                  <h4 className="text-lg font-bold text-slate-900">Đặt cọc giữ phòng thành công!</h4>
+                  <h4 className="text-xl font-extrabold text-slate-900">Đặt cọc giữ phòng thành công!</h4>
                   <p className="text-xs text-slate-600">
-                    Số dư ví của bạn đã được trừ <strong>500.000 VNĐ</strong> và được HostelHub bảo lãnh.
-                  </p>
-                  <div className="pt-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                      Trạng thái phòng: Chờ chủ trọ xác nhận cọc
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 pt-2 max-w-sm mx-auto">
-                    Nếu chủ trọ từ chối, tiền cọc 500.000 VNĐ sẽ được hoàn lại 100% vào ví của bạn. Bạn cũng có thể chủ động hủy cọc trong trang Lịch sử.
+                    Số tiền <strong className="text-emerald-700">500.000 VNĐ</strong> đã được giữ qua ví bảo lãnh trung gian an toàn.
                   </p>
                 </div>
 
-                <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                {/* Box tóm tắt thông tin cọc */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-left space-y-2">
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Phòng đã cọc:</span>
+                    <span className="font-bold text-slate-800 line-clamp-1 max-w-[200px]">{room.TieuDe}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Chủ trọ nhận:</span>
+                    <span className="font-semibold text-slate-700">{room.ChuTroTen || 'Chủ trọ HostelHub'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>Thời hạn giữ chỗ:</span>
+                    <span className="font-bold text-blue-600">48 giờ (Chờ xác nhận)</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-400">
+                    * Sau 48h nếu chủ trọ không xác nhận, hệ thống tự động hoàn trả 100% về ví của bạn.
+                  </div>
+                </div>
+
+                {/* 2 nút điều hướng rõ ràng */}
+                <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
+                    type="button"
                     onClick={() => {
                       setShowDepositModal(false);
-                      onNavigate?.('student-history-deposits');
+                      if (onNavigate) {
+                        onNavigate('student-history-deposits');
+                      }
                     }}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm inline-flex items-center justify-center gap-2"
+                    className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center justify-center gap-1.5 cursor-pointer transition-all"
                   >
-                    <span>Xem tại Lịch sử của tôi</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span>Xem đơn cọc của tôi</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowDepositModal(false)}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl"
+                    className="w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer transition-colors"
                   >
-                    Đóng
+                    Ở lại phòng này
                   </button>
                 </div>
               </div>
@@ -1648,8 +1692,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                       setQrRefreshKey(k => k + 1);
                     }}
                     className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${selectedBankIndex === idx
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                       }`}
                   >
                     <span>{b.shortName}</span>
@@ -1665,7 +1709,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   2. Chọn số tiền cần nạp:
                 </label>
                 <span className="text-[11px] text-slate-500">
-                  Số dư hiện tại: <strong className="text-blue-700">{(user?.soDuVi || 0).toLocaleString('vi-VN')} đ</strong>
+                  Số dư hiện tại: <strong className="text-blue-700">{((user?.soDuVi ?? (user as any)?.SoDuVi ?? 0)).toLocaleString('vi-VN')} đ</strong>
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -1680,8 +1724,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                       setQrRefreshKey(k => k + 1);
                     }}
                     className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${qrAmount === amt && !customQrAmount
-                        ? 'bg-blue-50 text-blue-700 border-blue-400 shadow-2xs ring-1 ring-blue-400'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      ? 'bg-blue-50 text-blue-700 border-blue-400 shadow-2xs ring-1 ring-blue-400'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                       }`}
                   >
                     <span>{amt.toLocaleString('vi-VN')} đ</span>

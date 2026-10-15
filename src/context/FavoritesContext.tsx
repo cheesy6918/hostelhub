@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Room } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -16,7 +16,6 @@ interface FavoritesContextType {
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
-
 const LOCAL_STORAGE_KEY = 'hostelhub_favorite_room_ids';
 
 export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -29,32 +28,36 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return [];
     }
   });
-
   const [favoriteRooms, setFavoriteRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const toastTimerRef = useRef<any>(null);
 
   const clearToast = useCallback(() => {
     setToastMessage(null);
   }, []);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current));
-    }, 3000);
-  };
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
+  }, []);
 
-  // Sync to localStorage
-  const saveToLocalStorage = (ids: string[]) => {
+  // Lưu đồng bộ vào localStorage
+  const saveToLocalStorage = useCallback((ids: string[]) => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(ids));
     } catch {
-      // ignore storage errors
+      // ignore
     }
-  };
+  }, []);
 
-  // Fetch full details of favorite rooms
+  // Tải danh sách phòng yêu thích
   const refreshFavorites = useCallback(async () => {
     if (token) {
       try {
@@ -64,9 +67,10 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
         const data = await res.json();
         if (data.success) {
-          setFavoriteRoomIds(data.roomIds || []);
+          const ids = data.roomIds || [];
+          setFavoriteRoomIds(ids);
           setFavoriteRooms(data.rooms || []);
-          saveToLocalStorage(data.roomIds || []);
+          saveToLocalStorage(ids);
           return;
         }
       } catch {
@@ -76,30 +80,32 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
 
-    // Fallback if not logged in or server fails: fetch rooms matching favoriteRoomIds
-    if (favoriteRoomIds.length > 0) {
-      try {
+    // Fallback: nếu không có token hoặc offline
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const storedIds: string[] = stored ? JSON.parse(stored) : [];
+      if (storedIds.length > 0) {
         setLoading(true);
         const res = await fetch('/api/rooms');
         const data = await res.json();
         if (data.success && Array.isArray(data.data)) {
-          const matched = data.data.filter((r: Room) => favoriteRoomIds.includes(r.Id));
+          const matched = data.data.filter((r: Room) => storedIds.includes(r.Id));
           setFavoriteRooms(matched);
         }
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
+      } else {
+        setFavoriteRooms([]);
       }
-    } else {
-      setFavoriteRooms([]);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
     }
-  }, [token, favoriteRoomIds]);
+  }, [token, saveToLocalStorage]);
 
-  // Load favorites when user / token changes
+  // Chỉ fetch 1 lần khi đăng nhập/đổi token
   useEffect(() => {
     refreshFavorites();
-  }, [token, user]);
+  }, [token]);
 
   const isFavorite = useCallback(
     (roomId: string) => {
@@ -108,77 +114,78 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [favoriteRoomIds]
   );
 
-  // Toggle favorite
-  const toggleFavorite = async (roomId: string, roomData?: Room): Promise<{ isFavorite: boolean; message: string }> => {
-    const currentlyFav = favoriteRoomIds.includes(roomId);
-    const nextFavState = !currentlyFav;
+  // Thêm / Bỏ yêu thích phòng (Optimistic Update chuẩn không gây crash view)
+  const toggleFavorite = useCallback(
+    async (roomId: string, roomData?: Room): Promise<{ isFavorite: boolean; message: string }> => {
+      const currentlyFav = favoriteRoomIds.includes(roomId);
+      const nextFavState = !currentlyFav;
 
-    let updatedIds: string[];
-    if (currentlyFav) {
-      updatedIds = favoriteRoomIds.filter((id) => id !== roomId);
-      setFavoriteRooms((prev) => prev.filter((r) => r.Id !== roomId));
-    } else {
-      updatedIds = [roomId, ...favoriteRoomIds];
-      if (roomData) {
+      const updatedIds = currentlyFav
+        ? favoriteRoomIds.filter((id) => id !== roomId)
+        : [roomId, ...favoriteRoomIds];
+
+      setFavoriteRoomIds(updatedIds);
+      saveToLocalStorage(updatedIds);
+
+      if (currentlyFav) {
+        setFavoriteRooms((prev) => prev.filter((r) => r.Id !== roomId));
+      } else if (roomData) {
         setFavoriteRooms((prev) => [roomData, ...prev.filter((r) => r.Id !== roomId)]);
       }
-    }
 
-    setFavoriteRoomIds(updatedIds);
-    saveToLocalStorage(updatedIds);
+      const message = nextFavState ? 'Đã lưu phòng vào mục yêu thích!' : 'Đã xóa phòng khỏi mục yêu thích.';
 
-    let message = nextFavState ? 'Đã lưu phòng vào mục yêu thích!' : 'Đã xóa phòng khỏi mục yêu thích.';
-
-    if (token) {
-      try {
-        const res = await fetch('/api/favorites/toggle', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ roomId }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          if (data.message) message = data.message;
-          if (Array.isArray(data.roomIds)) {
+      if (token) {
+        try {
+          const res = await fetch('/api/favorites/toggle', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ roomId }),
+          });
+          const data = await res.json();
+          if (data.success && Array.isArray(data.roomIds)) {
             setFavoriteRoomIds(data.roomIds);
             saveToLocalStorage(data.roomIds);
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // optimistic update already done
       }
-    }
 
-    showToast(message);
-    return { isFavorite: nextFavState, message };
-  };
+      showToast(message);
+      return { isFavorite: nextFavState, message };
+    },
+    [favoriteRoomIds, token, saveToLocalStorage, showToast]
+  );
 
-  // Remove specific favorite
-  const removeFavorite = async (roomId: string) => {
-    const updatedIds = favoriteRoomIds.filter((id) => id !== roomId);
-    setFavoriteRoomIds(updatedIds);
-    setFavoriteRooms((prev) => prev.filter((r) => r.Id !== roomId));
-    saveToLocalStorage(updatedIds);
+  // Bỏ lưu 1 phòng cụ thể
+  const removeFavorite = useCallback(
+    async (roomId: string) => {
+      const updatedIds = favoriteRoomIds.filter((id) => id !== roomId);
+      setFavoriteRoomIds(updatedIds);
+      setFavoriteRooms((prev) => prev.filter((r) => r.Id !== roomId));
+      saveToLocalStorage(updatedIds);
+      showToast('Đã xóa phòng khỏi mục yêu thích.');
 
-    showToast('Đã xóa phòng khỏi mục yêu thích.');
-
-    if (token) {
-      try {
-        await fetch(`/api/favorites/${roomId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {
-        // ignore
+      if (token) {
+        try {
+          await fetch(`/api/favorites/${roomId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch {
+          // ignore
+        }
       }
-    }
-  };
+    },
+    [favoriteRoomIds, token, saveToLocalStorage, showToast]
+  );
 
-  // Clear all favorites
-  const clearAllFavorites = async () => {
+  // Xóa toàn bộ phòng yêu thích
+  const clearAllFavorites = useCallback(async () => {
     setFavoriteRoomIds([]);
     setFavoriteRooms([]);
     saveToLocalStorage([]);
@@ -194,7 +201,7 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // ignore
       }
     }
-  };
+  }, [token, saveToLocalStorage, showToast]);
 
   return (
     <FavoritesContext.Provider
