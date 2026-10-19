@@ -225,20 +225,44 @@ const MainContent: React.FC = () => {
         return <MapView onSelectRoomDetail={navigateToRoomDetail} />;
 
       case 'landlord-rooms':
+        return (
+          <LandlordManageView
+            onNavigateToCreate={() => setCurrentView('landlord-create-room')}
+            onViewRoomDetail={navigateToRoomDetail}
+            initialTab="rooms"
+          />
+        );
+      case 'landlord-contracts':
+        return (
+          <LandlordManageView
+            onNavigateToCreate={() => setCurrentView('landlord-create-room')}
+            onViewRoomDetail={navigateToRoomDetail}
+            initialTab="contracts"
+          />
+        );
+      case 'landlord-appointments':
       case 'landlord-inquiries':
         return (
           <LandlordManageView
             onNavigateToCreate={() => setCurrentView('landlord-create-room')}
             onViewRoomDetail={navigateToRoomDetail}
-            initialTab={currentView === 'landlord-inquiries' ? 'appointments' : 'rooms'}
+            initialTab="appointments"
           />
         );
-
-      case 'landlord-create-room':
+      case 'landlord-deposits':
         return (
-          <LandlordCreateRoomView
-            onBack={() => setCurrentView('landlord-rooms')}
-            onSuccess={() => setCurrentView('landlord-rooms')}
+          <LandlordManageView
+            onNavigateToCreate={() => setCurrentView('landlord-create-room')}
+            onViewRoomDetail={navigateToRoomDetail}
+            initialTab="deposits"
+          />
+        );
+      case 'landlord-messages':
+        return (
+          <LandlordManageView
+            onNavigateToCreate={() => setCurrentView('landlord-create-room')}
+            onViewRoomDetail={navigateToRoomDetail}
+            initialTab="inquiries"
           />
         );
 

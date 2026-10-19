@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Wallet, ArrowDownRight, ArrowUpRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Wallet, ArrowUpRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface LandlordWalletModalProps {
@@ -10,7 +10,7 @@ interface LandlordWalletModalProps {
 
 export const LandlordWalletModal: React.FC<LandlordWalletModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user, token, refreshUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'withdraw' | 'deposit'>('withdraw');
+  const [activeTab] = useState<'withdraw' | 'deposit'>('withdraw');
   const [amount, setAmount] = useState<number | ''>('');
   const [bankName, setBankName] = useState('Vietcombank');
   const [bankAccount, setBankAccount] = useState('');
@@ -18,9 +18,10 @@ export const LandlordWalletModal: React.FC<LandlordWalletModalProps> = ({ isOpen
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  if (!isOpen) return null;
+  // Tính toán số dư khả dụng an toàn (hỗ trợ cả thuộc tính soDuVi và SoDuVi)
+  const currentBalance = (user?.soDuVi ?? (user as any)?.SoDuVi ?? 0);
 
-  const currentBalance = user?.SoDuVi || 0;
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

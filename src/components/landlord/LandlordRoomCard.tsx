@@ -1,6 +1,6 @@
 import React from 'react';
 import { Room } from '../../types';
-import { MapPin, Eye, Edit2, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { MapPin, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 interface LandlordRoomCardProps {
   room: Room;
@@ -17,9 +17,9 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
   onToggleStatus,
   onDeleteRoom,
 }) => {
-  const isAvailable =
-    room.TrangThai === 'Còn phòng' ||
-    (room.TrangThai as string)?.toLowerCase().includes('controng');
+  const rawStatus = (room.TrangThai || '').toLowerCase();
+  const isAvailable = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
+  const isPending = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group">
@@ -34,17 +34,19 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Nút 1 chạm đổi trạng thái nhanh Còn/Hết phòng (Tính năng 4) */}
+        {/* Nút 1 chạm đổi trạng thái nhanh Còn / Chờ duyệt / Hết phòng */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggleStatus?.();
           }}
-          title="Bấm để chuyển nhanh giữa Còn phòng / Hết phòng"
+          title="Bấm để chuyển nhanh trạng thái phòng"
           className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
             isAvailable
               ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+              : isPending
+              ? 'bg-amber-500 hover:bg-amber-600 text-white'
               : 'bg-slate-700 hover:bg-slate-800 text-white'
           }`}
         >
@@ -52,6 +54,11 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             <>
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Còn phòng</span>
+            </>
+          ) : isPending ? (
+            <>
+              <Clock className="w-3.5 h-3.5" />
+              <span>Chờ duyệt</span>
             </>
           ) : (
             <>
@@ -91,7 +98,6 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             <Eye className="w-3.5 h-3.5" />
             <span>Xem phòng</span>
           </button>
-
           <div className="flex items-center gap-1">
             <button
               type="button"

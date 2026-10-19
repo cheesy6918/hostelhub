@@ -5,10 +5,14 @@ import { LandlordRoomFilter } from '../components/landlord/LandlordRoomFilter';
 import { LandlordRoomCard } from '../components/landlord/LandlordRoomCard';
 import { LandlordWalletModal } from '../components/landlord/LandlordWalletModal';
 import { LandlordCreateArticleModal } from '../components/landlord/LandlordCreateArticleModal';
-import { BookOpen } from 'lucide-react';
+import { ARTICLES_DATA as INITIAL_ARTICLES } from '../utils/articlesData';
 
 import {
+  Search,
+  Tag,
+  BookOpen,
   Building2,
+  ChevronDown,
   Plus,
   Edit2,
   Trash2,
@@ -43,7 +47,7 @@ import {
 interface LandlordManageViewProps {
   onNavigateToCreate?: () => void;
   onViewRoomDetail?: (roomId: string) => void;
-  initialTab?: 'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries';
+  initialTab?: 'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries' | 'articles';
 }
 
 const AVAILABLE_AMENITIES_LIST = [
@@ -71,14 +75,19 @@ const AVAILABLE_AMENITIES_LIST = [
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  // State bổ sung cho mục Tin nhắn liên hệ
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<'all' | 'pending' | 'handled'>('all');
+  const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
+  const [replyingId, setReplyingId] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<LichHen[]>([]);
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
   const [contracts, setContracts] = useState<RentalContract[]>([]);
+  const [articles, setArticles] = useState<any[]>(INITIAL_ARTICLES || []);
   const [loading, setLoading] = useState(true);
 
   // Khai báo activeTab ở đây:
-  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries'>(
-    initialTab || 'rooms'
+  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries' | 'articles'>(
+  initialTab || 'rooms'
   );
 
   // State modal ví & bài viết:
@@ -131,14 +140,15 @@ const AVAILABLE_AMENITIES_LIST = [
         address.includes(searchTerm.toLowerCase()) ||
         district.includes(searchTerm.toLowerCase());
 
-      // Lọc theo trạng thái
-      const rawStatus = (room.TrangThai || '').toLowerCase();
+      // Lọc theo trạng thái mở rộng chuẩn xác
+      const rawStatus = (room.TrangThai || '').toLowerCase().trim();
       let matchesStatus = true;
-      if (statusFilter === 'available') {
+      
+      if (statusFilter === 'available' || statusFilter === 'Còn phòng') {
         matchesStatus = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
-      } else if (statusFilter === 'rented') {
-        matchesStatus = rawStatus.includes('hết phòng') || rawStatus.includes('dathue');
-      } else if (statusFilter === 'pending') {
+      } else if (statusFilter === 'rented' || statusFilter === 'Hết phòng' || statusFilter === 'Đã cho thuê') {
+        matchesStatus = !rawStatus.includes('còn phòng') && !rawStatus.includes('controng');
+      } else if (statusFilter === 'pending' || statusFilter === 'Chờ duyệt') {
         matchesStatus = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
       }
 
@@ -168,6 +178,78 @@ const AVAILABLE_AMENITIES_LIST = [
   const indexOfLastRoom = currentPage * roomsPerPage;
   const indexOfFirstRoom = indexOfLastRoom - roomsPerPage;
   const currentRooms = filteredRooms.slice(indexOfFirstRoom, indexOfLastRoom);
+
+  // --- State lọc & phân trang cho Cẩm nang ---
+  const [articleSearchTerm, setArticleSearchTerm] = useState('');
+  const [articleCategoryFilter, setArticleCategoryFilter] = useState('all');
+  const [articleSortDate, setArticleSortDate] = useState<'newest' | 'oldest'>('newest'); // 👈 THÊM DÒNG NÀY
+  const [articleCurrentPage, setArticleCurrentPage] = useState(1);
+  const articlesPerPage = 6;
+
+  // Kiểm tra xem cẩm nang có đang được lọc hay không
+  const isArticleFiltered =
+    articleSearchTerm.trim() !== '' ||
+    articleCategoryFilter !== 'all' ||
+    articleSortDate !== 'newest';
+
+  // Hàm đặt lại toàn bộ bộ lọc cẩm nang về mặc định
+  const handleResetArticleFilters = () => {
+    setArticleSearchTerm('');
+    setArticleCategoryFilter('all');
+    setArticleSortDate('newest');
+  };
+
+  // Danh sách các chuyên mục cẩm nang duy nhất
+  const availableCategories = Array.from(
+    new Set(articles.map((a) => a.Tag || a.ChuyenMuc || a.category).filter(Boolean))
+  ) as string[];
+
+  // Lọc và sắp xếp bài viết theo từ khóa, chuyên mục và thời gian đăng
+  const filteredArticles = articles
+    .filter((item) => {
+      const title = (item.TieuDe || item.title || '').toLowerCase();
+      const summary = (item.MoTaNgan || item.TomTat || item.NoiDung1 || '').toLowerCase();
+      const tag = (item.Tag || item.ChuyenMuc || item.category || '').toLowerCase();
+
+      const matchesSearch =
+        title.includes(articleSearchTerm.toLowerCase()) ||
+        summary.includes(articleSearchTerm.toLowerCase());
+
+      const matchesCategory =
+        articleCategoryFilter === 'all' || tag === articleCategoryFilter.toLowerCase();
+
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      // Chuyển đổi định dạng ngày (ví dụ DD/MM/YYYY hoặc ISO) sang timestamp
+      const parseDate = (dStr: string) => {
+        if (!dStr) return 0;
+        if (dStr.includes('/')) {
+          const parts = dStr.split('/');
+          if (parts.length === 3) {
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+          }
+        }
+        return new Date(dStr).getTime() || 0;
+      };
+
+      const dateA = parseDate(a.NgayDang || a.NgayTao || a.date);
+      const dateB = parseDate(b.NgayDang || b.NgayTao || b.date);
+
+      if (articleSortDate === 'newest') return dateB - dateA;
+      return dateA - dateB;
+    });
+
+  // Tự động về trang 1 khi đổi từ khóa hoặc bộ lọc
+ useEffect(() => {
+    setArticleCurrentPage(1);
+  }, [articleSearchTerm, articleCategoryFilter, articleSortDate]);
+
+  // Cắt mảng bài viết cho trang hiện tại
+  const totalArticlePages = Math.ceil(filteredArticles.length / articlesPerPage);
+  const indexOfLastArticle = articleCurrentPage * articlesPerPage;
+  const indexOfFirstArticle = indexOfLastArticle - articlesPerPage;
+  const currentArticles = filteredArticles.slice(indexOfFirstArticle, indexOfLastArticle);
 
   useEffect(() => {
     if (initialTab) {
@@ -237,7 +319,7 @@ const AVAILABLE_AMENITIES_LIST = [
     if (!user || !token) return;
     try {
       setLoading(true);
-      // Fetch landlord's rooms, inquiries, appointments, deposits, contracts and student candidates
+      // 1. Fetch dữ liệu phòng, hợp đồng, cọc, lịch hẹn chính
       const [resRooms, resInq, resApp, resDep, resContracts, resCandidates] = await Promise.all([
         fetch(`/api/rooms?landlordId=${user.Id}`),
         fetch('/api/inquiries', { headers: { Authorization: `Bearer ${token}` } }),
@@ -262,8 +344,14 @@ const AVAILABLE_AMENITIES_LIST = [
       if (dataDep.success) setDeposits(dataDep.data || []);
       if (dataContracts.success) setContracts(dataContracts.data || []);
       if (dataCandidates.success) setCandidates(dataCandidates.data || []);
-    } catch {
-      // ignore
+
+     // Nạp bài viết từ articlesData
+      if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
+        setArticles(INITIAL_ARTICLES);
+      }
+
+    } catch (error) {
+      console.error('Lỗi khi tải dữ liệu chủ trọ:', error);
     } finally {
       setLoading(false);
     }
@@ -672,92 +760,296 @@ const AVAILABLE_AMENITIES_LIST = [
   };
 
   const availableCount = rooms.filter((r) => r.TrangThai === 'Còn phòng').length;
-  const occupiedCount = rooms.filter((r) => r.TrangThai === 'Hết phòng').length;
+  const occupiedCount = rooms.filter((r) => {
+    const st = (r.TrangThai || '').toLowerCase();
+    return !st.includes('còn phòng') && !st.includes('controng');
+  }).length;
   const pendingCount = rooms.filter((r) => r.TrangThai === 'Chờ duyệt' || r.TrangThai === 'ChoDuyet' || (r.TrangThai as string)?.toLowerCase() === 'choduyet').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Header Card */}
+      {/* Top Header Banner: Tự động thay đổi đồng bộ theo 5 mục trên Navbar */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {activeTab === 'contracts' ? (
+          /* 1. Banner mục Hợp đồng */
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg w-fit mb-2">
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Giao diện quản lý dành cho Chủ trọ</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Xác minh thuê phòng 2 chiều</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Quản lý Hợp đồng & Người thuê
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Kích hoạt trạng thái đang ở và cấp quyền viết đánh giá minh bạch cho sinh viên
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Quản lý phòng của tôi
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Chủ trọ: <strong>{user?.HoTen}</strong> · SĐT: {user?.Sdt}
-            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng số hợp đồng</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{contracts.length}</span>
+              </div>
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-emerald-700 block">Đang thuê thực tế (Đang ở)</span>
+                <span className="text-xl font-bold text-emerald-800 tabular-nums">
+                  {contracts.filter(c => c.status === 'active').length}
+                </span>
+              </div>
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-amber-700 block">Sinh viên đề xuất (Chờ duyệt)</span>
+                <span className="text-xl font-bold text-amber-800 tabular-nums">
+                  {contracts.filter(c => c.status === 'pending_landlord').length}
+                </span>
+              </div>
+            </div>
           </div>
-
-          <div className="flex items-center gap-2.5">
-            {/* Nút Viết cẩm nang */}
-            <button
-              type="button"
-              onClick={() => setShowArticleModal(true)}
-              className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
-            >
-              <BookOpen className="w-4 h-4 text-blue-600" />
-              <span>+ Viết cẩm nang</span>
-            </button>
-
-            {/* Nút Đăng tin phòng mới */}
-            {onNavigateToCreate && (
+        ) : activeTab === 'appointments' ? (
+          /* 2. Banner mục Lịch hẹn xem phòng */
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Điều phối lịch hẹn xem phòng</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Lịch hẹn xem phòng trực tiếp
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Xác nhận hoặc dời lịch để sinh viên chủ động thời gian qua xem phòng
+                </p>
+              </div>
               <button
-                onClick={onNavigateToCreate}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all whitespace-nowrap cursor-pointer active:scale-98"
+                type="button"
+                onClick={fetchLandlordData}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>Đăng tin phòng mới</span>
+                <RefreshCw className="w-4 h-4" />
+                <span>Làm mới danh sách</span>
               </button>
-            )}
-          </div>
-        </div>
-
-        {/* Stats strip kèm Thống kê Tài chính Ví */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mt-6 pt-6 border-t border-slate-100">
-          <div className="bg-slate-50 p-3.5 rounded-2xl">
-            <span className="text-xs text-slate-400 block">Tổng số phòng</span>
-            <span className="text-xl font-bold text-slate-900 tabular-nums">{rooms.length}</span>
-          </div>
-          <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
-            <span className="text-xs text-emerald-700 block">Đang còn trống</span>
-            <span className="text-xl font-bold text-emerald-800 tabular-nums">{availableCount}</span>
-          </div>
-          <div className="bg-slate-50 p-3.5 rounded-2xl">
-            <span className="text-xs text-slate-400 block">Đã cho thuê</span>
-            <span className="text-xl font-bold text-slate-700 tabular-nums">{occupiedCount}</span>
-          </div>
-          
-          {/* Thẻ tiền cọc đang giữ */}
-          <div className="bg-blue-50/70 p-3.5 rounded-2xl">
-            <span className="text-xs text-blue-700 block">Tiền cọc giữ chỗ</span>
-            <span className="text-lg font-bold text-blue-900 tabular-nums">
-              {totalDepositReceived.toLocaleString('vi-VN')} đ
-            </span>
-          </div>
-
-          {/* Thẻ Số dư ví khả dụng & Nút mở ví */}
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3.5 rounded-2xl text-white flex flex-col justify-between shadow-xs col-span-2 sm:col-span-1">
-            <div>
-              <span className="text-[11px] text-emerald-100 block font-medium">Số dư ví chủ trọ</span>
-              <span className="text-lg font-extrabold tabular-nums">
-                {(user?.SoDuVi || 0).toLocaleString('vi-VN')} đ
-              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowWalletModal(true)}
-              className="mt-2 py-1 px-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-lg text-[10px] font-bold text-white transition-colors cursor-pointer w-fit flex items-center gap-1"
-            >
-              <Wallet className="w-3 h-3" />
-              <span>Rút / Nạp ví</span>
-            </button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng số lịch hẹn</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{appointments.length}</span>
+              </div>
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-amber-700 block">Chờ xác nhận</span>
+                <span className="text-xl font-bold text-amber-800 tabular-nums">
+                  {appointments.filter(a => a.TrangThai === 'Chờ xác nhận').length}
+                </span>
+              </div>
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-emerald-700 block">Đã xác nhận gặp</span>
+                <span className="text-xl font-bold text-emerald-800 tabular-nums">
+                  {appointments.filter(a => a.TrangThai === 'Đã xác nhận').length}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : activeTab === 'deposits' ? (
+          /* 3. Banner mục Đơn cọc */
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Quản lý cọc bảo đảm 48h</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Đơn đặt cọc giữ phòng
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Tiếp nhận tiền cọc vào ví và tự động chuyển trạng thái phòng sang Đã cọc
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchLandlordData}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Làm mới đơn cọc</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng đơn cọc nhận</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{deposits.length}</span>
+              </div>
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-amber-700 block">Đơn chờ duyệt</span>
+                <span className="text-xl font-bold text-amber-800 tabular-nums">
+                  {deposits.filter(d => d.TrangThaiCoc === 'Chờ xác nhận').length}
+                </span>
+              </div>
+              <div className="bg-blue-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-blue-700 block">Tổng tiền cọc nhận được</span>
+                <span className="text-lg font-bold text-blue-900 tabular-nums">
+                  {totalDepositReceived.toLocaleString('vi-VN')} đ
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'inquiries' ? (
+          /* 4. Banner mục Tin nhắn liên hệ */
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Trung tâm tin nhắn & Hỗ trợ sinh viên</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Tin nhắn & Yêu cầu tư vấn
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Quản lý và giải đáp thắc mắc của sinh viên gửi tới các phòng trọ của bạn
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchLandlordData}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Làm mới hộp thư</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng tin nhắn nhận</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{inquiries.length}</span>
+              </div>
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-amber-700 block">Chờ phản hồi</span>
+                <span className="text-xl font-bold text-amber-800 tabular-nums">
+                  {inquiries.filter(i => i.TrangThai === 'ChoXacNhan').length}
+                </span>
+              </div>
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-emerald-700 block">Đã xử lý & Phản hồi</span>
+                <span className="text-xl font-bold text-emerald-800 tabular-nums">
+                  {inquiries.filter(i => i.TrangThai !== 'ChoXacNhan').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+        ) : activeTab === 'articles' ? (
+          /* Banner chuyên biệt cho mục Quản lý cẩm nang */
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Trung tâm cẩm nang & Chia sẻ kinh nghiệm</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Quản lý cẩm nang & Hướng dẫn
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Đăng tải kinh nghiệm thuê trọ, nội quy và mẹo vặt hữu ích giúp kết nối sinh viên tốt hơn
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowArticleModal(true)}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all whitespace-nowrap cursor-pointer active:scale-98"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Viết cẩm nang mới</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng số bài viết</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{articles.length}</span>
+              </div>
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-emerald-700 block">Đã xuất bản</span>
+                <span className="text-xl font-bold text-emerald-800 tabular-nums">{articles.length}</span>
+              </div>
+              <div className="bg-blue-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-blue-700 block">Tác giả đăng bài</span>
+                <span className="text-sm font-bold text-blue-900 truncate block mt-1">
+                  {user?.HoTen || 'Chủ trọ'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+        ) : (
+          /* 5. Banner mặc định: Quản lý phòng của tôi */
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg w-fit mb-2">
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>Giao diện quản lý dành cho Chủ trọ</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Quản lý phòng của tôi
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  Chủ trọ: <strong>{user?.HoTen}</strong> · SĐT: {user?.Sdt}
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowArticleModal(true)}
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap cursor-pointer"
+                >
+                  <BookOpen className="w-4 h-4 text-blue-600" />
+                  <span>Viết cẩm nang</span>
+                </button>
+                {onNavigateToCreate && (
+                  <button
+                    onClick={onNavigateToCreate}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all whitespace-nowrap cursor-pointer active:scale-98"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Đăng tin phòng mới</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Tổng số phòng</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums">{rooms.length}</span>
+              </div>
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-emerald-700 block">Đang còn trống</span>
+                <span className="text-xl font-bold text-emerald-800 tabular-nums">{availableCount}</span>
+              </div>
+              <div className="bg-slate-50 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-400 block">Đã cho thuê</span>
+                <span className="text-xl font-bold text-slate-700 tabular-nums">{occupiedCount}</span>
+              </div>
+              <div className="bg-blue-50/70 p-3.5 rounded-2xl">
+                <span className="text-xs text-blue-700 block">Tiền cọc giữ chỗ</span>
+                <span className="text-lg font-bold text-blue-900 tabular-nums">
+                  {totalDepositReceived.toLocaleString('vi-VN')} đ
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action message */}
         {actionMessage && (
@@ -768,9 +1060,10 @@ const AVAILABLE_AMENITIES_LIST = [
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2.5 mb-6">
+      {/* 2 nút chuyển đổi: Quản lý phòng & Quản lý cẩm nang */}
+      <div className="flex items-center gap-2 mb-6">
         <button
+          type="button"
           onClick={() => setActiveTab('rooms')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'rooms'
@@ -778,78 +1071,221 @@ const AVAILABLE_AMENITIES_LIST = [
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <Building2 className="w-3.5 h-3.5" />
-          <span>Danh sách phòng ({rooms.length})</span>
+          <Building2 className="w-4 h-4" />
+          <span>Quản lý phòng ({rooms.length})</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('contracts')}
+          type="button"
+          onClick={() => setActiveTab('articles')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'contracts'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Hợp đồng & Xác nhận thuê ({contracts.length})</span>
-          {contracts.filter(c => c.status === 'pending_landlord').length > 0 && (
-            <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">
-              {contracts.filter(c => c.status === 'pending_landlord').length} cần xác nhận
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('appointments')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'appointments'
+            activeTab === 'articles'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Lịch hẹn xem phòng ({appointments.length})</span>
-          {appointments.filter(a => a.TrangThai === 'Chờ xác nhận').length > 0 && (
-            <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">
-              {appointments.filter(a => a.TrangThai === 'Chờ xác nhận').length} chờ duyệt
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('deposits')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'deposits'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <CreditCard className="w-3.5 h-3.5" />
-          <span>Đơn cọc giữ phòng ({deposits.length})</span>
-          {deposits.filter(d => d.TrangThaiCoc === 'Chờ xác nhận').length > 0 && (
-            <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-bold">
-              {deposits.filter(d => d.TrangThaiCoc === 'Chờ xác nhận').length} chờ xử lý
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('inquiries')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'inquiries'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>Tin nhắn liên hệ ({inquiries.length})</span>
+          <BookOpen className="w-4 h-4" />
+          <span>Quản lý cẩm nang ({articles.length})</span>
         </button>
       </div>
 
-      {/* Tab: Hợp đồng thuê phòng & Xác nhận 2 chiều */}
-      {activeTab === 'contracts' && (
+      {/* Nội dung hiển thị theo tab đang chọn (Đồng bộ từ Navbar & Nút chuyển tab) */}
+      {activeTab === 'articles' ? (
+        /* Giao diện Danh sách Cẩm nang của tôi (Kèm Bộ lọc & Phân trang) */
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-blue-600" />
+                <span>Danh sách bài viết cẩm nang ({filteredArticles.length})</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Các bài chia sẻ kinh nghiệm thuê trọ, nội quy và mẹo vặt hữu ích cho sinh viên
+              </p>
+            </div>
+          </div>
+
+          {/* HÀNG 1: Thanh tìm kiếm & Cụm Dropdown bộ lọc cẩm nang */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+            {/* 1. Ô tìm kiếm bài viết */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Tìm bài viết theo tiêu đề, nội dung tóm tắt..."
+                value={articleSearchTerm}
+                onChange={(e) => setArticleSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs"
+              />
+            </div>
+
+            {/* 2 Dropdown bên phải */}
+            <div className="flex items-center gap-3">
+              {/* 2. Lọc theo chuyên mục */}
+              <div className="relative min-w-[200px]">
+                <Tag className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={articleCategoryFilter}
+                  onChange={(e) => setArticleCategoryFilter(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-700 cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs appearance-none"
+                >
+                  <option value="all">Tất cả chuyên mục</option>
+                  {availableCategories.map((cat, idx) => (
+                    <option key={idx} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {/* 3. Lọc theo thời gian đăng */}
+              <div className="relative min-w-[160px]">
+                <select
+                  value={articleSortDate}
+                  onChange={(e) => setArticleSortDate(e.target.value as 'newest' | 'oldest')}
+                  className="w-full px-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-700 cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs appearance-none"
+                >
+                  <option value="newest">Mới đăng nhất</option>
+                  <option value="oldest">Cũ nhất</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* HÀNG 2: Tách biệt xuống dòng dưới - Tìm thấy X kết quả & Nút Xóa bộ lọc */}
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <span>
+              Tìm thấy <strong className="text-slate-800">{filteredArticles.length}</strong> kết quả
+            </span>
+
+            {isArticleFiltered && (
+              <button
+                type="button"
+                onClick={handleResetArticleFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Xóa bộ lọc</span>
+              </button>
+            )}
+          </div>
+
+          {/* Danh sách bài viết */}
+          {filteredArticles.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 space-y-2">
+              <BookOpen className="w-10 h-10 mx-auto text-slate-300" />
+              <p className="text-sm font-semibold text-slate-600">Không tìm thấy bài viết cẩm nang nào.</p>
+              <p className="text-xs text-slate-400">Hãy thử thay đổi từ khóa hoặc bộ lọc chuyên mục.</p>
+              {(articleSearchTerm || articleCategoryFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArticleSearchTerm('');
+                    setArticleCategoryFilter('all');
+                  }}
+                  className="mt-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 cursor-pointer"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {currentArticles.map((item: any) => (
+                  <div
+                    key={item.Id || item.id}
+                    className="border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-all flex flex-col bg-white group"
+                  >
+                    {item.HinhAnh && (
+                      <div className="aspect-16/10 overflow-hidden bg-slate-100">
+                        <img
+                          src={item.HinhAnh}
+                          alt={item.TieuDe}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    )}
+                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      <div>
+                        <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                          {item.Tag || item.ChuyenMuc || 'Kinh nghiệm thuê phòng'}
+                        </span>
+                        <h3 className="font-bold text-sm text-slate-900 mt-2 line-clamp-2">
+                          {item.TieuDe}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                          {item.MoTaNgan || item.NoiDung1}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>{item.NgayDang || 'Mới đăng'}</span>
+                        <span className="text-emerald-600 font-semibold">✓ Đã xuất bản</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Thanh phân trang cẩm nang */}
+              {totalArticlePages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">
+                  <span className="text-xs text-slate-500 font-medium">
+                    Hiển thị <strong>{indexOfFirstArticle + 1} - {Math.min(indexOfLastArticle, filteredArticles.length)}</strong> trên tổng số <strong>{filteredArticles.length}</strong> bài viết
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={articleCurrentPage === 1}
+                      onClick={() => {
+                        setArticleCurrentPage((prev) => Math.max(prev - 1, 1));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang trước
+                    </button>
+                    {Array.from({ length: totalArticlePages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => {
+                          setArticleCurrentPage(page);
+                          window.scrollTo({ top: 350, behavior: 'smooth' });
+                        }}
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                          articleCurrentPage === page
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={articleCurrentPage === totalArticlePages}
+                      onClick={() => {
+                        setArticleCurrentPage((prev) => Math.min(prev + 1, totalArticlePages));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang sau
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'contracts' ? (
+        /* Tab: Hợp đồng */
         <div className="space-y-5 animate-in fade-in">
-          {/* Header & New Proposal Button */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-100">
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -862,13 +1298,6 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowProposalModal(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Đề xuất xác nhận thuê mới</span>
-              </button>
-              <button
                 onClick={fetchLandlordData}
                 className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
                 title="Làm mới"
@@ -878,7 +1307,6 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
           </div>
 
-          {/* Explanation Policy Card */}
           <div className="p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-600 flex items-start gap-3 shadow-2xs">
             <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
@@ -893,7 +1321,6 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
           </div>
 
-          {/* Contracts List */}
           {loading ? (
             <div className="space-y-3">
               {[1, 2].map(i => (
@@ -909,13 +1336,6 @@ const AVAILABLE_AMENITIES_LIST = [
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 Khi sinh viên gửi yêu cầu thuê phòng hoặc bạn chủ động gửi đề xuất tới sinh viên, danh sách hợp đồng sẽ xuất hiện tại đây.
               </p>
-              <button
-                onClick={() => setShowProposalModal(true)}
-                className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Gửi đề xuất xác nhận thuê đầu tiên</span>
-              </button>
             </div>
           ) : (
             <div className="space-y-3.5">
@@ -925,7 +1345,6 @@ const AVAILABLE_AMENITIES_LIST = [
                 const isActive = contract.status === 'active';
                 const isCompleted = contract.status === 'completed';
                 const isCancelled = contract.status === 'cancelled';
-
                 return (
                   <div
                     key={contract.id}
@@ -938,7 +1357,6 @@ const AVAILABLE_AMENITIES_LIST = [
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      {/* Room & Renter Info */}
                       <div className="flex items-start gap-3.5">
                         <img
                           src={contract.roomImage || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=300&q=80'}
@@ -976,8 +1394,6 @@ const AVAILABLE_AMENITIES_LIST = [
                           </div>
                         </div>
                       </div>
-
-                      {/* Status Badge */}
                       <div className="shrink-0 self-start sm:self-auto">
                         {isPendingLandlord && (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 animate-pulse">
@@ -1011,8 +1427,6 @@ const AVAILABLE_AMENITIES_LIST = [
                         )}
                       </div>
                     </div>
-
-                    {/* Timeline & Actions Footer */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
                       <div className="text-slate-500 flex items-center gap-3 flex-wrap">
                         {contract.start_date && (
@@ -1027,10 +1441,7 @@ const AVAILABLE_AMENITIES_LIST = [
                         )}
                         <span>Ngày tạo: {new Date(contract.created_at).toLocaleString('vi-VN')}</span>
                       </div>
-
-                      {/* Action buttons */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        {/* Case 1: Sinh viên gửi yêu cầu -> Chủ trọ bấm xác nhận */}
                         {isPendingLandlord && (
                           <>
                             <button
@@ -1050,8 +1461,6 @@ const AVAILABLE_AMENITIES_LIST = [
                             </button>
                           </>
                         )}
-
-                        {/* Case 2: Đang chờ sinh viên duyệt -> Chủ trọ có thể hủy */}
                         {isPendingRenter && (
                           <button
                             onClick={() => handleCancelContract(contract.id)}
@@ -1060,8 +1469,6 @@ const AVAILABLE_AMENITIES_LIST = [
                             Hủy đề xuất
                           </button>
                         )}
-
-                        {/* Case 3: Đang ở -> Chủ trọ có thể ghi nhận trả phòng khi sinh viên dọn đi */}
                         {isActive && (
                           <button
                             onClick={() => handleCompleteContract(contract.id)}
@@ -1072,7 +1479,6 @@ const AVAILABLE_AMENITIES_LIST = [
                             <span>{completingContractId === contract.id ? 'Đang lưu...' : 'Ghi nhận trả phòng (Hoàn tất)'}</span>
                           </button>
                         )}
-
                         {contract.room_id && (
                           <button
                             onClick={() => onViewRoomDetail?.(contract.room_id)}
@@ -1089,140 +1495,8 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
           )}
         </div>
-      )}
-
-      {/* Tab 1: Rooms List */}
-      {activeTab === 'rooms' ? (
-        <>
-          {/* Thanh tìm kiếm và bộ lọc nhanh */}
-          <LandlordRoomFilter
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            districtFilter={districtFilter}
-            onDistrictFilterChange={setDistrictFilter}
-            districts={availableDistricts}
-            sortBy={sortBy}
-            onSortByChange={setSortBy}
-            totalFilteredCount={filteredRooms.length}
-            isFiltered={isFiltered}
-            onReset={handleResetFilters}
-          />
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="bg-white rounded-3xl border border-slate-200 p-6 h-64 animate-pulse" />
-              ))}
-            </div>
-          ) : rooms.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
-              <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-base font-bold text-slate-800">Bạn chưa có tin đăng phòng trọ nào</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Hãy đăng phòng trọ đầu tiên của bạn để sinh viên có thể tìm thấy và gửi yêu cầu xem phòng.
-              </p>
-              {onNavigateToCreate && (
-                <button
-                  onClick={onNavigateToCreate}
-                  className="mt-4 px-5 py-2.5 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 shadow-sm"
-                >
-                  + Đăng tin phòng mới
-                </button>
-              )}
-            </div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
-              <p className="text-sm font-bold text-slate-700">Không tìm thấy phòng trọ nào phù hợp với bộ lọc.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('all');
-                }}
-                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-blue-700"
-              >
-                Đặt lại bộ lọc
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Lưới danh sách phòng phân trang */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {currentRooms.map((room) => (
-                  <LandlordRoomCard
-                    key={room.Id}
-                    room={room}
-                    onViewDetail={(id) => onViewRoomDetail?.(id)}
-                    onEditRoom={() => handleOpenEditModal(room)}
-                    onToggleStatus={() => handleToggleRoomStatus(room)}
-                    onDeleteRoom={() => handleDeleteRoom(room.Id, room.TieuDe)}
-                  />
-                ))}
-              </div>
-
-              {/* Thanh điều hướng phân trang (chỉ hiện khi có trên 1 trang) */}
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">
-                  <span className="text-xs text-slate-500 font-medium">
-                    Hiển thị <strong>{indexOfFirstRoom + 1} - {Math.min(indexOfLastRoom, filteredRooms.length)}</strong> trên tổng số <strong>{filteredRooms.length}</strong> phòng
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    {/* Nút Trước */}
-                    <button
-                      type="button"
-                      disabled={currentPage === 1}
-                      onClick={() => {
-                        setCurrentPage((prev) => Math.max(prev - 1, 1));
-                        window.scrollTo({ top: 350, behavior: 'smooth' });
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                    >
-                      Trang trước
-                    </button>
-
-                    {/* Danh sách các số trang */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() => {
-                          setCurrentPage(page);
-                          window.scrollTo({ top: 350, behavior: 'smooth' });
-                        }}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
-                          currentPage === page
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
-
-                    {/* Nút Sau */}
-                    <button
-                      type="button"
-                      disabled={currentPage === totalPages}
-                      onClick={() => {
-                        setCurrentPage((prev) => Math.min(prev + 1, totalPages));
-                        window.scrollTo({ top: 350, behavior: 'smooth' });
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                    >
-                      Trang sau
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-        
       ) : activeTab === 'appointments' ? (
-        /* Tab 2: Appointments List */
+        /* Tab: Lịch hẹn */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <div>
@@ -1235,7 +1509,6 @@ const AVAILABLE_AMENITIES_LIST = [
               Làm mới
             </button>
           </div>
-
           {appointments.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-300" />
@@ -1265,7 +1538,6 @@ const AVAILABLE_AMENITIES_LIST = [
                       <p className="text-xs text-slate-500 italic">Lời nhắn: "{app.GhiChu}"</p>
                     )}
                   </div>
-
                   <div className="flex items-center gap-2">
                     {app.TrangThai === 'Chờ xác nhận' ? (
                       <>
@@ -1309,7 +1581,7 @@ const AVAILABLE_AMENITIES_LIST = [
           )}
         </div>
       ) : activeTab === 'deposits' ? (
-        /* Tab 3: Deposits List */
+        /* Tab: Đơn cọc */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <div>
@@ -1324,7 +1596,6 @@ const AVAILABLE_AMENITIES_LIST = [
               Làm mới
             </button>
           </div>
-
           {deposits.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <CreditCard className="w-10 h-10 mx-auto mb-2 text-slate-300" />
@@ -1355,7 +1626,6 @@ const AVAILABLE_AMENITIES_LIST = [
                       </span>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     {dep.TrangThaiCoc === 'Chờ xác nhận' ? (
                       <>
@@ -1400,82 +1670,317 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
           )}
         </div>
-      ) : (
-        /* Tab 4: Inquiries List */
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <h2 className="text-base font-bold text-slate-900">
-              Danh sách sinh viên gửi yêu cầu liên hệ ({inquiries.length})
-            </h2>
-            <button onClick={fetchLandlordData} className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer">
-              Làm mới
-            </button>
+      ) : activeTab === 'inquiries' ? (
+        /* Tab: Tin nhắn liên hệ */
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Danh sách sinh viên gửi yêu cầu liên hệ ({inquiries.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Phản hồi tin nhắn hoặc liên hệ trực tiếp qua SĐT/Zalo để tư vấn cho sinh viên[cite: 19]
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setInquiryStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  inquiryStatusFilter === 'all' ? 'bg-white text-blue-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tất cả ({inquiries.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInquiryStatusFilter('pending')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  inquiryStatusFilter === 'pending' ? 'bg-white text-amber-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Chờ phản hồi ({inquiries.filter(i => i.TrangThai === 'ChoXacNhan').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInquiryStatusFilter('handled')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  inquiryStatusFilter === 'handled' ? 'bg-white text-emerald-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Đã xử lý ({inquiries.filter(i => i.TrangThai !== 'ChoXacNhan').length})
+              </button>
+            </div>
           </div>
-
           {inquiries.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <Clock className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm">Hiện chưa có sinh viên nào gửi tin nhắn liên hệ.</p>
+              <p className="text-sm">Hiện chưa có sinh viên nào gửi tin nhắn liên hệ.[cite: 19]</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {inquiries.map((inq) => (
-                <div key={inq.Id} className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900">{inq.SinhVienTen}</h4>
-                      <span className="text-xs text-blue-600 font-semibold">({inq.SinhVienSdt})</span>
-                    </div>
-                    <p className="text-xs font-medium text-slate-700">Phòng: {inq.TieuDePhong}</p>
-                    <p className="text-xs text-slate-500">Lời nhắn: "{inq.GhiChu}"</p>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
-                      <span>Ngày gửi: {new Date(inq.NgayTao).toLocaleDateString('vi-VN')}</span>
-                      {inq.TienCoc > 0 && (
-                        <>
-                          <span>·</span>
-                          <span className="font-bold text-emerald-600">
-                            Tiền cọc tạm giữ: {inq.TienCoc.toLocaleString('vi-VN')} đ
-                          </span>
-                        </>
+              {inquiries
+                .filter(inq => {
+                  if (inquiryStatusFilter === 'pending') return inq.TrangThai === 'ChoXacNhan';
+                  if (inquiryStatusFilter === 'handled') return inq.TrangThai !== 'ChoXacNhan';
+                  return true;
+                })
+                .map((inq) => {
+                  const rawPhone = (inq.SinhVienSdt || '').replace(/\D/g, '');
+                  const isReplying = replyingId === inq.Id;
+                  return (
+                    <div key={inq.Id} className="py-5 space-y-3">
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <h4 className="text-sm font-bold text-slate-900">{inq.SinhVienTen}</h4>
+                            <span className="text-xs font-mono text-slate-400">#{inq.Id}</span>
+                            <span className="text-[11px] font-semibold text-slate-400">
+                              · Gửi lúc: {new Date(inq.NgayTao).toLocaleString('vi-VN')}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-blue-700 bg-blue-50/70 px-2.5 py-1 rounded-lg w-fit">
+                            Phòng quan tâm: {inq.TieuDePhong}
+                          </p>
+                          <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-700 leading-relaxed">
+                            <span className="font-semibold text-slate-500 block mb-0.5">Lời nhắn từ sinh viên:</span>
+                            "{inq.GhiChu || 'Sinh viên quan tâm và muốn được tư vấn thêm về phòng trọ này.'}"
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
+                          {inq.SinhVienSdt && (
+                            <a
+                              href={`tel:${inq.SinhVienSdt}`}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-blue-600" />
+                              <span>{inq.SinhVienSdt}</span>
+                            </a>
+                          )}
+                          {rawPhone && (
+                            <a
+                              href={`https://zalo.me/${rawPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Chat Zalo</span>
+                            </a>
+                          )}
+                          {inq.TrangThai === 'ChoXacNhan' ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleInquiryAction(inq.Id, 'DaDuyet')}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs cursor-pointer transition-all"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Tiếp nhận</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleInquiryAction(inq.Id, 'TuChoi')}
+                                className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Bỏ qua</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className={`px-3 py-1 text-xs font-bold rounded-xl inline-flex items-center gap-1 ${
+                                inq.TrangThai === 'DaDuyet'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {inq.TrangThai === 'DaDuyet' ? '✓ Đã tiếp nhận' : '✕ Đã từ chối'}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setReplyingId(isReplying ? null : inq.Id)}
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                          >
+                            {isReplying ? 'Đóng trả lời' : 'Trả lời nhanh'}
+                          </button>
+                        </div>
+                      </div>
+                      {isReplying && (
+                        <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-3 animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-indigo-900">
+                              Phản hồi trực tiếp tới sinh viên {inq.SinhVienTen}:
+                            </span>
+                            <span className="text-[11px] text-slate-400">Chọn câu mẫu để điền nhanh:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              'Chào bạn, phòng này hiện vẫn còn nhé!',
+                              'Bạn có thể qua xem phòng trực tiếp vào chiều nay không?',
+                              'Giá điện nước và dịch vụ chuẩn như trên bài đăng em nhé.',
+                            ].map((sample, sIdx) => (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={() => setReplyTextMap(prev => ({ ...prev, [inq.Id]: sample }))}
+                                className="px-2.5 py-1 bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg text-[11px] cursor-pointer transition-colors"
+                              >
+                                + {sample}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={replyTextMap[inq.Id] || ''}
+                              onChange={(e) => setReplyTextMap(prev => ({ ...prev, [inq.Id]: e.target.value }))}
+                              placeholder="Nhập nội dung tin nhắn gửi tới sinh viên..."
+                              className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!(replyTextMap[inq.Id] || '').trim()) return;
+                                setActionMessage(`Đã gửi phản hồi thành công tới sinh viên ${inq.SinhVienTen}!`);
+                                setTimeout(() => setActionMessage(''), 4000);
+                                setReplyTextMap(prev => ({ ...prev, [inq.Id]: '' }));
+                                setReplyingId(null);
+                                handleInquiryAction(inq.Id, 'DaDuyet');
+                              }}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Gửi phản hồi</span>
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-
-                  <div>
-                    {inq.TrangThai === 'ChoXacNhan' ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleInquiryAction(inq.Id, 'DaDuyet')}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          Đồng ý
-                        </button>
-                        <button
-                          onClick={() => handleInquiryAction(inq.Id, 'TuChoi')}
-                          className="px-3.5 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          Từ chối
-                        </button>
-                      </div>
-                    ) : (
-                      <span
-                        className={`px-3 py-1 text-xs font-semibold rounded-xl ${
-                          inq.TrangThai === 'DaDuyet'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-red-50 text-red-700'
-                        }`}
-                      >
-                        {inq.TrangThai === 'DaDuyet' ? '✓ Đã đồng ý' : '✕ Đã từ chối'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           )}
         </div>
+      ) : (
+        /* Mặc định: Tab Quản lý phòng (activeTab === 'rooms') */
+        <>
+          <LandlordRoomFilter
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            districtFilter={districtFilter}
+            onDistrictFilterChange={setDistrictFilter}
+            districts={availableDistricts}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            totalFilteredCount={filteredRooms.length}
+            isFiltered={isFiltered}
+            onReset={handleResetFilters}
+          />
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="bg-white rounded-3xl border border-slate-200 p-6 h-64 animate-pulse" />
+              ))}
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
+              <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-base font-bold text-slate-800">Bạn chưa có tin đăng phòng trọ nào</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Hãy đăng phòng trọ đầu tiên của bạn để sinh viên có thể tìm thấy và gửi yêu cầu xem phòng.
+              </p>
+              {onNavigateToCreate && (
+                <button
+                  onClick={onNavigateToCreate}
+                  className="mt-4 px-5 py-2.5 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 shadow-sm"
+                >
+                  + Đăng tin phòng mới
+                </button>
+              )}
+            </div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
+              <p className="text-sm font-bold text-slate-700">Không tìm thấy phòng trọ nào phù hợp với bộ lọc.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                }}
+                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-blue-700"
+              >
+                Đặt lại bộ lọc
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {currentRooms.map((room) => (
+                  <LandlordRoomCard
+                    key={room.Id}
+                    room={room}
+                    onViewDetail={(id) => onViewRoomDetail?.(id)}
+                    onEditRoom={() => handleOpenEditModal(room)}
+                    onToggleStatus={() => handleToggleRoomStatus(room)}
+                    onDeleteRoom={() => handleDeleteRoom(room.Id, room.TieuDe)}
+                  />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">
+                  <span className="text-xs text-slate-500 font-medium">
+                    Hiển thị <strong>{indexOfFirstRoom + 1} - {Math.min(indexOfLastRoom, filteredRooms.length)}</strong> trên tổng số <strong>{filteredRooms.length}</strong> phòng
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => {
+                        setCurrentPage((prev) => Math.max(prev - 1, 1));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang trước
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => {
+                          setCurrentPage(page);
+                          window.scrollTo({ top: 350, behavior: 'smooth' });
+                        }}
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={currentPage === totalPages}
+                      onClick={() => {
+                        setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+                        window.scrollTo({ top: 350, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      Trang sau
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Modal Sửa tin phòng trọ */}

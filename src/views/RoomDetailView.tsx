@@ -1254,15 +1254,19 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     <span>Đặt lịch hẹn xem phòng</span>
                   </button>
 
-                  {/* Kiểm tra nếu phòng đang ở trạng thái Chờ chủ trọ xác nhận cọc */}
-                  {room.TrangThai === 'Chờ chủ trọ xác nhận cọc' ? (
+                  {/* Kiểm tra nếu phòng đang ở trạng thái Chờ xác nhận cọc HOẶC Đã cọc */}
+                  {room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc' ? (
                     <div className="space-y-2">
                       <button
                         disabled
                         className="w-full py-3 px-4 bg-amber-50 border border-amber-200 text-amber-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-2xs"
                       >
-                        <Clock className="w-4 h-4 text-amber-600 animate-spin" />
-                        <span>Đang chờ chủ trọ xác nhận cọc (Đã cọc)</span>
+                        <Clock className="w-4 h-4 text-amber-600" />
+                        <span>
+                          {room.TrangThai === 'Đã cọc' 
+                            ? 'Phòng đã có người đặt cọc giữ chỗ' 
+                            : 'Đang chờ chủ trọ xác nhận cọc (Đã cọc)'}
+                        </span>
                       </button>
                       <button
                         type="button"

@@ -26,13 +26,15 @@ interface NavbarProps {
   setCurrentView: (view: string) => void;
   onSelectDistrict?: (districtName: string) => void;
   onSelectGuideCategory?: (category: string) => void; // 👈 Thêm dòng này để hết lỗi ở App.tsx
+  onOpenWallet?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
-  currentView,
-  setCurrentView,
+export const Navbar: React.FC<NavbarProps> = ({ 
+  currentView, 
+  setCurrentView, 
   onSelectDistrict,
-  onSelectGuideCategory // 👈 Nhận thêm prop này
+  onSelectGuideCategory,
+  onOpenWallet // 👈 BẮT BUỘC NHẬN THÊM BIẾN NÀY
 }) => {
   const { user, logout } = useAuth();
   const { favoriteRoomIds } = useFavorites();
@@ -299,23 +301,52 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </>
             ) : user.VaiTro === 'ChuTro' ? (
-              <>
-                <button
-                  onClick={() => setCurrentView('landlord-create-room')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'landlord-create-room' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  Đăng tin mới
-                </button>
-                <button
-                  onClick={() => setCurrentView('landlord-inquiries')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'landlord-inquiries' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
-                >
-                  Yêu cầu xem phòng
-                </button>
-              </>
-            ) : (
+            <>
+              {/* 2. Hợp đồng & Xác nhận thuê */}
+              <button
+                type="button"
+                onClick={() => setCurrentView('landlord-contracts')}
+                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                  currentView === 'landlord-contracts' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                }`}
+              >
+                Hợp đồng & Xác nhận thuê
+              </button>
+
+              {/* 3. Lịch hẹn xem phòng */}
+              <button
+                type="button"
+                onClick={() => setCurrentView('landlord-appointments')}
+                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                  currentView === 'landlord-appointments' || currentView === 'landlord-inquiries' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                }`}
+              >
+                Lịch hẹn xem phòng
+              </button>
+
+              {/* 4. Đơn cọc giữ phòng */}
+              <button
+                type="button"
+                onClick={() => setCurrentView('landlord-deposits')}
+                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                  currentView === 'landlord-deposits' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                }`}
+              >
+                Đơn cọc giữ phòng
+              </button>
+
+              {/* 5. Tin nhắn liên hệ */}
+              <button
+                type="button"
+                onClick={() => setCurrentView('landlord-messages')}
+                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                  currentView === 'landlord-messages' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                }`}
+              >
+                Tin nhắn liên hệ
+              </button>
+            </>
+          ) : (
               <>
                 <button
                   onClick={() => setCurrentView('admin-dashboard')}
@@ -397,10 +428,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Ví tiền dành riêng cho Chủ trọ */}
               {user.VaiTro === 'ChuTro' && (
-                <div
-                  onClick={() => setCurrentView('landlord-rooms')}
+                <div 
                   title="Số dư ví chủ trọ"
-                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-xs font-bold shadow-2xs cursor-pointer hover:bg-emerald-100 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-xs font-bold shadow-2xs select-none"
                 >
                   <Wallet className="w-4 h-4 text-emerald-600" />
                   <span>{((user.soDuVi ?? (user as any).SoDuVi ?? 0)).toLocaleString('vi-VN')} đ</span>
