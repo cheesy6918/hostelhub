@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { User, Room, AdminStats, TrangThaiPhong } from '../types';
+import { ARTICLES_DATA } from '../utils/articlesData';
 import { useAuth } from '../context/AuthContext';
 import {
   ShieldCheck,
   Users,
   Building2,
+  BookOpen,
   Lock,
   Unlock,
   Search,
@@ -26,7 +28,8 @@ import {
   MapPin,
   Maximize2,
   DollarSign,
-  RefreshCw
+  RefreshCw,
+  LogOut
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -34,7 +37,7 @@ interface AdminDashboardViewProps {
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRoomDetail }) => {
-  const { token, user: currentUser } = useAuth();
+  const { token, user: currentUser, logout } = useAuth();
 
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -42,7 +45,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
   const [loading, setLoading] = useState(true);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'stats' | 'moderate' | 'users' | 'all_rooms'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'moderate' | 'articles' | 'users' | 'all_rooms'>('stats');
+  const [adminArticles, setAdminArticles] = useState<any[]>([]);
+  const [articleStatusFilter, setArticleStatusFilter] = useState<'all' | 'pending' | 'approved'>('pending');
 
   // Filter & Search states
   const [userSearch, setUserSearch] = useState('');
@@ -86,27 +91,47 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     if (!token) return;
     try {
       setLoading(true);
-      // Fetch stats, users, all rooms directly from Admin API in parallel
+      // Giữ lại phần gọi API lấy dữ liệu thống kê, user, phòng ban đầu
       const [resStats, resUsers, resRooms] = await Promise.all([
         fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/rooms', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-
       const [dataStats, dataUsers, dataRooms] = await Promise.all([
         resStats.json(),
         resUsers.json(),
         resRooms.json(),
       ]);
-
       if (dataStats.success) setStats(dataStats.data);
       if (dataUsers.success) setUsers(dataUsers.data || []);
       if (dataRooms.success) setRooms(dataRooms.data || []);
+
+      // 👉 Nạp danh sách cẩm nang
+      if (ARTICLES_DATA && Array.isArray(ARTICLES_DATA)) {
+        setAdminArticles(ARTICLES_DATA);
+      }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
+  }; // 👈 ĐÓNG HÀM fetchAdminData TẠI ĐÂY
+
+  // 👇 ĐẶT 2 HÀM XỬ LÝ DUYỆT / TỪ CHỐI Ở BÊN NGOÀI:
+  const handleApproveArticle = (articleId: string) => {
+    setAdminArticles((prev) =>
+      prev.map((a) => (a.Id === articleId ? { ...a, TrangThai: 'Công khai' } : a))
+    );
+    setActionNotice('Đã duyệt và công khai bài viết cẩm nang thành công!');
+    setTimeout(() => setActionNotice(''), 3500);
+  };
+
+  const handleRejectArticle = (articleId: string) => {
+    setAdminArticles((prev) =>
+      prev.map((a) => (a.Id === articleId ? { ...a, TrangThai: 'Từ chối' } : a))
+    );
+    setActionNotice('Đã từ chối bài viết cẩm nang.');
+    setTimeout(() => setActionNotice(''), 3500);
   };
 
   // Tự động gọi lại API fetch danh sách phòng khi Admin chuyển tab hoặc khi token thay đổi
@@ -507,128 +532,207 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      
-      {/* Top Banner Header */}
-      <div className="bg-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-sm mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-semibold mb-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Bảng điều khiển Quản trị viên (HostelHub Admin)</span>
+    <div className="flex min-h-screen bg-slate-50 text-slate-800">
+      {/* ================= CỘT SIDEBAR BÊN TRÁI (GIỐNG ẢNH 2) ================= */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 fixed inset-y-0 left-0 z-30 shadow-xs">
+        <div>
+          {/* Logo Brand Admin */}
+          <div className="h-16 flex items-center gap-2 px-6 border-b border-slate-100">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-base shadow-xs">
+              H
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Hệ thống quản trị & kiểm duyệt</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Quản lý tài khoản, phê duyệt tin đăng phòng trọ và giám sát chỉ số vận hành toàn hệ thống.
-            </p>
+            <div>
+              <span className="font-extrabold text-slate-900 text-base tracking-tight block">HostelHub</span>
+              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block -mt-1">Hệ thống Admin</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
-              Admin: <strong>{currentUser?.HoTen}</strong>
-            </span>
+          {/* 4 Mục điều hướng chuyển Tab trong cột bên trái */}
+          <nav className="p-3.5 space-y-1.5 text-xs font-semibold">
+            {/* 1. Thống kê & Biểu đồ */}
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'stats'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <BarChart3 className="w-4 h-4" />
+                <span>Thống kê & Biểu đồ</span>
+              </div>
+            </button>
+
+            {/* 2. Kiểm duyệt bài đăng */}
+            <button
+              onClick={() => setActiveTab('moderate')}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'moderate'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Kiểm duyệt phòng</span>
+              </div>
+              {pendingRooms.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === 'moderate' ? 'bg-white text-blue-700' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {pendingRooms.length}
+                </span>
+              )}
+            </button>
+
+            {/* 3. Quản lý tài khoản */}
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'users'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="w-4 h-4" />
+                <span>Quản lý tài khoản</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'users' ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {users.length}
+              </span>
+            </button>
+
+            {/* 4. Tất cả phòng trọ */}
+            <button
+              onClick={() => setActiveTab('all_rooms')}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'all_rooms'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-4 h-4" />
+                <span>Tất cả phòng trọ</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'all_rooms' ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {rooms.length}
+              </span>
+            </button>
+
+            {/* Mục: Duyệt cẩm nang */}
+            <button
+              onClick={() => setActiveTab('articles')}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'articles'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <BookOpen className="w-4 h-4" />
+                <span>Duyệt cẩm nang</span>
+              </div>
+              {adminArticles.filter((a) => a.TrangThai === 'Chờ duyệt' || !a.TrangThai).length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === 'articles' ? 'bg-white text-blue-700' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {adminArticles.filter((a) => a.TrangThai === 'Chờ duyệt' || !a.TrangThai).length}
+                </span>
+              )}
+            </button> 
+          </nav>
+        </div>
+
+        {/* Nút Đăng xuất ở cuối Sidebar (Giống nút Đăng xuất ở Ảnh 2) */}
+        <div className="p-3.5 border-t border-slate-100">
+          <button
+            onClick={() => {
+              if (confirm('Bạn có chắc muốn đăng xuất khỏi trang Quản trị?')) {
+                logout?.();
+              }
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ================= NỘI DUNG CHÍNH BÊN PHẢI ================= */}
+      <div className="flex-1 ml-64 p-6 sm:p-8 space-y-6">
+        {/* Banner Chào mừng Admin & Thông số (Giữ nguyên màu Slate-900 như ảnh 1) */}
+        <div className="bg-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-semibold mb-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Bảng điều khiển Quản trị viên (HostelHub Admin)</span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Xin chào, {currentUser?.HoTen || 'Quản trị viên'}!
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">
+                Quản lý tài khoản, phê duyệt tin đăng phòng trọ và giám sát chỉ số vận hành toàn hệ thống.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+                Admin: <strong>{currentUser?.HoTen}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Dải thống kê Ribbon */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 pt-6 border-t border-slate-800 text-xs">
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-slate-400 block text-[11px]">Tổng người dùng</span>
+              <span className="text-xl font-bold text-white tabular-nums">{stats?.totalUsers || users.length}</span>
+            </div>
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-blue-400 block text-[11px]">Sinh viên / Chủ trọ</span>
+              <span className="text-lg font-bold text-blue-300 tabular-nums">
+                {stats?.sinhVienCount || 0} / {stats?.chuTroCount || 0}
+              </span>
+            </div>
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-amber-400 block text-[11px]">Phòng chờ duyệt</span>
+              <span className="text-xl font-bold text-amber-300 tabular-nums">
+                {pendingRooms.length}
+              </span>
+            </div>
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-slate-300 block text-[11px]">Lượt đặt lịch hẹn</span>
+              <span className="text-xl font-bold text-white tabular-nums">{stats?.totalAppointments || 0}</span>
+            </div>
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-emerald-400 block text-[11px]">Tỷ lệ cọc thành công</span>
+              <span className="text-xl font-bold text-emerald-300 tabular-nums">
+                {stats?.depositSuccessRate || 0}%
+              </span>
+            </div>
+            <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
+              <span className="text-emerald-400 block text-[11px]">Tổng số dư lưu thông</span>
+              <span className="text-sm font-bold text-emerald-300 tabular-nums truncate block">
+                {(stats?.totalWallet || 0).toLocaleString('vi-VN')} đ
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Highlight Stats Ribbon */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 pt-6 border-t border-slate-800 text-xs">
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-slate-400 block text-[11px]">Tổng người dùng</span>
-            <span className="text-xl font-bold text-white tabular-nums">{stats?.totalUsers || users.length}</span>
+        {actionNotice && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-2xl flex items-center gap-2 animate-in fade-in">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionNotice}</span>
           </div>
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-blue-400 block text-[11px]">Sinh viên / Chủ trọ</span>
-            <span className="text-lg font-bold text-blue-300 tabular-nums">
-              {stats?.sinhVienCount || 0} / {stats?.chuTroCount || 0}
-            </span>
-          </div>
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-amber-400 block text-[11px]">Phòng chờ duyệt</span>
-            <span className="text-xl font-bold text-amber-300 tabular-nums">
-              {pendingRooms.length}
-            </span>
-          </div>
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-slate-300 block text-[11px]">Lượt đặt lịch hẹn</span>
-            <span className="text-xl font-bold text-white tabular-nums">{stats?.totalAppointments || 0}</span>
-          </div>
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-emerald-400 block text-[11px]">Tỷ lệ cọc thành công</span>
-            <span className="text-xl font-bold text-emerald-300 tabular-nums">
-              {stats?.depositSuccessRate || 0}%
-            </span>
-          </div>
-          <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/80">
-            <span className="text-emerald-400 block text-[11px]">Tổng số dư lưu thông</span>
-            <span className="text-sm font-bold text-emerald-300 tabular-nums truncate block">
-              {(stats?.totalWallet || 0).toLocaleString('vi-VN')} đ
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {actionNotice && (
-        <div className="mb-6 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-2xl flex items-center gap-2 animate-in fade-in">
-          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{actionNotice}</span>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2.5 mb-6">
-        <button
-          onClick={() => setActiveTab('stats')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'stats'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-3.5 h-3.5" />
-          <span>Thống kê & Biểu đồ</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('moderate')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'moderate'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Kiểm duyệt bài đăng phòng ({pendingRooms.length})</span>
-          {pendingRooms.length > 0 && (
-            <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-bold">
-              {pendingRooms.length} mới
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'users'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Quản lý tài khoản ({users.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('all_rooms')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'all_rooms'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Building2 className="w-3.5 h-3.5" />
-          <span>Tất cả phòng trọ ({rooms.length})</span>
-        </button>
-      </div>
+        )}
 
       {/* Tab 1: Thống kê & Biểu đồ (Chart.js) */}
       {activeTab === 'stats' && (
@@ -1152,6 +1256,121 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
         </div>
       )}
 
+      {/* Tab: Kiểm duyệt cẩm nang */}
+      {activeTab === 'articles' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-blue-600" />
+                <span>Kiểm duyệt bài viết cẩm nang ({adminArticles.length})</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Xem xét, phê duyệt hoặc từ chối các bài chia sẻ kinh nghiệm thuê trọ do chủ nhà gửi lên
+              </p>
+            </div>
+
+            {/* Filter trạng thái */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setArticleStatusFilter('pending')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${
+                  articleStatusFilter === 'pending'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Chờ duyệt ({adminArticles.filter((a) => a.TrangThai === 'Chờ duyệt' || !a.TrangThai).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setArticleStatusFilter('approved')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${
+                  articleStatusFilter === 'approved'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Đã duyệt ({adminArticles.filter((a) => a.TrangThai === 'Công khai').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setArticleStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${
+                  articleStatusFilter === 'all'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tất cả ({adminArticles.length})
+              </button>
+            </div>
+          </div>
+
+          {/* Danh sách bài viết cần duyệt */}
+          <div className="divide-y divide-slate-100">
+            {adminArticles
+              .filter((item) => {
+                const isPending = item.TrangThai === 'Chờ duyệt' || !item.TrangThai;
+                if (articleStatusFilter === 'pending') return isPending;
+                if (articleStatusFilter === 'approved') return item.TrangThai === 'Công khai';
+                return true;
+              })
+              .map((article) => {
+                const isPending = article.TrangThai === 'Chờ duyệt' || !article.TrangThai;
+                return (
+                  <div key={article.Id} className="py-5 flex flex-col md:flex-row gap-5 items-start">
+                    <img
+                      src={article.HinhAnh}
+                      alt={article.TieuDe}
+                      className="w-full md:w-44 h-28 rounded-2xl object-cover shrink-0 border border-slate-200"
+                    />
+
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                          {article.Tag || 'Cẩm nang'}
+                        </span>
+                        <span className="text-xs text-slate-400">· Tác giả: <strong>{article.TacGia || 'Chủ trọ'}</strong></span>
+                        <span className="text-xs text-slate-400">· Ngày gửi: {article.NgayDang || 'Hôm nay'}</span>
+                      </div>
+
+                      <h3 className="font-bold text-sm text-slate-900">{article.TieuDe}</h3>
+                      <p className="text-xs text-slate-500 line-clamp-2">{article.MoTaNgan || article.NoiDung1}</p>
+                    </div>
+
+                    <div className="flex md:flex-col items-center gap-2 shrink-0 w-full md:w-auto">
+                      {isPending ? (
+                        <>
+                          <button
+                            onClick={() => handleApproveArticle(article.Id)}
+                            className="flex-1 md:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Duyệt bài</span>
+                          </button>
+                          <button
+                            onClick={() => handleRejectArticle(article.Id)}
+                            className="flex-1 md:flex-none px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 border border-rose-200 cursor-pointer active:scale-98"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Từ chối</span>
+                          </button>
+                        </>
+                      ) : (
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-xl">
+                          ✓ Đã duyệt
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+      
       {/* Tab 3: Quản lý tài khoản */}
       {activeTab === 'users' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
@@ -1435,7 +1654,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
           </div>
         </div>
       )}
-
+      </div>
     </div>
   );
 };

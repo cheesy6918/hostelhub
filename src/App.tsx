@@ -59,6 +59,7 @@ const MainContent: React.FC = () => {
   }, []);
 
   const isAuthPage = currentView === 'login' || currentView === 'register';
+  const isAdminPage = currentView.startsWith('admin-'); 
 
   // 2. Lưu và khôi phục ID phòng đang xem
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(() => {
@@ -301,8 +302,8 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 selection:bg-blue-600 selection:text-white relative">
-      {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký */}
-      {!isAuthPage && (
+      {/* Chỉ hiển thị thanh điều hướng Navbar khi KHÔNG PHẢI trang đăng nhập/đăng ký VÀ KHÔNG PHẢI Admin */}
+      {!isAuthPage && !isAdminPage && (
         <Navbar
           currentView={currentView}
           setCurrentView={setCurrentView}
@@ -342,8 +343,7 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {/* Chỉ hiển thị nút Trợ lý AI cho Sinh viên hoặc khách chưa đăng nhập, ẩn với Chủ trọ */}
-      {!isAuthPage && user?.VaiTro !== 'ChuTro' && (
+      {!isAuthPage && !isAdminPage && user?.VaiTro !== 'ChuTro' && (
         <ChatWidget
           onViewRoomDetail={navigateToRoomDetail}
           onNavigate={setCurrentView}
@@ -354,8 +354,8 @@ const MainContent: React.FC = () => {
         {renderView()}
       </main>
 
-      {/* Chỉ hiển thị chân trang Footer khi KHÔNG PHẢI trang đăng nhập/đăng ký VÀ KHÔNG PHẢI Chủ trọ */}
-      {!isAuthPage && user?.VaiTro !== 'ChuTro' && <Footer onSelectView={setCurrentView} />}
+      {/* Chỉ hiển thị chân trang Footer khi KHÔNG PHẢI login/register, KHÔNG PHẢI Chủ trọ VÀ KHÔNG PHẢI Admin */}
+      {!isAuthPage && !isAdminPage && user?.VaiTro !== 'ChuTro' && <Footer onSelectView={setCurrentView} />}
     </div>
   );
 };
