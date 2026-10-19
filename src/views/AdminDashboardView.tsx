@@ -820,9 +820,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       <p className="text-[11px] text-slate-400">Phân bố phòng theo trạng thái kiểm duyệt & thuê</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    Doughnut Chart
-                  </span>
+
                 </div>
 
                 <div className="relative h-64 flex items-center justify-center">
