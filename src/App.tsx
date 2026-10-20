@@ -67,7 +67,9 @@ const MainContent: React.FC = () => {
   });
 
   const [previousView, setPreviousView] = useState<string>('home');
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(() => {
+  return localStorage.getItem('hostelhub_selected_article_id') || null;
+});
   const [selectedGuideCategory, setSelectedGuideCategory] = useState<string>('Tất cả bài viết');
 
   const handleNavigateGuideCategory = (categoryName: string) => {
@@ -82,10 +84,18 @@ const MainContent: React.FC = () => {
       navigateToRoomDetail(param);
       return;
     }
-    setCurrentView(view);
+
     if (view === 'guide') {
-      setSelectedArticleId(param || null);
+      if (param) {
+        setSelectedArticleId(param);
+        localStorage.setItem('hostelhub_selected_article_id', param);
+      }
+      setCurrentView('guide');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+
+    setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -214,9 +224,14 @@ const MainContent: React.FC = () => {
       case 'guide':
         return (
           <GuideView
+            key={selectedArticleId || 'guide_list'}
             initialArticleId={selectedArticleId}
-            onClearInitialArticle={() => setSelectedArticleId(null)}
+            onClearInitialArticle={() => {
+              setSelectedArticleId(null);
+              localStorage.removeItem('hostelhub_selected_article_id');
+            }}
             initialCategory={selectedGuideCategory}
+            onBackToHome={() => setCurrentView('home')} // 👈 THÊM DÒNG NÀY
           />
         );
       case 'roommate':
@@ -224,6 +239,16 @@ const MainContent: React.FC = () => {
 
       case 'map':
         return <MapView onSelectRoomDetail={navigateToRoomDetail} />;
+
+      case 'landlord-create-room':
+        return (
+          <LandlordCreateRoomView
+            onBack={() => setCurrentView('landlord-rooms')}
+            onSuccess={() => {
+              setCurrentView('landlord-rooms');
+            }}
+          />
+        );
 
       case 'landlord-rooms':
         return (

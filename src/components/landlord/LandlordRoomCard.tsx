@@ -21,6 +21,17 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
   const isAvailable = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
   const isPending = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
 
+  // Xác nhận rõ quyền sở hữu bài đăng của Chủ trọ trước khi xóa
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const confirmed = window.confirm(
+      `[Chủ trọ] Bạn có chắc chắn muốn xóa bài đăng phòng trọ "${room.TieuDe}" của mình không?\n\nLưu ý: Thao tác này sẽ gỡ bài viết vĩnh viễn khỏi danh sách quản lý của bạn.`
+    );
+    if (confirmed) {
+      onDeleteRoom?.();
+    }
+  };
+
   return (
     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group">
       {/* Khung ảnh */}
@@ -101,17 +112,20 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={onEditRoom}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditRoom?.();
+              }}
               className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-              title="Chỉnh sửa thông tin"
+              title="Chỉnh sửa thông tin phòng"
             >
               <Edit2 className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={onDeleteRoom}
+              onClick={handleDeleteClick}
               className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-              title="Xóa tin phòng"
+              title="Xóa bài đăng của tôi"
             >
               <Trash2 className="w-4 h-4" />
             </button>

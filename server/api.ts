@@ -2631,4 +2631,156 @@ apiRouter.post('/chat', async (req: Request, res: Response) => {
   }
 });
 
+// -------------------------------------------------------------
+// 11. CẨM NANG & KINH NGHIỆM THUÊ TRỌ (LƯU CẢ TIDB & DATABASE.JSON)
+// -------------------------------------------------------------
 
+// GET /api/articles - Lấy danh sách cẩm nang
+apiRouter.get('/articles', async (req: Request, res: Response) => {
+  try {
+    const userRole = req.headers['x-user-role'];
+    let articles: any[] = [];
+
+    // 1. Thử lấy từ CSDL TiDB Cloud trước
+    try {
+      const [rows]: any = await pool.query(
+        userRole === 'Admin'
+          ? 'SELECT * FROM articles ORDER BY Id DESC'
+          : "SELECT * FROM articles WHERE TrangThai = 'Công khai' ORDER BY Id DESC"
+      );
+      if (Array.isArray(rows) && rows.length > 0) {
+        articles = rows;
+      }
+    } catch (sqlErr) {
+      console.warn('[MySQL] Chưa query được từ TiDB, chuyển sang JSON fallback:', sqlErr);
+    }
+
+    // 2. Nếu TiDB chưa có dữ liệu, lấy từ database.json
+    if (articles.length === 0) {
+      const db: any = readDb();
+      let localArticles = Array.isArray(db.articles) ? db.articles : [];
+
+      if (userRole === 'Admin') {
+        articles = localArticles;
+      } else {
+        articles = localArticles.filter((a: any) => a.TrangThai === 'Công khai');
+      }
+    }
+
+    // 3. Đảm bảo luôn lọc bỏ những bài có link ảnh hỏng/rỗng
+    articles = articles.filter((a: any) => a.HinhAnh && typeof a.HinhAnh === 'string');
+
+    res.json({
+      success: true,
+      count: articles.length,
+      data: articles,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Lỗi lấy danh sách cẩm nang',
+    });
+  }
+});
+
+// POST /api/articles - Chủ trọ đăng bài viết (Lưu đồng thời TiDB & database.json)
+apiRouter.post('/articles', async (req: Request, res: Response) => {
+  try {
+    const { TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang } = req.body;
+    const articleId = `art_${Date.now()}`;
+    const newArticle = {
+      Id: articleId,
+      TieuDe: TieuDe || 'Chưa có tiêu đề',
+      Tag: Tag || 'Kinh nghiệm thuê phòng',
+      MoTaNgan: MoTaNgan || '',
+      NoiDung: NoiDung || '',
+      TacGia: TacGia || 'Chủ trọ',
+      ThoiGianDoc: ThoiGianDoc || '5 phút đọc',
+      HinhAnh: HinhAnh || '',
+      NgayDang: NgayDang || new Date().toLocaleDateString('vi-VN'),
+      TrangThai: 'Chờ duyệt',
+    };
+
+    // 1. Lưu vào TiDB Cloud (MySQL)
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        const sql = `
+          INSERT INTO articles (Id, TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang, TrangThai)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await pool.query(sql, [
+          newArticle.Id,
+          newArticle.TieuDe,
+          newArticle.Tag,
+          newArticle.MoTaNgan,
+          newArticle.NoiDung,
+          newArticle.TacGia,
+          newArticle.ThoiGianDoc,
+          newArticle.HinhAnh,
+          newArticle.NgayDang,
+          newArticle.TrangThai,
+        ]);
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi lưu article vào TiDB:', sqlErr);
+      }
+    }
+
+    // 2. Đồng thời lưu trực tiếp vào database.json
+    try {
+      const db: any = readDb();
+      if (!db.articles) db.articles = [];
+      db.articles.unshift(newArticle);
+      writeDb(db);
+    } catch (fsErr) {
+      console.error('[JSON] Lỗi ghi bài viết vào database.json:', fsErr);
+    }
+
+    res.json({
+      success: true,
+      message: 'Đăng bài viết cẩm nang thành công! Dữ liệu đã lưu vào cả TiDB và database.json.',
+      data: newArticle,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi đăng bài viết cẩm nang' });
+  }
+});
+
+// PATCH /api/articles/:id/status - Admin duyệt hoặc từ chối bài (Cập nhật cả TiDB & database.json)
+apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { TrangThai } = req.body; // 'Công khai' | 'Từ chối'
+
+    // 1. Cập nhật trên TiDB Cloud (MySQL)
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        await pool.query('UPDATE articles SET TrangThai = ? WHERE Id = ?', [TrangThai, id]);
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi cập nhật trạng thái trên TiDB:', sqlErr);
+      }
+    }
+
+    // 2. Cập nhật trực tiếp trên database.json
+    try {
+      const db: any = readDb();
+      if (db.articles && Array.isArray(db.articles)) {
+        const item = db.articles.find((a: any) => a.Id === id);
+        if (item) {
+          item.TrangThai = TrangThai;
+          writeDb(db);
+        }
+      }
+    } catch (fsErr) {
+      console.error('[JSON] Lỗi cập nhật trạng thái trong database.json:', fsErr);
+    }
+
+    res.json({
+      success: true,
+      message: `Đã cập nhật trạng thái bài viết thành: ${TrangThai} trên cả hai hệ thống lưu trữ!`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi cập nhật trạng thái bài viết' });
+  }
+});

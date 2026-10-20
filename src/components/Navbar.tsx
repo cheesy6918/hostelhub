@@ -25,7 +25,7 @@ interface NavbarProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   onSelectDistrict?: (districtName: string) => void;
-  onSelectGuideCategory?: (category: string) => void; // 👈 Thêm dòng này để hết lỗi ở App.tsx
+  onSelectGuideCategory?: (category: string) => void;
   onOpenWallet?: () => void;
 }
 
@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setCurrentView, 
   onSelectDistrict,
   onSelectGuideCategory,
-  onOpenWallet // 👈 BẮT BUỘC NHẬN THÊM BIẾN NÀY
+  onOpenWallet
 }) => {
   const { user, logout } = useAuth();
   const { favoriteRoomIds } = useFavorites();
@@ -55,14 +55,19 @@ export const Navbar: React.FC<NavbarProps> = ({
     return <GraduationCap className="w-4 h-4 text-blue-600" />;
   };
 
+  // Hàm điều hướng chung về trang Cẩm nang tổng quan
+  const handleOpenGeneralGuide = () => {
+    onSelectGuideCategory?.('Tất cả bài viết');
+    setCurrentView('guide');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-
         {/* Nhóm bên trái: Logo & Menu điều hướng */}
         <div className="flex items-center gap-8 lg:gap-10">
-          {/* Logo HostelHub giữ nguyên màu xanh thương hiệu */}
-          {/* Logo HostelHub giữ nguyên màu xanh thương hiệu */}
+          {/* Logo HostelHub */}
           <button
             onClick={() => {
               if (user?.VaiTro === 'ChuTro') {
@@ -75,7 +80,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className="flex items-center gap-2.5 text-left focus:outline-none group cursor-pointer"
           >
-
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs transition-transform group-hover:scale-105">
               <Home className="w-5 h-5" />
             </div>
@@ -87,7 +91,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Menu chính có Dropdown khi Hover */}
-          {/* Menu chính có Dropdown khi Hover */}
           <nav className="hidden md:flex items-center gap-6 text-[13.5px] font-medium text-slate-700">
             {!user ? (
               <>
@@ -95,13 +98,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="relative group py-4">
                   <button
                     onClick={() => setCurrentView('find-rooms-public')}
-                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'find-rooms-public' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
-                      }`}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'find-rooms-public' || currentView === 'district-rooms'
+                        ? 'text-blue-600 font-bold'
+                        : 'group-hover:text-blue-600'
+                    }`}
                   >
                     <span>Tìm phòng trọ</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
                   </button>
-                  {/* Hộp menu thả xuống 2 cột */}
+
                   <div className="absolute top-full left-0 hidden group-hover:block w-[460px] bg-white rounded-2xl shadow-xl border border-slate-100 p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5 text-blue-600" />
@@ -136,14 +142,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 2. MỤC CẨM NANG (DROPDOWN KHI HOVER) */}
                 <div className="relative group py-4">
                   <button
-                    onClick={() => setCurrentView('guide')}
-                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'guide' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
-                      }`}
+                    onClick={handleOpenGeneralGuide}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'guide' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
+                    }`}
                   >
                     <span>Cẩm nang</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
                   </button>
-                  {/* Hộp menu thả xuống của Cẩm nang */}
+
                   <div className="absolute top-full left-0 hidden group-hover:block w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="space-y-1 text-xs text-slate-600">
                       {[
@@ -159,10 +166,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onSelectGuideCategory?.(item);
                             setCurrentView('guide');
                           }}
-                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${item.includes('lừa đảo')
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
+                            item.includes('lừa đảo')
                               ? 'hover:bg-rose-50 hover:text-rose-600'
                               : 'hover:bg-blue-50 hover:text-blue-600'
-                            }`}
+                          }`}
                         >
                           {item}
                         </button>
@@ -174,8 +182,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 3. MỤC TÌM Ở GHÉP */}
                 <button
                   onClick={() => setCurrentView('roommate')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'roommate' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'roommate' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Tìm ở ghép
                 </button>
@@ -183,22 +192,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 4. MỤC BẢN ĐỒ PHÒNG TRỌ */}
                 <button
                   onClick={() => setCurrentView('map')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'map' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'map' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Bản đồ phòng trọ
                 </button>
               </>
             ) : user.VaiTro === 'SinhVien' ? (
               <>
-                {/* 1. MỤC TÌM PHÒNG TRỌ SINH VIÊN (GIỐNG HỆT TRANG KHÁCH) */}
+                {/* 1. MỤC TÌM PHÒNG TRỌ SINH VIÊN */}
                 <div className="relative group py-4">
                   <button
                     onClick={() => setCurrentView('student-rooms')}
-                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'student-rooms' || currentView === 'district-rooms'
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'student-rooms' || currentView === 'district-rooms'
                         ? 'text-blue-600 font-bold'
                         : 'group-hover:text-blue-600'
-                      }`}
+                    }`}
                   >
                     <span>Tìm phòng trọ</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
@@ -235,12 +246,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
-                {/* 2. MỤC CẨM NANG (DROPDOWN Y HỆT TRANG KHÁCH) */}
+                {/* 2. MỤC CẨM NANG */}
                 <div className="relative group py-4">
                   <button
-                    onClick={() => setCurrentView('guide')}
-                    className={`flex items-center gap-1 cursor-pointer transition-colors ${currentView === 'guide' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
-                      }`}
+                    onClick={handleOpenGeneralGuide}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'guide' ? 'text-blue-600 font-bold' : 'group-hover:text-blue-600'
+                    }`}
                   >
                     <span>Cẩm nang</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
@@ -261,10 +273,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onSelectGuideCategory?.(item);
                             setCurrentView('guide');
                           }}
-                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${item.includes('lừa đảo')
+                          className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
+                            item.includes('lừa đảo')
                               ? 'hover:bg-rose-50 hover:text-rose-600'
                               : 'hover:bg-blue-50 hover:text-blue-600'
-                            }`}
+                          }`}
                         >
                           {item}
                         </button>
@@ -276,8 +289,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 3. MỤC TÌM Ở GHÉP */}
                 <button
                   onClick={() => setCurrentView('roommate')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'roommate' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'roommate' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Tìm ở ghép
                 </button>
@@ -285,8 +299,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 4. MỤC BẢN ĐỒ PHÒNG TRỌ */}
                 <button
                   onClick={() => setCurrentView('map')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'map' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'map' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Bản đồ phòng trọ
                 </button>
@@ -294,78 +309,84 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* 5. MỤC LỊCH SỬ CỦA TÔI */}
                 <button
                   onClick={() => setCurrentView('student-history')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'student-history' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'student-history' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Lịch sử của tôi
                 </button>
               </>
             ) : user.VaiTro === 'ChuTro' ? (
-            <>
-              {/* 2. Hợp đồng & Xác nhận thuê */}
-              <button
-                type="button"
-                onClick={() => setCurrentView('landlord-contracts')}
-                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
-                  currentView === 'landlord-contracts' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
-                }`}
-              >
-                Hợp đồng & Xác nhận thuê
-              </button>
+              <>
+                {/* Hợp đồng & Xác nhận thuê */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('landlord-contracts')}
+                  className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                    currentView === 'landlord-contracts' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                  }`}
+                >
+                  Hợp đồng & Xác nhận thuê
+                </button>
 
-              {/* 3. Lịch hẹn xem phòng */}
-              <button
-                type="button"
-                onClick={() => setCurrentView('landlord-appointments')}
-                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
-                  currentView === 'landlord-appointments' || currentView === 'landlord-inquiries' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
-                }`}
-              >
-                Lịch hẹn xem phòng
-              </button>
+                {/* Lịch hẹn xem phòng */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('landlord-appointments')}
+                  className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                    currentView === 'landlord-appointments' || currentView === 'landlord-inquiries'
+                      ? 'text-blue-600 font-bold'
+                      : 'text-slate-600 hover:text-blue-600'
+                  }`}
+                >
+                  Lịch hẹn xem phòng
+                </button>
 
-              {/* 4. Đơn cọc giữ phòng */}
-              <button
-                type="button"
-                onClick={() => setCurrentView('landlord-deposits')}
-                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
-                  currentView === 'landlord-deposits' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
-                }`}
-              >
-                Đơn cọc giữ phòng
-              </button>
+                {/* Đơn cọc giữ phòng */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('landlord-deposits')}
+                  className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                    currentView === 'landlord-deposits' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                  }`}
+                >
+                  Đơn cọc giữ phòng
+                </button>
 
-              {/* 5. Tin nhắn liên hệ */}
-              <button
-                type="button"
-                onClick={() => setCurrentView('landlord-messages')}
-                className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
-                  currentView === 'landlord-messages' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
-                }`}
-              >
-                Tin nhắn liên hệ
-              </button>
-            </>
-          ) : (
+                {/* Tin nhắn liên hệ */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('landlord-messages')}
+                  className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
+                    currentView === 'landlord-messages' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
+                  }`}
+                >
+                  Tin nhắn liên hệ
+                </button>
+              </>
+            ) : (
               <>
                 <button
                   onClick={() => setCurrentView('admin-dashboard')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'admin-dashboard' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'admin-dashboard' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Tổng quan
                 </button>
                 <button
                   onClick={() => setCurrentView('admin-users')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'admin-users' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'admin-users' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Người dùng
                 </button>
                 <button
                   onClick={() => setCurrentView('admin-rooms')}
-                  className={`transition-colors cursor-pointer py-1 ${currentView === 'admin-rooms' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
-                    }`}
+                  className={`transition-colors cursor-pointer py-1 ${
+                    currentView === 'admin-rooms' ? 'text-blue-600 font-bold' : 'hover:text-blue-600'
+                  }`}
                 >
                   Kiểm duyệt phòng
                 </button>
@@ -374,17 +395,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
         </div>
 
-        {/* Nhóm bên phải: Hotline & Nút hành động chuẩn giao diện mẫu */}
+        {/* Nhóm bên phải: Hotline & Nút hành động */}
         <div className="flex items-center gap-3 sm:gap-4">
           {!user ? (
             <>
-              {/* Hotline nhỏ gọn phong cách như ảnh mẫu */}
               <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-500 font-medium mr-2">
                 <span>Hotline:</span>
                 <span className="text-slate-900 font-bold tracking-tight">1900 8899</span>
               </div>
-
-              {/* Nút Đăng ký viền bo tròn hình viên thuốc (Pill shape) */}
               <button
                 onClick={() => setCurrentView('register')}
                 className="px-4 py-1.5 text-xs font-semibold text-blue-600 bg-white hover:bg-blue-50/60 border border-blue-400 rounded-full transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
@@ -392,8 +410,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <UserCircle2 className="w-3.5 h-3.5 text-blue-600" />
                 <span>Đăng ký</span>
               </button>
-
-              {/* Nút Đăng nhập viền xám nhẹ nhàng tinh tế */}
               <button
                 onClick={() => setCurrentView('login')}
                 className="px-4 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all shadow-2xs cursor-pointer whitespace-nowrap"
@@ -403,7 +419,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </>
           ) : (
             <div className="flex items-center gap-3">
-              {/* Icon Trái tim Yêu thích dành cho Sinh viên */}
+              {/* Icon Yêu thích dành cho Sinh viên */}
               {user.VaiTro === 'SinhVien' && (
                 <button
                   type="button"
@@ -412,10 +428,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     setCurrentView('student-favorites');
                   }}
                   title="Danh sách phòng yêu thích"
-                  className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${currentView === 'student-favorites'
-                    ? 'bg-rose-50 text-rose-600'
-                    : 'text-slate-500 hover:text-rose-600 hover:bg-slate-50'
-                    }`}
+                  className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                    currentView === 'student-favorites'
+                      ? 'bg-rose-50 text-rose-600'
+                      : 'text-slate-500 hover:text-rose-600 hover:bg-slate-50'
+                  }`}
                 >
                   <Heart className={`w-4 h-4 ${favoriteRoomIds.length > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500'}`} />
                   {favoriteRoomIds.length > 0 && (
@@ -451,7 +468,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               />
 
-              {/* Avatar người dùng bo tròn */}
+              {/* Avatar người dùng */}
               <button
                 onClick={() => setCurrentView('profile')}
                 className="flex items-center gap-2 p-1 pl-2 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -482,7 +499,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
         </div>
-
       </div>
     </header>
   );

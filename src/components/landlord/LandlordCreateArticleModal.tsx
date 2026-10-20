@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, BookOpen, Sparkles, ChevronDown, Upload, Image as ImageIcon } from 'lucide-react';
+import { X, BookOpen, Sparkles, ChevronDown, Upload, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface LandlordCreateArticleModalProps {
@@ -30,6 +30,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
   const [hinhAnh, setHinhAnh] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
 
   // Ref cho thẻ input file máy tính
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,49 +53,106 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
     }
   };
 
+  const resetForm = () => {
+    setTieuDe('');
+    setTag('Kinh nghiệm cho thuê');
+    setMoTaNgan('');
+    setNoiDung1('');
+    setNoiDung2('');
+    setHinhAnh('');
+    setError('');
+    setIsSuccess(false);
+  };
+
+  const handleCloseModal = () => {
+    resetForm();
+    onClose();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tieuDe.trim() || !moTaNgan.trim() || !noiDung1.trim()) {
       setError('Vui lòng nhập đầy đủ tiêu đề, mô tả ngắn và nội dung bài viết.');
       return;
     }
+
     try {
       setLoading(true);
       setError('');
+
+      // Ghép nội dung để lưu vào cột NoiDung trong TiDB
+      const fullContent = noiDung2.trim()
+        ? `${noiDung1.trim()}\n\n${noiDung2.trim()}`
+        : noiDung1.trim();
+
       const newArticle = {
-        Id: `art_${Date.now()}`,
         TieuDe: tieuDe.trim(),
-        Tag: tag,
+        Tag: tag || 'Kinh nghiệm thuê phòng',
         MoTaNgan: moTaNgan.trim(),
+        NoiDung: fullContent,
         TacGia: user?.HoTen || 'Chủ trọ HostelHub',
         ThoiGianDoc: '4 phút đọc',
         NgayDang: new Date().toLocaleDateString('vi-VN'),
         HinhAnh:
           hinhAnh.trim() ||
           'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80',
-        NoiDung1: noiDung1.trim(),
-        NoiDung2: noiDung2.trim(),
       };
 
-      // Gửi lên backend API (nếu có route /api/articles)
-      await fetch('/api/articles', {
+      const res = await fetch('/api/articles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(newArticle),
-      }).catch(() => {});
+      });
 
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Lỗi khi lưu bài viết vào máy chủ');
+      }
+
+      // Kích hoạt giao diện thông báo đăng bài thành công
+      setIsSuccess(true);
       onSuccess();
-      onClose();
-    } catch {
-      onSuccess();
-      onClose();
+    } catch (err: any) {
+      console.error('Lỗi đăng bài viết:', err);
+      setError(err.message || 'Không thể đăng bài viết, vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Màn hình thông báo phản hồi sau khi gửi bài thành công
+  if (isSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-4 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-bold text-slate-900">Đăng bài viết thành công!</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Bài viết của bạn đã được ghi nhận và đang ở trạng thái{' '}
+              <span className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
+                Chờ duyệt
+              </span>
+              . Quản trị viên hệ thống sẽ kiểm duyệt trước khi bài viết được công khai trên nền tảng.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md active:scale-98"
+          >
+            Đã hiểu & Đóng
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
@@ -107,7 +165,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseModal}
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
@@ -138,7 +196,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
 
           {/* Hàng 2 cột: Chuyên mục & Ảnh bìa */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* 1. Chuyên mục (Đã chỉnh mũi tên thoáng đẹp, không bị dính sát viền) */}
+            {/* 1. Chuyên mục */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Chuyên mục <span className="text-rose-500">*</span>
@@ -159,7 +217,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
               </div>
             </div>
 
-            {/* 2. Ảnh bìa (Hỗ trợ Tải từ máy tính HOẶC Dán link URL) */}
+            {/* 2. Ảnh bìa */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-bold text-slate-700">Ảnh bìa bài viết</label>
@@ -173,7 +231,6 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
                 </button>
               </div>
 
-              {/* Input file ẩn */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -256,7 +313,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseModal}
               className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold cursor-pointer hover:bg-slate-50 transition-colors"
             >
               Hủy

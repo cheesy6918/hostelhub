@@ -345,9 +345,25 @@ const AVAILABLE_AMENITIES_LIST = [
       if (dataContracts.success) setContracts(dataContracts.data || []);
       if (dataCandidates.success) setCandidates(dataCandidates.data || []);
 
-     // Nạp bài viết từ articlesData
-      if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
-        setArticles(INITIAL_ARTICLES);
+     // Lấy danh sách cẩm nang từ API CSDL (ưu tiên bài viết thực tế)
+      try {
+        const resArticles = await fetch('/api/articles', {
+          headers: {
+            'x-user-role': 'ChuTro',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const dataArticles = await resArticles.json();
+        if (dataArticles.success && Array.isArray(dataArticles.data) && dataArticles.data.length > 0) {
+          setArticles(dataArticles.data);
+        } else if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
+          setArticles(INITIAL_ARTICLES);
+        }
+      } catch (artErr) {
+        console.error('Lỗi tải danh sách bài viết cho Chủ trọ:', artErr);
+        if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
+          setArticles(INITIAL_ARTICLES);
+        }
       }
 
     } catch (error) {
@@ -2311,14 +2327,16 @@ const AVAILABLE_AMENITIES_LIST = [
       />
 
       {/* Modal Đăng cẩm nang mới */}
-      <LandlordCreateArticleModal
-        isOpen={showArticleModal}
-        onClose={() => setShowArticleModal(false)}
-        onSuccess={() => {
-          setActionMessage('Đăng bài viết cẩm nang thành công!');
-          setTimeout(() => setActionMessage(''), 3500);
-        }}
-      />
+          <LandlordCreateArticleModal
+            isOpen={showArticleModal}
+            onClose={() => setShowArticleModal(false)}
+            onSuccess={() => {
+              setActionMessage('Đăng bài viết cẩm nang thành công! Bài viết đang chờ Quản trị viên duyệt.');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setTimeout(() => setActionMessage(''), 4500);
+              fetchLandlordData(); // 👈 Gọi lại hàm fetch để cập nhật ngay bài mới vào danh sách
+            }}
+          />
     </div>
   );
 };

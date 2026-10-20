@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { GuideDetailView, Article } from './GuideDetailView';
 import { ARTICLES_DATA } from '../utils/articlesData';
 
@@ -14,23 +14,47 @@ const CATEGORIES = [
 interface GuideViewProps {
   initialArticleId?: string | null;
   onClearInitialArticle?: () => void;
-  initialCategory?: string; // 👈 Thêm để nhận từ Navbar
+  initialCategory?: string;
+  onBackToHome?: () => void;
 }
 
 export const GuideView: React.FC<GuideViewProps> = ({
   initialArticleId,
   onClearInitialArticle,
-  initialCategory
+  initialCategory,
+  onBackToHome,
 }) => {
-  // Tự động tìm và mở bài viết nếu được truyền ID từ trang chủ vào
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(() => {
-    if (initialArticleId) {
-      return ARTICLES_DATA.find((a) => a.Id === initialArticleId) || null;
-    }
-    return null;
-  });
+  // 1. Quản lý danh sách bài viết lấy động từ CSDL qua API (Khởi tạo mặc định bằng ARTICLES_DATA)
+  const [articlesList, setArticlesList] = useState<Article[]>(ARTICLES_DATA);
 
-  // Khởi tạo danh mục theo prop truyền vào từ Navbar (mặc định là 'Tất cả bài viết')
+  // Tải danh sách bài viết công khai từ API CSDL
+  useEffect(() => {
+    fetch('/api/articles')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setArticlesList(data.data);
+        }
+      })
+      .catch((err) => {
+        console.error('Lỗi tải bài viết cẩm nang từ API:', err);
+      });
+  }, []);
+
+  // Hàm tìm kiếm bài viết theo ID dựa trên danh sách articlesList động
+  const findArticleById = (id?: string | null): Article | null => {
+    if (!id) return null;
+    return (
+      articlesList.find((a: any) => String(a.Id ?? a.id ?? '') === String(id)) || null
+    );
+  };
+
+  // Khởi tạo bài viết chi tiết nếu có initialArticleId truyền vào
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(() =>
+    findArticleById(initialArticleId)
+  );
+
+  // Khởi tạo danh mục hiển thị
   const [selectedCategory, setSelectedCategory] = useState<string>(
     initialCategory && initialCategory !== 'Tất cả' ? initialCategory : 'Tất cả bài viết'
   );
@@ -38,21 +62,34 @@ export const GuideView: React.FC<GuideViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 9;
 
-  // Tự động cập nhật danh mục & reset trang khi bấm chọn mục khác trên Navbar
-  React.useEffect(() => {
+  // Luôn đồng bộ và mở bài viết khi initialArticleId hoặc articlesList thay đổi
+  useEffect(() => {
+    if (initialArticleId) {
+      const article = findArticleById(initialArticleId);
+      if (article) {
+        setSelectedArticle(article);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [initialArticleId, articlesList]);
+
+  // Cập nhật danh mục khi người dùng đổi danh mục từ bên ngoài Navbar
+  useEffect(() => {
     if (initialCategory) {
       setSelectedCategory(initialCategory === 'Tất cả' ? 'Tất cả bài viết' : initialCategory);
       setCurrentPage(1);
-      setSelectedArticle(null); // Đóng bài chi tiết nếu đang mở để hiển thị danh sách
+      if (!initialArticleId) {
+        setSelectedArticle(null);
+      }
     }
-  }, [initialCategory]);
+  }, [initialCategory, initialArticleId]);
 
-  // Lọc bài viết chính xác 100% theo Tag đã chuẩn hóa
-  const filteredArticles = selectedCategory === 'Tất cả bài viết'
-    ? ARTICLES_DATA
-    : ARTICLES_DATA.filter((a) => a.Tag === selectedCategory);
+  // Lọc bài viết theo danh mục từ danh sách articlesList
+  const filteredArticles =
+    selectedCategory === 'Tất cả bài viết'
+      ? articlesList
+      : articlesList.filter((a) => a.Tag === selectedCategory);
 
-  // 2. Rồi mới tính totalPages và paginatedArticles dựa trên filteredArticles
   const totalPages = Math.ceil(filteredArticles.length / ITEMS_PER_PAGE) || 1;
 
   const paginatedArticles = filteredArticles.slice(
@@ -60,25 +97,25 @@ export const GuideView: React.FC<GuideViewProps> = ({
     currentPage * ITEMS_PER_PAGE
   );
 
-  // 3. Hàm đổi danh mục
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
     setCurrentPage(1);
+    setSelectedArticle(null);
   };
 
-  // Nút quay lại trang danh sách cẩm nang
+  // Quay lại danh sách tổng quan
   const handleBack = () => {
     setSelectedArticle(null);
     if (onClearInitialArticle) onClearInitialArticle();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Nếu người dùng chọn bài viết -> Chuyển sang Component GuideDetailView riêng biệt
+  // Khi có bài viết được chọn -> Chuyển sang giao diện đọc bài chi tiết
   if (selectedArticle) {
     return (
       <GuideDetailView
         article={selectedArticle}
-        allArticles={ARTICLES_DATA}
+        allArticles={articlesList}
         onBack={handleBack}
         onSelectArticle={(article) => {
           setSelectedArticle(article);
@@ -90,7 +127,19 @@ export const GuideView: React.FC<GuideViewProps> = ({
 
   // Danh sách bài viết dạng lưới 3 cột (Blog Main Page)
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Nút Quay lại trang chủ */}
+      {onBackToHome && (
+        <button
+          type="button"
+          onClick={onBackToHome}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer shadow-2xs group"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+          <span>Quay lại trang chủ</span>
+        </button>
+      )}
+
       <div className="text-center max-w-2xl mx-auto space-y-3">
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
           Cẩm nang & Kinh nghiệm thuê trọ
@@ -100,7 +149,7 @@ export const GuideView: React.FC<GuideViewProps> = ({
         </p>
       </div>
 
-      {/* Thanh tiêu đề và bộ lọc danh mục tinh gọn */}
+      {/* Thanh tiêu đề và bộ lọc danh mục */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-200/80">
         <div className="flex items-center gap-2">
           <span className="text-base font-extrabold text-slate-900 tracking-tight">
@@ -111,27 +160,29 @@ export const GuideView: React.FC<GuideViewProps> = ({
           </span>
         </div>
 
-        {/* Dropdown danh mục bên phải */}
+        {/* Dropdown chọn danh mục */}
         <div className="relative shrink-0">
           <select
             value={selectedCategory}
             onChange={(e) => handleCategoryChange(e.target.value)}
-            className="appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2 pr-9 text-xs font-semibold text-slate-700 hover:border-slate-300 focus:outline-none cursor-pointer shadow-xs"
+            className="appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2 pr-9 text-xs font-semibold text-slate-700 hover:border-slate-300 focus:outline-hidden cursor-pointer shadow-xs"
           >
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
       </div>
 
-      {/* Danh sách bài viết hoặc thông báo trống */}
+      {/* Danh sách bài viết */}
       {filteredArticles.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {paginatedArticles.map((article) => (
+          {paginatedArticles.map((article: any) => (
             <div
-              key={article.Id}
+              key={article.Id || article.id}
               onClick={() => {
                 setSelectedArticle(article);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -184,9 +235,8 @@ export const GuideView: React.FC<GuideViewProps> = ({
         </div>
       )}
 
-      {/* Phân trang động hoạt động thực tế */}
+      {/* Phân trang */}
       <div className="pt-6 flex items-center justify-center gap-2">
-        {/* Nút lùi về trang trước */}
         <button
           type="button"
           disabled={currentPage === 1}
@@ -194,15 +244,15 @@ export const GuideView: React.FC<GuideViewProps> = ({
             setCurrentPage((prev) => Math.max(1, prev - 1));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${currentPage === 1
+          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${
+            currentPage === 1
               ? 'opacity-30 cursor-not-allowed text-slate-300'
               : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
-            }`}
+          }`}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Các số trang 1, 2, 3... */}
         {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
           <button
             key={pageNum}
@@ -211,16 +261,16 @@ export const GuideView: React.FC<GuideViewProps> = ({
               setCurrentPage(pageNum);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${currentPage === pageNum
+            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              currentPage === pageNum
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'hover:bg-slate-100 text-slate-600 border border-transparent'
-              }`}
+            }`}
           >
             {pageNum}
           </button>
         ))}
 
-        {/* Nút sang trang sau */}
         <button
           type="button"
           disabled={currentPage === totalPages}
@@ -228,10 +278,11 @@ export const GuideView: React.FC<GuideViewProps> = ({
             setCurrentPage((prev) => Math.min(totalPages, prev + 1));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${currentPage === totalPages
+          className={`w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all ${
+            currentPage === totalPages
               ? 'opacity-30 cursor-not-allowed text-slate-300'
               : 'hover:bg-slate-100 text-slate-600 cursor-pointer'
-            }`}
+          }`}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

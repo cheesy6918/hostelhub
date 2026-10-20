@@ -106,10 +106,34 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
       if (dataUsers.success) setUsers(dataUsers.data || []);
       if (dataRooms.success) setRooms(dataRooms.data || []);
 
-      // 👉 Nạp danh sách cẩm nang
-      if (ARTICLES_DATA && Array.isArray(ARTICLES_DATA)) {
-        setAdminArticles(ARTICLES_DATA);
+    // Lấy danh sách cẩm nang từ Database API
+      try {
+        const resArticles = await fetch('/api/articles', {
+          headers: {
+            'x-user-role': 'Admin',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const dataArticles = await resArticles.json();
+
+        // Ưu tiên nạp dữ liệu từ Database TiDB
+        if (dataArticles.success && Array.isArray(dataArticles.data) && dataArticles.data.length > 0) {
+          setAdminArticles(dataArticles.data);
+        } else {
+          // Lọc bỏ các bài viết bị lỗi link ảnh trong ARTICLES_DATA dự phòng
+          const cleanArticles = (ARTICLES_DATA || []).filter(
+            (item: any) => item.HinhAnh && item.HinhAnh.startsWith('http')
+          );
+          setAdminArticles(cleanArticles);
+        }
+      } catch (err) {
+        console.error('Lỗi tải bài viết cho Admin:', err);
+        const cleanArticles = (ARTICLES_DATA || []).filter(
+          (item: any) => item.HinhAnh && item.HinhAnh.startsWith('http')
+        );
+        setAdminArticles(cleanArticles);
       }
+
     } catch {
       // ignore
     } finally {
@@ -117,21 +141,52 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     }
   }; // 👈 ĐÓNG HÀM fetchAdminData TẠI ĐÂY
 
-  // 👇 ĐẶT 2 HÀM XỬ LÝ DUYỆT / TỪ CHỐI Ở BÊN NGOÀI:
-  const handleApproveArticle = (articleId: string) => {
-    setAdminArticles((prev) =>
-      prev.map((a) => (a.Id === articleId ? { ...a, TrangThai: 'Công khai' } : a))
-    );
-    setActionNotice('Đã duyệt và công khai bài viết cẩm nang thành công!');
-    setTimeout(() => setActionNotice(''), 3500);
+  // Admin duyệt bài viết -> Chuyển sang 'Công khai'
+  const handleApproveArticle = async (articleId: string | number) => {
+    try {
+      const res = await fetch(`/api/articles/${articleId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ TrangThai: 'Công khai' }),
+      });
+
+      if (res.ok) {
+        setAdminArticles((prev) =>
+          prev.map((a: any) => (String(a.Id) === String(articleId) ? { ...a, TrangThai: 'Công khai' } : a))
+        );
+        setActionNotice('Đã phê duyệt và công khai bài viết cẩm nang thành công!');
+        setTimeout(() => setActionNotice(''), 4000);
+      }
+    } catch (err) {
+      console.error('Lỗi duyệt bài viết:', err);
+    }
   };
 
-  const handleRejectArticle = (articleId: string) => {
-    setAdminArticles((prev) =>
-      prev.map((a) => (a.Id === articleId ? { ...a, TrangThai: 'Từ chối' } : a))
-    );
-    setActionNotice('Đã từ chối bài viết cẩm nang.');
-    setTimeout(() => setActionNotice(''), 3500);
+  // Admin từ chối bài viết -> Chuyển sang 'Từ chối'
+  const handleRejectArticle = async (articleId: string | number) => {
+    try {
+      const res = await fetch(`/api/articles/${articleId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ TrangThai: 'Từ chối' }),
+      });
+
+      if (res.ok) {
+        setAdminArticles((prev) =>
+          prev.map((a: any) => (String(a.Id) === String(articleId) ? { ...a, TrangThai: 'Từ chối' } : a))
+        );
+        setActionNotice('Đã từ chối bài viết cẩm nang.');
+        setTimeout(() => setActionNotice(''), 4000);
+      }
+    } catch (err) {
+      console.error('Lỗi từ chối bài viết:', err);
+    }
   };
 
   // Tự động gọi lại API fetch danh sách phòng khi Admin chuyển tab hoặc khi token thay đổi
@@ -475,16 +530,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     }
   };
 
-  // Xóa phòng trọ vi phạm
+  // Gỡ bỏ bài đăng vi phạm chính sách
   const handleDeleteRoom = async (roomId: string, title: string) => {
-    if (!confirm(`Bạn có chắc muốn xóa phòng trọ "${title}" khỏi hệ thống?`)) return;
+    if (!confirm(`[Quản trị viên] Bạn có chắc muốn gỡ bỏ bài đăng "${title}" do vi phạm chính sách nền tảng không?`)) return;
     try {
       const res = await fetch(`/api/rooms/${roomId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setActionNotice(`Đã gỡ bỏ phòng trọ "${title}" khỏi hệ thống.`);
+        setActionNotice(`Đã gỡ bỏ phòng trọ vi phạm "${title}" khỏi hệ thống thành công.`);
         setTimeout(() => setActionNotice(''), 3500);
         fetchAdminData();
       }
@@ -533,6 +588,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800">
+
+      {/* Thông báo thao tác Admin (Duyệt / Từ chối) */}
+      {actionNotice && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <span className="font-bold text-sm">✓ {actionNotice}</span>
+        </div>
+      )}
+
       {/* ================= CỘT SIDEBAR BÊN TRÁI (GIỐNG ẢNH 2) ================= */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 fixed inset-y-0 left-0 z-30 shadow-xs">
         <div>
@@ -1511,7 +1574,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                   <th className="py-3 px-4 font-semibold">Giá thuê / Diện tích</th>
                   <th className="py-3 px-4 font-semibold">Địa chỉ</th>
                   <th className="py-3 px-4 font-semibold">Trạng thái</th>
-                  <th className="py-3 px-4 font-semibold text-right">Xóa bài vi phạm</th>
+                  <th className="py-3 px-4 font-semibold text-right">Xử lý vi phạm</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1552,11 +1615,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
+                        type="button"
                         onClick={() => handleDeleteRoom(r.Id, r.TieuDe)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        title="Xóa phòng này khỏi hệ thống"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all cursor-pointer active:scale-95"
+                        title="Gỡ bỏ bài đăng vi phạm quy chuẩn khỏi hệ thống"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Gỡ bài vi phạm</span>
                       </button>
                     </td>
                   </tr>
