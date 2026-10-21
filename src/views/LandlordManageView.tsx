@@ -94,6 +94,123 @@ const AVAILABLE_AMENITIES_LIST = [
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showArticleModal, setShowArticleModal] = useState(false);
 
+  // --- State xem trước & chỉnh sửa cẩm nang của Chủ trọ ---
+  const [previewArticle, setPreviewArticle] = useState<any | null>(null);
+  const [showEditArticleModal, setShowEditArticleModal] = useState(false);
+  const [editingArticle, setEditingArticle] = useState<any | null>(null);
+
+  const [editArticleTitle, setEditArticleTitle] = useState('');
+  const [editArticleTag, setEditArticleTag] = useState('Kinh nghiệm thuê phòng');
+  const [editArticleSummary, setEditArticleSummary] = useState('');
+  const [editArticleContent, setEditArticleContent] = useState('');
+  const [editArticleImage, setEditArticleImage] = useState('');
+  const [submittingEditArticle, setSubmittingEditArticle] = useState(false);
+
+  const handleOpenEditArticle = (item: any) => {
+    setEditingArticle(item);
+    setEditArticleTitle(item.TieuDe || item.title || '');
+    setEditArticleTag(item.Tag || item.ChuyenMuc || item.category || 'Kinh nghiệm thuê phòng');
+    setEditArticleSummary(item.MoTaNgan || item.TomTat || item.NoiDung1 || '');
+    setEditArticleContent(item.NoiDung || item.content || item.NoiDung1 || '');
+    setEditArticleImage(item.HinhAnh || item.image || '');
+    setShowEditArticleModal(true);
+  };
+
+  // Xử lý khi chủ trọ chọn tệp ảnh từ máy tính
+  const handleUploadArticleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chỉ chọn tệp định dạng hình ảnh (PNG, JPG, JPEG, WEBP)!');
+      return;
+    }
+
+    // Đọc file thành base64 data URL để lưu và hiển thị trực tiếp
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setEditArticleImage(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveEditArticle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingArticle) return;
+    try {
+      setSubmittingEditArticle(true);
+      const res = await fetch(`/api/articles/${editingArticle.Id || editingArticle.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          TieuDe: editArticleTitle.trim(),
+          Tag: editArticleTag,
+          MoTaNgan: editArticleSummary.trim(),
+          NoiDung: editArticleContent.trim(),
+          HinhAnh: editArticleImage.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage('Cập nhật bài viết cẩm nang thành công!');
+        setShowEditArticleModal(false);
+        fetchLandlordData();
+        setTimeout(() => setActionMessage(''), 4000);
+      } else {
+        setArticles((prev) =>
+          prev.map((a) =>
+            (a.Id || a.id) === (editingArticle.Id || editingArticle.id)
+              ? {
+                  ...a,
+                  TieuDe: editArticleTitle.trim(),
+                  Tag: editArticleTag,
+                  MoTaNgan: editArticleSummary.trim(),
+                  NoiDung: editArticleContent.trim(),
+                  HinhAnh: editArticleImage.trim(),
+                }
+              : a
+          )
+        );
+        setActionMessage('Cập nhật bài viết cẩm nang thành công!');
+        setShowEditArticleModal(false);
+        setTimeout(() => setActionMessage(''), 4000);
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ khi cập nhật cẩm nang.');
+    } finally {
+      setSubmittingEditArticle(false);
+    }
+  };
+
+  const handleDeleteArticle = async (item: any) => {
+    const articleId = item.Id || item.id;
+    const title = item.TieuDe || item.title;
+    if (!window.confirm(`[Chủ trọ] Bạn có chắc chắn muốn xóa bài viết cẩm nang:\n"${title}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/articles/${articleId}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      });
+      if (res.ok) {
+        setArticles((prev) => prev.filter((a) => (a.Id || a.id) !== articleId));
+        setActionMessage(`Đã xóa bài viết "${title}" thành công.`);
+        setTimeout(() => setActionMessage(''), 3500);
+      } else {
+        setArticles((prev) => prev.filter((a) => (a.Id || a.id) !== articleId));
+        setActionMessage(`Đã gỡ bài viết "${title}".`);
+        setTimeout(() => setActionMessage(''), 3500);
+      }
+    } catch {
+      setArticles((prev) => prev.filter((a) => (a.Id || a.id) !== articleId));
+    }
+  };
+
   // Các biến tính toán doanh thu & cọc:
   const totalDepositReceived = deposits
     .filter((d) => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận')
@@ -1163,7 +1280,7 @@ const AVAILABLE_AMENITIES_LIST = [
                   onChange={(e) => setArticleSortDate(e.target.value as 'newest' | 'oldest')}
                   className="w-full px-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-700 cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs appearance-none"
                 >
-                  <option value="newest">Mới đăng nhất</option>
+                  <option value="newest">Mới đăng</option>
                   <option value="oldest">Cũ nhất</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1214,33 +1331,87 @@ const AVAILABLE_AMENITIES_LIST = [
                 {currentArticles.map((item: any) => (
                   <div
                     key={item.Id || item.id}
-                    className="border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-all flex flex-col bg-white group"
+                    className="border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-all flex flex-col bg-white group"
                   >
-                    {item.HinhAnh && (
-                      <div className="aspect-16/10 overflow-hidden bg-slate-100">
+                    {/* Phần ảnh bìa - Bấm vào mở xem trước */}
+                    <div 
+                      onClick={() => setPreviewArticle(item)}
+                      className="aspect-16/10 overflow-hidden bg-slate-100 relative cursor-pointer"
+                    >
+                      {item.HinhAnh ? (
                         <img
                           src={item.HinhAnh}
                           alt={item.TieuDe}
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80';
+                          }}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                      </div>
-                    )}
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                          <BookOpen className="w-10 h-10" />
+                        </div>
+                      )}
+
+                      <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600/90 text-white backdrop-blur-xs shadow-xs">
+                        {item.TrangThai === 'Chờ duyệt' ? '⏳ Chờ duyệt' : '✓ Đã xuất bản'}
+                      </span>
+                    </div>
+
+                    {/* Nội dung thông tin bài viết */}
+                    <div className="p-4.5 flex-1 flex flex-col justify-between space-y-3">
                       <div>
-                        <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                        <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-lg inline-block mb-1.5">
                           {item.Tag || item.ChuyenMuc || 'Kinh nghiệm thuê phòng'}
                         </span>
-                        <h3 className="font-bold text-sm text-slate-900 mt-2 line-clamp-2">
+                        <h3 
+                          onClick={() => setPreviewArticle(item)}
+                          className="font-bold text-sm text-slate-900 line-clamp-2 hover:text-blue-600 cursor-pointer transition-colors leading-snug"
+                        >
                           {item.TieuDe}
                         </h3>
-                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                          {item.MoTaNgan || item.NoiDung1}
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                          {item.MoTaNgan || item.NoiDung1 || item.NoiDung}
                         </p>
                       </div>
 
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>{item.NgayDang || 'Mới đăng'}</span>
-                        <span className="text-emerald-600 font-semibold">✓ Đã xuất bản</span>
+                      {/* Thanh công cụ: Xem bài, Sửa và Xóa đồng bộ với Thẻ phòng */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewArticle(item)}
+                          className="text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Xem bài</span>
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditArticle(item);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            title="Chỉnh sửa bài viết"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteArticle(item);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Xóa bài viết"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2337,6 +2508,215 @@ const AVAILABLE_AMENITIES_LIST = [
               fetchLandlordData(); // 👈 Gọi lại hàm fetch để cập nhật ngay bài mới vào danh sách
             }}
           />
+
+          {/* Modal Xem Trước Bài Viết Cẩm Nang */}
+      {previewArticle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-blue-600">
+                <BookOpen className="w-5 h-5" />
+                <h3 className="font-bold text-slate-900 text-base">Xem trước bài viết cẩm nang</h3>
+              </div>
+              <button
+                onClick={() => setPreviewArticle(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {previewArticle.HinhAnh && (
+                <div className="aspect-16/9 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+                  <img
+                    src={previewArticle.HinhAnh}
+                    alt={previewArticle.TieuDe}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                  {previewArticle.Tag || previewArticle.ChuyenMuc || 'Kinh nghiệm thuê phòng'}
+                </span>
+                <span className="text-xs text-slate-400">
+                  Ngày đăng: {previewArticle.NgayDang || 'Mới cập nhật'}
+                </span>
+              </div>
+              <h1 className="text-xl font-extrabold text-slate-900 leading-snug">
+                {previewArticle.TieuDe}
+              </h1>
+              {previewArticle.MoTaNgan && (
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-700 leading-relaxed italic">
+                  "{previewArticle.MoTaNgan}"
+                </div>
+              )}
+              <div className="text-xs text-slate-600 leading-relaxed space-y-2 whitespace-pre-line">
+                {previewArticle.NoiDung || previewArticle.NoiDung1 || 'Bài viết chưa có nội dung chi tiết.'}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPreviewArticle(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = previewArticle;
+                  setPreviewArticle(null);
+                  handleOpenEditArticle(target);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Chỉnh sửa bài này</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chỉnh Sửa Bài Viết Cẩm Nang */}
+      {showEditArticleModal && editingArticle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-indigo-600">
+                <Edit2 className="w-5 h-5" />
+                <h3 className="font-bold text-slate-900 text-base">Chỉnh sửa bài viết cẩm nang</h3>
+              </div>
+              <button
+                onClick={() => setShowEditArticleModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditArticle} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tiêu đề bài viết *</label>
+                <input
+                  type="text"
+                  required
+                  value={editArticleTitle}
+                  onChange={(e) => setEditArticleTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Chuyên mục bài viết</label>
+                <select
+                  value={editArticleTag}
+                  onChange={(e) => setEditArticleTag(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                >
+                  <option value="Kinh nghiệm thuê phòng">Kinh nghiệm thuê phòng</option>
+                  <option value="Kinh nghiệm cho thuê">Kinh nghiệm cho thuê</option>
+                  <option value="Cảnh báo lừa đảo đặt cọc">Cảnh báo lừa đảo đặt cọc</option>
+                  <option value="Mẹo tiết kiệm & Decor phòng">Mẹo tiết kiệm & Decor phòng</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Hình ảnh đại diện bài viết</label>
+                
+                {/* Khung tải tệp lên từ máy tính */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
+                  <label className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs shrink-0">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Tải ảnh từ máy tính</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadArticleImage}
+                      className="hidden"
+                    />
+                  </label>
+                  <span className="text-[11px] text-slate-400 self-center hidden sm:inline">hoặc nhập link URL:</span>
+                  <input
+                    type="url"
+                    value={editArticleImage}
+                    onChange={(e) => setEditArticleImage(e.target.value)}
+                    placeholder="Dán đường dẫn ảnh (https://...)"
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                {/* Khung xem trước ảnh đại diện */}
+                {editArticleImage && (
+                  <div className="relative aspect-16/9 max-h-36 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 group mt-2">
+                    <img
+                      src={editArticleImage}
+                      alt="Xem trước ảnh"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.onerror = null;
+                        target.src = 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80';
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setEditArticleImage('')}
+                        className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Xóa ảnh này</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Mô tả ngắn gọn (Tóm tắt)</label>
+                <textarea
+                  rows={2}
+                  value={editArticleSummary}
+                  onChange={(e) => setEditArticleSummary(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nội dung bài viết chi tiết</label>
+                <textarea
+                  rows={6}
+                  value={editArticleContent}
+                  onChange={(e) => setEditArticleContent(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditArticleModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEditArticle}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {submittingEditArticle ? 'Đang lưu...' : 'Lưu bài viết'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

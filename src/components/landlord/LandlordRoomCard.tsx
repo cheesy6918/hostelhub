@@ -1,6 +1,6 @@
 import React from 'react';
 import { Room } from '../../types';
-import { MapPin, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { MapPin, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
 
 interface LandlordRoomCardProps {
   room: Room;
@@ -17,9 +17,23 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
   onToggleStatus,
   onDeleteRoom,
 }) => {
-  const rawStatus = (room.TrangThai || '').toLowerCase();
-  const isAvailable = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
-  const isPending = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
+  const rawStatus = (room.TrangThai || '').toLowerCase().trim();
+  
+  // Nhận diện Còn phòng bao gồm cả "Công khai" và "Còn trống"
+  const isAvailable =
+    rawStatus.includes('còn phòng') ||
+    rawStatus.includes('controng') ||
+    rawStatus.includes('công khai') ||
+    rawStatus.includes('congkhai');
+
+  const isPending =
+    rawStatus.includes('chờ duyệt') ||
+    rawStatus.includes('choduyet') ||
+    rawStatus.includes('pending');
+
+  const isDeposit =
+    rawStatus.includes('đã cọc') ||
+    rawStatus.includes('dacoc');
 
   // Xác nhận rõ quyền sở hữu bài đăng của Chủ trọ trước khi xóa
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -45,19 +59,21 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Nút 1 chạm đổi trạng thái nhanh Còn / Chờ duyệt / Hết phòng */}
+        {/* Nút 1 chạm đổi trạng thái nhanh Còn / Chờ duyệt / Đã cọc / Hết phòng */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggleStatus?.();
           }}
-          title="Bấm để chuyển nhanh trạng thái phòng"
+          title="Bấm để chuyển nhanh giữa Còn phòng và Hết phòng"
           className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
             isAvailable
               ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
               : isPending
               ? 'bg-amber-500 hover:bg-amber-600 text-white'
+              : isDeposit
+              ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-slate-700 hover:bg-slate-800 text-white'
           }`}
         >
@@ -70,6 +86,11 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             <>
               <Clock className="w-3.5 h-3.5" />
               <span>Chờ duyệt</span>
+            </>
+          ) : isDeposit ? (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Đã cọc</span>
             </>
           ) : (
             <>
@@ -109,7 +130,22 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             <Eye className="w-3.5 h-3.5" />
             <span>Xem phòng</span>
           </button>
+
           <div className="flex items-center gap-1">
+            {/* Nút đổi trạng thái phòng */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleStatus?.();
+              }}
+              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+              title={isAvailable ? 'Chuyển sang Hết phòng' : 'Chuyển sang Còn phòng'}
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            {/* Nút sửa thông tin */}
             <button
               type="button"
               onClick={(e) => {
@@ -121,6 +157,8 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             >
               <Edit2 className="w-4 h-4" />
             </button>
+
+            {/* Nút xóa bài đăng */}
             <button
               type="button"
               onClick={handleDeleteClick}

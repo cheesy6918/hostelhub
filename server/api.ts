@@ -2262,20 +2262,20 @@ apiRouter.put('/admin/rooms/:id/moderate', requireAuth, async (req: Request, res
     const isConn = await isMySqlConnected();
 
     if (action === 'approve') {
-      room.TrangThai = 'Công khai';
+      room.TrangThai = 'Còn phòng';
       room.LyDoTuChoi = undefined;
 
       if (isConn) {
         try {
           await pool.execute(
             'UPDATE rooms SET TrangThai = ?, LyDoTuChoi = NULL WHERE Id = ?',
-            ['Công khai', room.Id]
+            ['Còn phòng', room.Id]
           );
         } catch (err: any) {
           if (err.code === 'ER_BAD_FIELD_ERROR') {
             await pool.execute(
               'UPDATE rooms SET trang_thai = ?, ly_do_tu_choi = NULL WHERE id = ?',
-              ['Công khai', room.Id]
+              ['Còn phòng', room.Id]
             );
           }
         }
