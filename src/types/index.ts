@@ -8,13 +8,12 @@ export interface User {
   VaiTro: VaiTro;
   soDuVi: number;
   NgayTao: string;
-  SoDuVi?: number; // 👈 Thêm dòng này để hết lỗi ở cả 3 file
-  [key: string]: any; // (Tùy chọn: thêm dòng này để linh hoạt nhận thêm các thuộc tính khác)
+  SoDuVi?: number;
+  [key: string]: any;
   TrangThai: 'HoatDong' | 'BiKhoa';
 }
 
 export type TrangThaiPhong = 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'ChoDuyet' | 'Chờ chủ trọ xác nhận cọc' | 'Đã cọc' | 'Từ chối';
-
 export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy';
 export type TrangThaiDatCoc = 'Chờ xác nhận' | 'Đã tiếp nhận thành công' | 'Đã xác nhận' | 'Đã hủy';
 
@@ -112,18 +111,19 @@ export interface Room {
   Id: string;
   TieuDe: string;
   DiaChi: string;
+  DiaChiChiTiet?: string;
   QuanHuyen: string;
   GiaThue: number; // VNĐ / tháng
-  GiaDien: string; // VD: "3.800 đ/kWh"
-  GiaNuoc: string; // VD: "30.000 đ/khối" hoặc "100.000 đ/người/tháng"
-  TienIch: string[]; // Mảng: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', ...]
-  TrangThai: TrangThaiPhong; // 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'Đã cọc' | 'Từ chối'
+  GiaDien: number | string; // Đã chuẩn hóa hỗ trợ cả number (3800) và string
+  GiaNuoc: number | string; // Đã chuẩn hóa hỗ trợ cả number (30000) và string
+  TienIch: string[];
+  TrangThai: TrangThaiPhong;
   LyDoTuChoi?: string;
   IdChuTro: string;
-  ChuTroId?: string; // alias for backward compatibility
+  ChuTroId?: string;
   ChuTroTen: string;
   ChuTroSdt: string;
-  HinhAnh: string[]; // Mảng URL / ảnh mẫu
+  HinhAnh: string[];
   MoTa: string;
   NoiQuy: string;
   DienTich: number;
@@ -155,7 +155,6 @@ export interface AdminStats {
   availableRooms: number;
   totalInquiries: number;
   totalWallet: number;
-  // Specific stats requested
   totalAppointments: number;
   totalDeposits: number;
   successfulDeposits: number;
@@ -193,4 +192,3 @@ export interface GiaoDichVi {
   MaThamChieu?: string;
   NgayTao: string;
 }
-

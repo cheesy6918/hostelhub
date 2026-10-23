@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Room } from '../../types';
+import { parseVideoUrl } from '../../utils/video';
 import {
   X,
   MapPin,
@@ -14,7 +15,10 @@ import {
   ChevronRight,
   ShieldCheck,
   Phone,
-  FileText
+  FileText,
+  Video as VideoIcon,
+  Play,
+  ExternalLink
 } from 'lucide-react';
 
 interface LandlordRoomDetailModalProps {
@@ -181,12 +185,20 @@ export const LandlordRoomDetailModal: React.FC<LandlordRoomDetailModalProps> = (
             </div>
             <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl">
               <span className="text-slate-500 block text-[11px] font-semibold">Giá điện</span>
-              <span className="text-sm font-bold text-slate-800">{room.GiaDien || '3.800 đ/số'}</span>
+              <span className="text-sm font-bold text-slate-800">
+                {typeof room.GiaDien === 'number'
+                  ? (room.GiaDien === 0 ? 'Miễn phí' : `${room.GiaDien.toLocaleString('vi-VN')} đ/kWh`)
+                  : (room.GiaDien || '3.800 đ/kWh')}
+              </span>
               <span className="text-[10px] text-slate-400 block">Công tơ riêng</span>
             </div>
             <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl">
               <span className="text-slate-500 block text-[11px] font-semibold">Giá nước</span>
-              <span className="text-sm font-bold text-slate-800">{room.GiaNuoc || '30.000 đ/khối'}</span>
+              <span className="text-sm font-bold text-slate-800">
+                {typeof room.GiaNuoc === 'number'
+                  ? (room.GiaNuoc === 0 ? 'Miễn phí' : `${room.GiaNuoc.toLocaleString('vi-VN')} đ/khối`)
+                  : (room.GiaNuoc || '30.000 đ/khối')}
+              </span>
               <span className="text-[10px] text-slate-400 block">Theo đồng hồ</span>
             </div>
           </div>
@@ -207,6 +219,66 @@ export const LandlordRoomDetailModal: React.FC<LandlordRoomDetailModalProps> = (
               )}
             </div>
           </div>
+
+          {/* Mục Video thực tế phòng trọ */}
+          {room.VideoUrl && (
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <VideoIcon className="w-4 h-4 text-rose-600" />
+                  <span>Video thực tế phòng trọ</span>
+                </h3>
+                <a
+                  href={room.VideoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Mở liên kết gốc</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              {(() => {
+                const parsed = parseVideoUrl(room.VideoUrl);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Nguồn: <strong>{parsed.type === 'gdrive' ? 'Google Drive' : parsed.type === 'youtube' ? 'YouTube' : 'Video trực tiếp'}</strong></span>
+                      <span className="text-[11px] font-mono text-slate-400 truncate max-w-xs">{room.VideoUrl}</span>
+                    </div>
+                    <div className="aspect-16/9 w-full rounded-2xl overflow-hidden bg-black border border-slate-200 shadow-inner">
+                      {parsed.isIframe ? (
+                        <iframe
+                          src={parsed.embedUrl}
+                          title="Xem video phòng trọ"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="w-full h-full border-0"
+                        />
+                      ) : parsed.type === 'direct' ? (
+                        <video controls src={parsed.embedUrl} className="w-full h-full object-contain" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-6 text-center space-y-2">
+                          <Play className="w-8 h-8 text-rose-500" />
+                          <p>Không thể nhúng trực tiếp trình phát này.</p>
+                          <a
+                            href={parsed.originalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold inline-flex items-center gap-1.5 transition-colors"
+                          >
+                            <span>Mở xem video trên tab mới</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Mô tả chi tiết & Nội quy */}
           <div className="space-y-3">
@@ -233,7 +305,7 @@ export const LandlordRoomDetailModal: React.FC<LandlordRoomDetailModalProps> = (
             Trạng thái hiện tại: <strong className="text-slate-800">{isAvailable ? 'Còn phòng' : room.TrangThai}</strong>
           </div>
           <div className="flex items-center gap-2">
-            {onToggleStatus && (
+            {onToggleStatus && !isDeposit && !isPending && (
               <button
                 type="button"
                 onClick={() => onToggleStatus(room)}

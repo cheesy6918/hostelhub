@@ -33,7 +33,11 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
 
   const isDeposit =
     rawStatus.includes('đã cọc') ||
-    rawStatus.includes('dacoc');
+    rawStatus.includes('dacoc') ||
+    rawStatus.includes('xác nhận cọc');
+
+  // Chỉ cho phép chuyển đổi nhanh khi phòng ở trạng thái Còn phòng hoặc Hết phòng
+  const canToggle = !isPending && !isDeposit;
 
   // Xác nhận rõ quyền sở hữu bài đăng của Chủ trọ trước khi xóa
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -59,21 +63,28 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Nút 1 chạm đổi trạng thái nhanh Còn / Chờ duyệt / Đã cọc / Hết phòng */}
+        {/* Nút badge trạng thái */}
         <button
           type="button"
+          disabled={!canToggle}
           onClick={(e) => {
             e.stopPropagation();
-            onToggleStatus?.();
+            if (canToggle) onToggleStatus?.();
           }}
-          title="Bấm để chuyển nhanh giữa Còn phòng và Hết phòng"
-          className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 ${
+          title={
+            canToggle
+              ? 'Bấm để chuyển nhanh giữa Còn phòng và Hết phòng'
+              : `Trạng thái: ${room.TrangThai}`
+          }
+          className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+            canToggle ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-95'
+          } ${
             isAvailable
               ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
               : isPending
-              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+              ? 'bg-amber-500 text-white'
               : isDeposit
-              ? 'bg-purple-600 hover:bg-purple-700 text-white'
+              ? 'bg-purple-600 text-white'
               : 'bg-slate-700 hover:bg-slate-800 text-white'
           }`}
         >
@@ -135,12 +146,21 @@ export const LandlordRoomCard: React.FC<LandlordRoomCardProps> = ({
             {/* Nút đổi trạng thái phòng */}
             <button
               type="button"
+              disabled={!canToggle}
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleStatus?.();
+                if (canToggle) onToggleStatus?.();
               }}
-              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-              title={isAvailable ? 'Chuyển sang Hết phòng' : 'Chuyển sang Còn phòng'}
+              className={`p-1.5 rounded-lg transition-colors ${
+                canToggle
+                  ? 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 cursor-pointer'
+                  : 'text-slate-300 cursor-not-allowed'
+              }`}
+              title={
+                canToggle
+                  ? (isAvailable ? 'Chuyển sang Hết phòng' : 'Chuyển sang Còn phòng')
+                  : 'Không thể chuyển đổi khi đang có cọc hoặc chờ duyệt'
+              }
             >
               <RefreshCw className="w-4 h-4" />
             </button>

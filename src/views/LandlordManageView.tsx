@@ -7,6 +7,7 @@ import { LandlordWalletModal } from '../components/landlord/LandlordWalletModal'
 import { LandlordCreateArticleModal } from '../components/landlord/LandlordCreateArticleModal';
 import { ARTICLES_DATA as INITIAL_ARTICLES } from '../utils/articlesData';
 import { LandlordRoomDetailModal } from '../components/landlord/LandlordRoomDetailModal';
+import { parseVideoUrl } from '../utils/video';
 
 import {
   Search,
@@ -48,7 +49,7 @@ import {
 interface LandlordManageViewProps {
   onNavigateToCreate?: () => void;
   onViewRoomDetail?: (roomId: string) => void;
-  initialTab?: 'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries' | 'articles';
+  initialTab?: 'rooms' | 'appointments' | 'deposits' | 'inquiries' | 'articles';
 }
 
 const AVAILABLE_AMENITIES_LIST = [
@@ -66,7 +67,7 @@ const AVAILABLE_AMENITIES_LIST = [
   'Ban công',
 ];
 
-  export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
+export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   onNavigateToCreate,
   onViewRoomDetail,
   initialTab,
@@ -82,14 +83,13 @@ const AVAILABLE_AMENITIES_LIST = [
   const [replyingId, setReplyingId] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<LichHen[]>([]);
   const [deposits, setDeposits] = useState<DatCoc[]>([]);
-  const [contracts, setContracts] = useState<RentalContract[]>([]);
   const [articles, setArticles] = useState<any[]>(INITIAL_ARTICLES || []);
   const [loading, setLoading] = useState(true);
 
   // Khai báo activeTab ở đây:
-  const [activeTab, setActiveTab] = useState<'rooms' | 'contracts' | 'appointments' | 'deposits' | 'inquiries' | 'articles'>(
+  const [activeTab, setActiveTab] = useState<'rooms' | 'appointments' | 'deposits' | 'inquiries' | 'articles'>(
   initialTab || 'rooms'
-  );
+);
 
   // State modal ví & bài viết:
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -168,13 +168,13 @@ const AVAILABLE_AMENITIES_LIST = [
           prev.map((a) =>
             (a.Id || a.id) === (editingArticle.Id || editingArticle.id)
               ? {
-                  ...a,
-                  TieuDe: editArticleTitle.trim(),
-                  Tag: editArticleTag,
-                  MoTaNgan: editArticleSummary.trim(),
-                  NoiDung: editArticleContent.trim(),
-                  HinhAnh: editArticleImage.trim(),
-                }
+                ...a,
+                TieuDe: editArticleTitle.trim(),
+                Tag: editArticleTag,
+                MoTaNgan: editArticleSummary.trim(),
+                NoiDung: editArticleContent.trim(),
+                HinhAnh: editArticleImage.trim(),
+              }
               : a
           )
         );
@@ -392,7 +392,7 @@ const AVAILABLE_AMENITIES_LIST = [
     });
 
   // Tự động về trang 1 khi đổi từ khóa hoặc bộ lọc
- useEffect(() => {
+  useEffect(() => {
     setArticleCurrentPage(1);
   }, [articleSearchTerm, articleCategoryFilter, articleSortDate]);
 
@@ -437,6 +437,7 @@ const AVAILABLE_AMENITIES_LIST = [
   const [editTrangThai, setEditTrangThai] = useState<TrangThaiPhong>('Còn phòng');
   const [editImages, setEditImages] = useState<string[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [editVideoUrl, setEditVideoUrl] = useState(''); // 👈 THÊM DÒNG NÀY
   const [editError, setEditError] = useState('');
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
@@ -491,10 +492,9 @@ const AVAILABLE_AMENITIES_LIST = [
       if (dataInq.success) setInquiries(dataInq.data || []);
       if (dataApp.success) setAppointments(dataApp.data || []);
       if (dataDep.success) setDeposits(dataDep.data || []);
-      if (dataContracts.success) setContracts(dataContracts.data || []);
       if (dataCandidates.success) setCandidates(dataCandidates.data || []);
 
-     // Lấy danh sách cẩm nang từ API CSDL (ưu tiên bài viết thực tế)
+      // Lấy danh sách cẩm nang từ API CSDL (ưu tiên bài viết thực tế)
       try {
         const resArticles = await fetch('/api/articles', {
           headers: {
@@ -781,14 +781,15 @@ const AVAILABLE_AMENITIES_LIST = [
     setEditDiaChi(r.DiaChi);
     setEditQuanHuyen(r.QuanHuyen || 'Cầu Giấy, Hà Nội');
     setEditGiaThue(r.GiaThue);
-    setEditGiaDien(r.GiaDien || '3.800 đ/kWh');
-    setEditGiaNuoc(r.GiaNuoc || '30.000 đ/khối');
+    setEditGiaDien(String(r.GiaDien ?? 3800));
+    setEditGiaNuoc(String(r.GiaNuoc ?? 30000));
     setEditDienTich(r.DienTich || 20);
     setEditMoTa(r.MoTa || '');
     setEditNoiQuy(r.NoiQuy || '');
     setEditTienIch(r.TienIch || []);
     setEditTrangThai(r.TrangThai || 'Còn phòng');
     setEditImages(r.HinhAnh && r.HinhAnh.length > 0 ? r.HinhAnh : []);
+    setEditVideoUrl(r.VideoUrl || ''); // 👈 THÊM DÒNG NÀY
     setEditError('');
     setShowEditModal(true);
   };
@@ -807,6 +808,22 @@ const AVAILABLE_AMENITIES_LIST = [
 
   const handleRemoveEditImage = (index: number) => {
     setEditImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // 👇 THÊM HÀM NÀY ĐỂ CHỌN ẢNH TỪ MÁY TÍNH
+  const handleUploadEditImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setEditImages((prev) => [...prev, event.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Toggle room status between "Còn phòng" and "Hết phòng"
@@ -850,14 +867,15 @@ const AVAILABLE_AMENITIES_LIST = [
         DiaChi: editDiaChi.trim(),
         QuanHuyen: editQuanHuyen,
         GiaThue: Number(editGiaThue),
-        GiaDien: editGiaDien.trim(),
-        GiaNuoc: editGiaNuoc.trim(),
+        GiaDien: Number(String(editGiaDien).replace(/[^\d]/g, '')) || 3800,
+        GiaNuoc: Number(String(editGiaNuoc).replace(/[^\d]/g, '')) || 30000,
         DienTich: Number(editDienTich) || 20,
         MoTa: editMoTa.trim(),
         NoiQuy: editNoiQuy.trim(),
         TienIch: editTienIch,
         TrangThai: editTrangThai,
         HinhAnh: editImages.length > 0 ? editImages : editingRoom.HinhAnh,
+        VideoUrl: editVideoUrl.trim() || undefined, // 👈 THÊM DÒNG NÀY
       };
 
       const res = await fetch(`/api/rooms/${editingRoom.Id}`, {
@@ -925,11 +943,11 @@ const AVAILABLE_AMENITIES_LIST = [
   };
 
   const availableCount = rooms.filter((r) => {
-  const st = (r.TrangThai || '').toLowerCase().trim();
-  return st.includes('còn phòng') || st.includes('conphong') || st.includes('controng') || st.includes('công khai') || st.includes('congkhai');
-}).length;
+    const st = (r.TrangThai || '').toLowerCase().trim();
+    return st.includes('còn phòng') || st.includes('conphong') || st.includes('controng') || st.includes('công khai') || st.includes('congkhai');
+  }).length;
 
- const occupiedCount = rooms.filter((r) => {
+  const occupiedCount = rooms.filter((r) => {
     const st = (r.TrangThai || '').toLowerCase().trim();
     const isAvail = st.includes('còn phòng') || st.includes('controng') || st.includes('công khai');
     const isPend = st.includes('chờ duyệt') || st.includes('choduyet');
@@ -941,53 +959,8 @@ const AVAILABLE_AMENITIES_LIST = [
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Top Header Banner: Tự động thay đổi đồng bộ theo 5 mục trên Navbar */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 mb-8">
-        {activeTab === 'contracts' ? (
-          /* 1. Banner mục Hợp đồng */
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg w-fit mb-2">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Xác minh thuê phòng 2 chiều</span>
-                </div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  Quản lý Hợp đồng & Người thuê
-                </h1>
-                <p className="text-xs text-slate-500 mt-1">
-                  Kích hoạt trạng thái đang ở và cấp quyền viết đánh giá minh bạch cho sinh viên
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('rooms')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  <span>Về Quản lý phòng</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
-              <div className="bg-slate-50 p-3.5 rounded-2xl">
-                <span className="text-xs text-slate-400 block">Tổng số hợp đồng</span>
-                <span className="text-xl font-bold text-slate-900 tabular-nums">{contracts.length}</span>
-              </div>
-              <div className="bg-emerald-50/70 p-3.5 rounded-2xl">
-                <span className="text-xs text-emerald-700 block">Đang thuê thực tế (Đang ở)</span>
-                <span className="text-xl font-bold text-emerald-800 tabular-nums">
-                  {contracts.filter(c => c.status === 'active').length}
-                </span>
-              </div>
-              <div className="bg-amber-50/70 p-3.5 rounded-2xl">
-                <span className="text-xs text-amber-700 block">Sinh viên đề xuất (Chờ duyệt)</span>
-                <span className="text-xl font-bold text-amber-800 tabular-nums">
-                  {contracts.filter(c => c.status === 'pending_landlord').length}
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : activeTab === 'appointments' ? (
+        {
+        activeTab === 'appointments' ? (
           /* 2. Banner mục Lịch hẹn xem phòng */
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1248,11 +1221,10 @@ const AVAILABLE_AMENITIES_LIST = [
           <button
             type="button"
             onClick={() => setActiveTab('rooms')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'rooms'
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'rooms'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
+              }`}
           >
             <Building2 className="w-4 h-4" />
             <span>Quản lý phòng ({rooms.length})</span>
@@ -1260,11 +1232,10 @@ const AVAILABLE_AMENITIES_LIST = [
           <button
             type="button"
             onClick={() => setActiveTab('articles')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'articles'
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'articles'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
+              }`}
           >
             <BookOpen className="w-4 h-4" />
             <span>Quản lý cẩm nang ({articles.length})</span>
@@ -1384,7 +1355,7 @@ const AVAILABLE_AMENITIES_LIST = [
                     className="border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-all flex flex-col bg-white group"
                   >
                     {/* Phần ảnh bìa - Bấm vào mở xem trước */}
-                    <div 
+                    <div
                       onClick={() => setPreviewArticle(item)}
                       className="aspect-16/10 overflow-hidden bg-slate-100 relative cursor-pointer"
                     >
@@ -1416,7 +1387,7 @@ const AVAILABLE_AMENITIES_LIST = [
                         <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-lg inline-block mb-1.5">
                           {item.Tag || item.ChuyenMuc || 'Kinh nghiệm thuê phòng'}
                         </span>
-                        <h3 
+                        <h3
                           onClick={() => setPreviewArticle(item)}
                           className="font-bold text-sm text-slate-900 line-clamp-2 hover:text-blue-600 cursor-pointer transition-colors leading-snug"
                         >
@@ -1494,11 +1465,10 @@ const AVAILABLE_AMENITIES_LIST = [
                           setArticleCurrentPage(page);
                           window.scrollTo({ top: 350, behavior: 'smooth' });
                         }}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
-                          articleCurrentPage === page
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${articleCurrentPage === page
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         {page}
                       </button>
@@ -1520,201 +1490,7 @@ const AVAILABLE_AMENITIES_LIST = [
             </div>
           )}
         </div>
-      ) : activeTab === 'contracts' ? (
-        /* Tab: Hợp đồng */
-        <div className="space-y-5 animate-in fade-in">
-          <div className="p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-600 flex items-start gap-3 shadow-2xs">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-            </div>
-            <div className="space-y-1">
-              <span className="font-bold text-slate-800">Quy trình vận hành hợp đồng xác minh 2 chiều:</span>
-              <p className="text-slate-600 leading-relaxed">
-                • <strong>Sinh viên gửi yêu cầu:</strong> Bạn bấm <em>"Xác nhận đồng ý cho thuê"</em> để kích hoạt hợp đồng sang trạng thái <strong>Đang ở (Active)</strong>.<br />
-                • <strong>Chủ trọ gửi đề xuất:</strong> Sinh viên sẽ nhận được thông báo để bấm xác nhận.<br />
-                • <strong>Phân quyền đánh giá:</strong> Chỉ những sinh viên có hợp đồng thuê được xác nhận mới có thể viết đánh giá kèm huy hiệu <strong>"✔ Đã xác minh thuê phòng"</strong>.
-              </p>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="space-y-3">
-              {[1, 2].map(i => (
-                <div key={i} className="h-36 bg-slate-100 rounded-2xl animate-pulse" />
-              ))}
-            </div>
-          ) : contracts.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center space-y-3">
-              <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto">
-                <FileText className="w-7 h-7" />
-              </div>
-              <h3 className="font-bold text-slate-800">Chưa có hợp đồng thuê phòng nào</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Khi sinh viên gửi yêu cầu thuê phòng hoặc bạn chủ động gửi đề xuất tới sinh viên, danh sách hợp đồng sẽ xuất hiện tại đây.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3.5">
-              {contracts.map(contract => {
-                const isPendingLandlord = contract.status === 'pending_landlord';
-                const isPendingRenter = contract.status === 'pending_renter';
-                const isActive = contract.status === 'active';
-                const isCompleted = contract.status === 'completed';
-                const isCancelled = contract.status === 'cancelled';
-                return (
-                  <div
-                    key={contract.id}
-                    className={`bg-white rounded-2xl border p-4.5 transition-all shadow-xs space-y-3.5 ${
-                      isPendingLandlord
-                        ? 'border-amber-300 ring-2 ring-amber-100'
-                        : isActive
-                        ? 'border-emerald-200'
-                        : 'border-slate-200'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div className="flex items-start gap-3.5">
-                        <img
-                          src={contract.roomImage || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=300&q=80'}
-                          alt={contract.roomTitle}
-                          className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-100"
-                        />
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                              HĐ #{contract.id}
-                            </span>
-                            <h3 className="font-bold text-sm text-slate-900 leading-snug">
-                              {contract.roomTitle}
-                            </h3>
-                          </div>
-                          <p className="text-xs text-slate-500 flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{contract.roomAddress || 'Khu vực phòng trọ'}</span>
-                          </p>
-                          <div className="flex items-center gap-3 pt-0.5 text-xs text-slate-600 flex-wrap">
-                            <span className="font-bold text-blue-600">
-                              {(contract.roomPrice || 0).toLocaleString('vi-VN')} đ/tháng
-                            </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="flex items-center gap-1 font-semibold text-slate-800">
-                              <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Người thuê: <strong>{contract.renterName}</strong></span>
-                            </span>
-                            {contract.renterPhone && (
-                              <span className="flex items-center gap-1 text-slate-500">
-                                <Phone className="w-3 h-3 text-slate-400" />
-                                <span>{contract.renterPhone}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="shrink-0 self-start sm:self-auto">
-                        {isPendingLandlord && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 animate-pulse">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Sinh viên đề xuất (Chờ bạn duyệt)</span>
-                          </span>
-                        )}
-                        {isPendingRenter && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            <Clock className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Đã gửi đề xuất (Chờ sinh viên)</span>
-                          </span>
-                        )}
-                        {isActive && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Đang thuê (Hợp đồng có hiệu lực)</span>
-                          </span>
-                        )}
-                        {isCompleted && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            <Check className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Đã hoàn tất (Trả phòng)</span>
-                          </span>
-                        )}
-                        {isCancelled && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <X className="w-3.5 h-3.5 text-rose-500" />
-                            <span>Đã hủy</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
-                      <div className="text-slate-500 flex items-center gap-3 flex-wrap">
-                        {contract.start_date && (
-                          <span>
-                            Ngày bắt đầu: <strong>{new Date(contract.start_date).toLocaleDateString('vi-VN')}</strong>
-                          </span>
-                        )}
-                        {contract.end_date && (
-                          <span>
-                            Ngày kết thúc: <strong>{new Date(contract.end_date).toLocaleDateString('vi-VN')}</strong>
-                          </span>
-                        )}
-                        <span>Ngày tạo: {new Date(contract.created_at).toLocaleString('vi-VN')}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {isPendingLandlord && (
-                          <>
-                            <button
-                              onClick={() => handleConfirmContract(contract.id)}
-                              disabled={confirmingContractId === contract.id}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                            >
-                              <Check className="w-4 h-4" />
-                              <span>{confirmingContractId === contract.id ? 'Đang duyệt...' : 'Xác nhận đồng ý cho thuê'}</span>
-                            </button>
-                            <button
-                              onClick={() => handleCancelContract(contract.id)}
-                              disabled={cancelingContractId === contract.id}
-                              className="px-3 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 font-semibold rounded-xl transition-colors cursor-pointer"
-                            >
-                              Từ chối
-                            </button>
-                          </>
-                        )}
-                        {isPendingRenter && (
-                          <button
-                            onClick={() => handleCancelContract(contract.id)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
-                          >
-                            Hủy đề xuất
-                          </button>
-                        )}
-                        {isActive && (
-                          <button
-                            onClick={() => handleCompleteContract(contract.id)}
-                            disabled={completingContractId === contract.id}
-                            className="px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>{completingContractId === contract.id ? 'Đang lưu...' : 'Ghi nhận trả phòng (Hoàn tất)'}</span>
-                          </button>
-                        )}
-                        {contract.room_id && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const target = rooms.find(r => String(r.Id) === String(contract.room_id));
-                              if (target) setViewingRoom(target);
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
-                          >
-                            Xem phòng
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      
       ) : activeTab === 'appointments' ? (
         /* Tab: Lịch hẹn */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
@@ -1774,11 +1550,10 @@ const AVAILABLE_AMENITIES_LIST = [
                     ) : (
                       <div className="text-right">
                         <span
-                          className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${
-                            app.TrangThai === 'Đã xác nhận'
+                          className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${app.TrangThai === 'Đã xác nhận'
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               : 'bg-rose-100 text-rose-800 border border-rose-300'
-                          }`}
+                            }`}
                         >
                           {app.TrangThai === 'Đã xác nhận' ? '✓ Đã xác nhận' : '✕ Đã hủy'}
                         </span>
@@ -1859,11 +1634,10 @@ const AVAILABLE_AMENITIES_LIST = [
                     ) : (
                       <div className="text-right">
                         <span
-                          className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${
-                            dep.TrangThaiCoc === 'Đã tiếp nhận thành công' || dep.TrangThaiCoc === 'Đã xác nhận'
+                          className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${dep.TrangThaiCoc === 'Đã tiếp nhận thành công' || dep.TrangThaiCoc === 'Đã xác nhận'
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               : 'bg-rose-100 text-rose-800 border border-rose-300'
-                          }`}
+                            }`}
                         >
                           {dep.TrangThaiCoc === 'Đã tiếp nhận thành công' || dep.TrangThaiCoc === 'Đã xác nhận'
                             ? '✓ Đã tiếp nhận thành công (Phòng: Đã cọc)'
@@ -1898,27 +1672,24 @@ const AVAILABLE_AMENITIES_LIST = [
               <button
                 type="button"
                 onClick={() => setInquiryStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  inquiryStatusFilter === 'all' ? 'bg-white text-blue-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${inquiryStatusFilter === 'all' ? 'bg-white text-blue-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 Tất cả ({inquiries.length})
               </button>
               <button
                 type="button"
                 onClick={() => setInquiryStatusFilter('pending')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  inquiryStatusFilter === 'pending' ? 'bg-white text-amber-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${inquiryStatusFilter === 'pending' ? 'bg-white text-amber-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 Chờ phản hồi ({inquiries.filter(i => i.TrangThai === 'ChoXacNhan').length})
               </button>
               <button
                 type="button"
                 onClick={() => setInquiryStatusFilter('handled')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  inquiryStatusFilter === 'handled' ? 'bg-white text-emerald-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${inquiryStatusFilter === 'handled' ? 'bg-white text-emerald-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 Đã xử lý ({inquiries.filter(i => i.TrangThai !== 'ChoXacNhan').length})
               </button>
@@ -1982,11 +1753,10 @@ const AVAILABLE_AMENITIES_LIST = [
                             </div>
                           ) : (
                             <div
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 ${
-                                inq.TrangThai === 'DaDuyet'
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 ${inq.TrangThai === 'DaDuyet'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'bg-slate-100 text-slate-600'
-                              }`}
+                                }`}
                             >
                               <span>{inq.TrangThai === 'DaDuyet' ? '✓ Đã tiếp nhận' : '✕ Đã từ chối'}</span>
                             </div>
@@ -2180,11 +1950,10 @@ const AVAILABLE_AMENITIES_LIST = [
                           setCurrentPage(page);
                           window.scrollTo({ top: 350, behavior: 'smooth' });
                         }}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
-                          currentPage === page
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${currentPage === page
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         {page}
                       </button>
@@ -2318,9 +2087,8 @@ const AVAILABLE_AMENITIES_LIST = [
                     return (
                       <label
                         key={item}
-                        className={`flex items-center gap-1.5 p-2 rounded-lg border text-xs cursor-pointer select-none ${
-                          checked ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' : 'bg-slate-50 border-slate-200'
-                        }`}
+                        className={`flex items-center gap-1.5 p-2 rounded-lg border text-xs cursor-pointer select-none ${checked ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' : 'bg-slate-50 border-slate-200'
+                          }`}
                       >
                         <input
                           type="checkbox"
@@ -2356,23 +2124,48 @@ const AVAILABLE_AMENITIES_LIST = [
               </div>
 
               {/* Edit images */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Hình ảnh ({editImages.length} ảnh)</label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="url"
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="Nhập URL ảnh..."
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddEditImage}
-                    className="px-3 py-2 bg-blue-50 text-blue-700 font-bold rounded-xl"
-                  >
-                    + Thêm ảnh
-                  </button>
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-700">Hình ảnh phòng ({editImages.length} ảnh)</label>
+                
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
+                  {/* Nút chọn tệp ảnh từ máy tính */}
+                  <label className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs shrink-0">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Tải ảnh từ máy tính</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleUploadEditImageFile}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <span className="text-[11px] text-slate-400 self-center hidden sm:inline">hoặc</span>
+
+                  {/* Nhập link ảnh online */}
+                  <div className="flex flex-1 gap-1.5">
+                    <input
+                      type="url"
+                      value={newImageUrl}
+                      onChange={(e) => setNewImageUrl(e.target.value)}
+                      placeholder="Dán link ảnh (https://...)"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newImageUrl.trim()) {
+                          alert('Vui lòng dán link URL ảnh vào ô trước khi bấm Thêm!');
+                          return;
+                        }
+                        handleAddEditImage();
+                      }}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer whitespace-nowrap"
+                    >
+                      + Thêm URL
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {editImages.map((img, idx) => (
@@ -2397,6 +2190,58 @@ const AVAILABLE_AMENITIES_LIST = [
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* 👈 DÁN ĐOẠN DƯỚI ĐÂY VÀO TRƯỚC NÚT "HỦY / LƯU THAY ĐỔI" */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="block font-bold text-slate-700">
+                  Video thực tế phòng trọ (Google Drive, YouTube, hoặc tệp .mp4)
+                </label>
+                <input
+                  type="url"
+                  value={editVideoUrl}
+                  onChange={(e) => setEditVideoUrl(e.target.value)}
+                  placeholder="VD: https://drive.google.com/file/d/... hoặc https://youtu.be/..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-[11px] text-slate-400 block">
+                  Dán link chia sẻ công khai từ Google Drive hoặc YouTube để người thuê xem trước video thực tế.
+                </span>
+
+                {/* Khung xem trước video nếu có link */}
+                {editVideoUrl.trim() && (() => {
+                  const parsed = parseVideoUrl(editVideoUrl);
+                  return (
+                    <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-700">Xem trước video:</span>
+                        <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-semibold uppercase">
+                          {parsed.type === 'gdrive' ? 'Google Drive' : parsed.type === 'youtube' ? 'YouTube' : 'Video trực tiếp'}
+                        </span>
+                      </div>
+                      <div className="aspect-16/9 w-full max-w-md rounded-xl overflow-hidden bg-black border border-slate-300">
+                        {parsed.isIframe ? (
+                          <iframe
+                            src={parsed.embedUrl}
+                            title="Xem trước video phòng"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="w-full h-full border-0"
+                          />
+                        ) : parsed.type === 'direct' ? (
+                          <video controls src={parsed.embedUrl} className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-4 text-center">
+                            <p className="line-clamp-1">Link: {parsed.originalUrl}</p>
+                            <a href={parsed.originalUrl} target="_blank" rel="noreferrer" className="mt-2 text-blue-400 underline inline-flex items-center gap-1">
+                              <span>Mở kiểm tra liên kết</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -2517,8 +2362,8 @@ const AVAILABLE_AMENITIES_LIST = [
                 {rejectModal.submitting
                   ? 'Đang xử lý...'
                   : rejectModal.type === 'deposit'
-                  ? 'Xác nhận từ chối & Hoàn 100% ví SV'
-                  : 'Xác nhận từ chối lịch hẹn'}
+                    ? 'Xác nhận từ chối & Hoàn 100% ví SV'
+                    : 'Xác nhận từ chối lịch hẹn'}
               </button>
             </div>
           </div>
@@ -2536,18 +2381,18 @@ const AVAILABLE_AMENITIES_LIST = [
       />
 
       {/* Modal Đăng cẩm nang mới */}
-          <LandlordCreateArticleModal
-            isOpen={showArticleModal}
-            onClose={() => setShowArticleModal(false)}
-            onSuccess={() => {
-              setActionMessage('Đăng bài viết cẩm nang thành công! Bài viết đang chờ Quản trị viên duyệt.');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-              setTimeout(() => setActionMessage(''), 4500);
-              fetchLandlordData(); // 👈 Gọi lại hàm fetch để cập nhật ngay bài mới vào danh sách
-            }}
-          />
+      <LandlordCreateArticleModal
+        isOpen={showArticleModal}
+        onClose={() => setShowArticleModal(false)}
+        onSuccess={() => {
+          setActionMessage('Đăng bài viết cẩm nang thành công! Bài viết đang chờ Quản trị viên duyệt.');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          setTimeout(() => setActionMessage(''), 4500);
+          fetchLandlordData(); // 👈 Gọi lại hàm fetch để cập nhật ngay bài mới vào danh sách
+        }}
+      />
 
-          {/* Modal Xem Trước Bài Viết Cẩm Nang */}
+      {/* Modal Xem Trước Bài Viết Cẩm Nang */}
       {previewArticle && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
@@ -2665,7 +2510,7 @@ const AVAILABLE_AMENITIES_LIST = [
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1.5">Hình ảnh đại diện bài viết</label>
-                
+
                 {/* Khung tải tệp lên từ máy tính */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
                   <label className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs shrink-0">

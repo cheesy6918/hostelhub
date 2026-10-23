@@ -39,6 +39,7 @@ import { useComparison } from '../context/ComparisonContext';
 
 interface StudentFindRoomViewProps {
   onSelectRoomDetail?: (roomId: string) => void;
+  onNavigate?: (view: string) => void; // 👈 Thêm dòng này
   initialTab?: 'browse' | 'favorites' | 'my-inquiries';
 }
 
@@ -50,7 +51,7 @@ interface AmenityOption {
 const AMENITY_FILTER_OPTIONS: AmenityOption[] = [
   { id: 'Điều hòa', label: 'Điều hòa / Máy lạnh' },
   { id: 'Wifi', label: 'Wifi Internet' },
-  { id: 'Vệ sinh riêng', label: 'Vệ sinh riêng khép kín'},
+  { id: 'Vệ sinh riêng', label: 'Vệ sinh riêng khép kín' },
   { id: 'Nóng lạnh', label: 'Bình nóng lạnh' },
   { id: 'Gác lửng', label: 'Có gác lửng' },
   { id: 'Tủ lạnh', label: 'Tủ lạnh' },
@@ -104,7 +105,7 @@ const POPULAR_ADDRESS_SHORTCUTS = [
   { label: 'Hồ Tùng Mậu (Thương Mại)', query: 'Hồ Tùng Mậu' },
 ];
 
-export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSelectRoomDetail, initialTab }) => {
+export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSelectRoomDetail, onNavigate, initialTab }) => {
   const { user, token } = useAuth();
   const {
     favoriteRoomIds,
@@ -129,11 +130,11 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
 
   // Search input state for the top advanced filter form
   const [keywordInput, setKeywordInput] = useState('');
-  
+
   // Price range inputs (min & max in VNĐ)
   const [minPriceInput, setMinPriceInput] = useState<string>('');
   const [maxPriceInput, setMaxPriceInput] = useState<string>('');
-  
+
   // Area range inputs (min & max in m²)
   const [minAreaInput, setMinAreaInput] = useState<string>('');
   const [maxAreaInput, setMaxAreaInput] = useState<string>('');
@@ -212,11 +213,10 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
           key={pageNum}
           type="button"
           onClick={() => handlePageChange(pageNum, total)}
-          className={`min-w-8 sm:min-w-9 h-8 sm:h-9 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            isActive
+          className={`min-w-8 sm:min-w-9 h-8 sm:h-9 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
               ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-102'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 active:scale-95 shadow-2xs'
-          }`}
+            }`}
         >
           {pageNum}
         </button>
@@ -487,12 +487,13 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
       <RoomDetailView
         roomId={viewingRoomId}
         onBack={() => setViewingRoomId(null)}
+        onNavigate={onNavigate} // 👈 Truyền vào đây
       />
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">     
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Student Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 rounded-3xl p-6 sm:p-8 text-white shadow-sm mb-8">
         <div className="max-w-3xl">
@@ -510,28 +511,25 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               onClick={() => setActiveTab('browse')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'browse'
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'browse'
                   ? 'bg-white text-blue-900 shadow-sm font-bold'
                   : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
+                }`}
             >
               🔍 Tìm kiếm & Khám phá phòng
             </button>
             <button
               onClick={() => setActiveTab('favorites')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'favorites'
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'favorites'
                   ? 'bg-white text-rose-700 shadow-sm font-bold'
                   : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
+                }`}
             >
               <Heart className={`w-3.5 h-3.5 ${activeTab === 'favorites' ? 'fill-rose-600 text-rose-600' : 'text-white'}`} />
               <span>Mục yêu thích của tôi</span>
               {favoriteRoomIds.length > 0 && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold tabular-nums ${
-                  activeTab === 'favorites' ? 'bg-rose-100 text-rose-700' : 'bg-white/30 text-white'
-                }`}>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold tabular-nums ${activeTab === 'favorites' ? 'bg-rose-100 text-rose-700' : 'bg-white/30 text-white'
+                  }`}>
                   {favoriteRoomIds.length}
                 </span>
               )}
@@ -539,11 +537,10 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
             {user && (
               <button
                 onClick={() => setActiveTab('my-inquiries')}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'my-inquiries'
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'my-inquiries'
                     ? 'bg-white text-blue-900 shadow-sm font-bold'
                     : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
+                  }`}
               >
                 📋 Lịch sử đặt hẹn & phòng ({myInquiries.length})
               </button>
@@ -554,7 +551,7 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
 
       {activeTab === 'browse' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* CỘT TRÁI: BỘ LỌC DỌC (SIDEBAR FILTER) */}
           <aside className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 shadow-xs p-5 lg:sticky lg:top-20 space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -645,11 +642,10 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                         key={p.label}
                         type="button"
                         onClick={() => handleApplyPresetPrice(p.min, p.max)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
-                          isActive
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${isActive
                             ? 'bg-blue-600 text-white shadow-2xs'
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                        }`}
+                          }`}
                       >
                         {p.label}
                       </button>
@@ -699,11 +695,10 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                         key={a.label}
                         type="button"
                         onClick={() => handleApplyPresetArea(a.min, a.max)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
-                          isActive
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${isActive
                             ? 'bg-blue-600 text-white shadow-2xs'
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                        }`}
+                          }`}
                       >
                         {a.label}
                       </button>
@@ -728,11 +723,10 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                     return (
                       <label
                         key={item.id}
-                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer select-none transition-all ${
-                          checked
+                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer select-none transition-all ${checked
                             ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold'
                             : 'bg-slate-50/70 border-slate-200 text-slate-600 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         <input
                           type="checkbox"
@@ -917,29 +911,34 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                         <button
                           type="button"
                           onClick={() => setStatusFilter('all')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                            statusFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
-                          }`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${statusFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
+                            }`}
                         >
                           Tất cả ({matchingSearchRooms.length})
                         </button>
                         <button
                           type="button"
                           onClick={() => setStatusFilter('con-trong')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                            statusFilter === 'con-trong' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-emerald-700'
-                          }`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${statusFilter === 'con-trong' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-emerald-700'
+                            }`}
                         >
                           Còn trống ({conTrongCount})
                         </button>
                         <button
                           type="button"
                           onClick={() => setStatusFilter('da-dat')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                            statusFilter === 'da-dat' ? 'bg-amber-500 text-white shadow-2xs' : 'text-amber-700'
-                          }`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${statusFilter === 'da-dat' ? 'bg-amber-500 text-white shadow-2xs' : 'text-amber-700'
+                            }`}
                         >
                           Đã đặt ({daDatCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStatusFilter('het-phong')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${statusFilter === 'het-phong' ? 'bg-rose-600 text-white shadow-2xs' : 'text-rose-700'
+                            }`}
+                        >
+                          Hết phòng ({hetPhongCount})
                         </button>
                       </div>
 
@@ -1080,7 +1079,7 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
           </main>
 
         </div>
-      
+
       ) : activeTab === 'favorites' ? (
         /* DEDICATED FAVORITES VIEW (MỤC YÊU THÍCH CỦA TÔI) */
         <div className="space-y-6">
@@ -1105,7 +1104,7 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                   <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                   <span>Đã lưu: {favoriteRooms.length} phòng</span>
                 </span>
-                
+
                 {favoriteRooms.length > 0 && (
                   <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
                     Còn trống: {favoriteRooms.filter(r => r.TrangThai === 'Còn phòng' || r.TrangThai === 'Công khai').length}
@@ -1242,15 +1241,12 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                         <img
                           src={coverImage}
                           alt={room.TieuDe}
-                          loading="lazy"
                           onError={(e) => {
                             const target = e.currentTarget;
                             target.onerror = null;
                             target.src = DEFAULT_ROOM_FALLBACK_IMG;
                           }}
-                          className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-                            statusInfo.grayscaleImg ? 'grayscale-40 opacity-85' : ''
-                          }`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
 
                         {/* Visual Status Badge (Top-Left) */}
@@ -1315,13 +1311,12 @@ export const StudentFindRoomView: React.FC<StudentFindRoomViewProps> = ({ onSele
                           {/* Status Strip */}
                           <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border ${statusInfo.pillClass}`}>
                             <div className="flex items-center gap-1.5 font-bold">
-                              <span className={`w-2 h-2 rounded-full ${
-                                statusInfo.type === 'con-trong'
+                              <span className={`w-2 h-2 rounded-full ${statusInfo.type === 'con-trong'
                                   ? 'bg-emerald-500 animate-pulse'
                                   : statusInfo.type === 'da-dat'
-                                  ? 'bg-amber-500'
-                                  : 'bg-rose-500'
-                              }`} />
+                                    ? 'bg-amber-500'
+                                    : 'bg-rose-500'
+                                }`} />
                               <span>{statusInfo.statusText}</span>
                             </div>
                             <span className="text-[11px] font-medium opacity-90">

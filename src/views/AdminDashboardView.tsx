@@ -60,7 +60,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
         const parsed = JSON.parse(saved);
         mockRoommates.splice(0, mockRoommates.length, ...parsed);
         return parsed;
-      } catch {}
+      } catch { }
     }
     return mockRoommates || [];
   });
@@ -153,7 +153,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
       if (dataUsers.success) setUsers(dataUsers.data || []);
       if (dataRooms.success) setRooms(dataRooms.data || []);
 
-      // Lấy danh sách cẩm nang từ Database API
       try {
         const resArticles = await fetch('/api/articles', {
           headers: {
@@ -162,22 +161,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
           },
         });
         const dataArticles = await resArticles.json();
-
         // Ưu tiên nạp dữ liệu từ Database TiDB
         if (dataArticles.success && Array.isArray(dataArticles.data) && dataArticles.data.length > 0) {
           setAdminArticles(dataArticles.data);
         } else {
-          // Lọc bỏ các bài viết bị lỗi link ảnh trong ARTICLES_DATA dự phòng
-          const cleanArticles = (ARTICLES_DATA || []).filter(
-            (item: any) => item.HinhAnh && item.HinhAnh.startsWith('http')
-          );
+          // Gán mặc định trạng thái 'Công khai' cho các bài viết mẫu ban đầu
+          const cleanArticles = (ARTICLES_DATA || [])
+            .filter((item: any) => item.HinhAnh && item.HinhAnh.startsWith('http'))
+            .map((item: any) => ({
+              ...item,
+              TrangThai: item.TrangThai || 'Công khai',
+            }));
           setAdminArticles(cleanArticles);
         }
       } catch (err) {
         console.error('Lỗi tải bài viết cho Admin:', err);
-        const cleanArticles = (ARTICLES_DATA || []).filter(
-          (item: any) => item.HinhAnh && item.HinhAnh.startsWith('http')
-        );
+        const cleanArticles = (ARTICLES_DATA || [])
+          .filter((item: any) => item.HinhAnh && item.HinhAnh.startsWith('http'))
+          .map((item: any) => ({
+            ...item,
+            TrangThai: item.TrangThai || 'Công khai',
+          }));
         setAdminArticles(cleanArticles);
       }
 
@@ -975,6 +979,75 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                   </div>
                 </div>
 
+                {/* Mục Video thực tế phòng trọ kiểm định */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <VideoIcon className="w-4 h-4 text-rose-600" />
+                      <span>Video thực tế phòng trọ (Chủ trọ cung cấp)</span>
+                    </h2>
+                    {inspectingRoom.VideoUrl && (
+                      <a
+                        href={inspectingRoom.VideoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Mở liên kết gốc</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                  {inspectingRoom.VideoUrl ? (
+                    (() => {
+                      const parsed = parseVideoUrl(inspectingRoom.VideoUrl);
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-slate-600">
+                              Nguồn: <strong>{parsed.type === 'gdrive' ? 'Google Drive' : parsed.type === 'youtube' ? 'YouTube' : 'Video trực tiếp'}</strong>
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-mono truncate max-w-xs">
+                              {inspectingRoom.VideoUrl}
+                            </span>
+                          </div>
+                          <div className="aspect-16/9 w-full rounded-2xl overflow-hidden bg-black border border-slate-200 shadow-inner">
+                            {parsed.isIframe ? (
+                              <iframe
+                                src={parsed.embedUrl}
+                                title="Xem video phòng trọ kiểm định"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                className="w-full h-full border-0"
+                              />
+                            ) : parsed.type === 'direct' ? (
+                              <video controls src={parsed.embedUrl} className="w-full h-full object-contain" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-6 text-center space-y-2">
+                                <Play className="w-8 h-8 text-rose-500" />
+                                <p>Không thể nhúng trực tiếp trình phát này.</p>
+                                <a
+                                  href={parsed.originalUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold inline-flex items-center gap-1.5 transition-colors"
+                                >
+                                  <span>Bấm để mở xem video trên tab mới</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400">
+                      Chủ trọ không đính kèm đường dẫn video thực tế cho phòng trọ này.
+                    </div>
+                  )}
+                </div>
+
                 {/* Nội dung chi tiết bài đăng */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
                   <div className="border-b border-slate-100 pb-4">
@@ -1002,13 +1075,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-2xl">
                       <span className="text-slate-500 block text-[11px] font-semibold">Giá tiền điện</span>
                       <span className="text-sm font-bold text-slate-800">
-                        {inspectingRoom.GiaDien || '3.800 đ/số'}
+                        {typeof inspectingRoom.GiaDien === 'number'
+                          ? (inspectingRoom.GiaDien === 0 ? 'Miễn phí' : `${inspectingRoom.GiaDien.toLocaleString('vi-VN')} đ/kWh`)
+                          : (inspectingRoom.GiaDien || '3.800 đ/kWh')}
                       </span>
                     </div>
                     <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-2xl">
                       <span className="text-slate-500 block text-[11px] font-semibold">Giá tiền nước</span>
                       <span className="text-sm font-bold text-slate-800">
-                        {inspectingRoom.GiaNuoc || '30.000 đ/khối'}
+                        {typeof inspectingRoom.GiaNuoc === 'number'
+                          ? (inspectingRoom.GiaNuoc === 0 ? 'Miễn phí' : `${inspectingRoom.GiaNuoc.toLocaleString('vi-VN')} đ/khối`)
+                          : (inspectingRoom.GiaNuoc || '30.000 đ/khối')}
                       </span>
                     </div>
                   </div>
@@ -1310,10 +1387,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-mono text-slate-400 font-bold">MÃ TIN: #{inspectingRoommate.Id}</span>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${inspectingRoommate.TrangThaiDuyet === 'Đã duyệt'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : inspectingRoommate.TrangThaiDuyet === 'Từ chối'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-amber-100 text-amber-800'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : inspectingRoommate.TrangThaiDuyet === 'Từ chối'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-amber-100 text-amber-800'
                     }`}>
                     {inspectingRoommate.TrangThaiDuyet || 'Chờ duyệt'}
                   </span>
@@ -1581,10 +1658,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     </div>
                     <div className="relative">
                       <span className={`w-2 h-2 rounded-full absolute -left-[19px] top-1 ${inspectingRoommate.TrangThaiDuyet === 'Đã duyệt'
-                          ? 'bg-emerald-500'
-                          : inspectingRoommate.TrangThaiDuyet === 'Từ chối'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-500 animate-pulse'
+                        ? 'bg-emerald-500'
+                        : inspectingRoommate.TrangThaiDuyet === 'Từ chối'
+                          ? 'bg-rose-500'
+                          : 'bg-amber-500 animate-pulse'
                         }`} />
                       <p className="font-bold text-slate-800">
                         Trạng thái: {inspectingRoommate.TrangThaiDuyet || 'Chờ duyệt'}
@@ -2189,7 +2266,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                               <span>Chủ trọ: <strong>{room.ChuTroTen || 'Chủ trọ'}</strong></span>
                               <span>SĐT: <strong className="font-mono text-blue-600">{room.ChuTroSdt || 'Chưa cập nhật'}</strong></span>
-                              <span> Điện: {room.GiaDien} · Nước: {room.GiaNuoc}</span>
+                              <span>
+                                Điện: {typeof room.GiaDien === 'number'
+                                  ? (room.GiaDien === 0 ? 'Miễn phí' : `${room.GiaDien.toLocaleString('vi-VN')} đ/kWh`)
+                                  : room.GiaDien} ·
+                                Nước: {typeof room.GiaNuoc === 'number'
+                                  ? (room.GiaNuoc === 0 ? 'Miễn phí' : `${room.GiaNuoc.toLocaleString('vi-VN')} đ/khối`)
+                                  : room.GiaNuoc}
+                              </span>
                             </div>
 
                             {/* Amenities chips */}
@@ -2442,8 +2526,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       type="button"
                       onClick={() => setRoommateFilter('pending')}
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${roommateFilter === 'pending'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       Chờ duyệt ({roommatePosts.filter((p) => p.TrangThaiDuyet === 'Chờ duyệt').length})
@@ -2452,8 +2536,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       type="button"
                       onClick={() => setRoommateFilter('approved')}
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${roommateFilter === 'approved'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       Đã duyệt ({roommatePosts.filter((p) => p.TrangThaiDuyet !== 'Chờ duyệt').length})
@@ -2462,8 +2546,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       type="button"
                       onClick={() => setRoommateFilter('all')}
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${roommateFilter === 'all'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       Tất cả ({roommatePosts.length})
@@ -2534,7 +2618,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
 
                             {/* Cụm nút hành động căn giữa dọc */}
                             <div className="flex md:flex-col items-center justify-center self-center gap-2 shrink-0 w-full md:w-auto my-auto">
-                              {isPending ? (
+                              {roommateFilter === 'pending' || isPending ? (
+                                /* 1. MỤC CHỜ DUYỆT: Nút Duyệt tin & Từ chối */
                                 <>
                                   <button
                                     type="button"
@@ -2553,7 +2638,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                                     <span>Từ chối</span>
                                   </button>
                                 </>
-                              ) : (
+                              ) : roommateFilter === 'approved' ? (
+                                /* 2. MỤC ĐÃ DUYỆT: Nhãn Đã duyệt & Nút Gỡ bài vi phạm (Bỏ nút kiểm định) */
                                 <>
                                   <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-xl whitespace-nowrap">
                                     ✓ Đã duyệt
@@ -2568,20 +2654,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                                     <span>Gỡ bài vi phạm</span>
                                   </button>
                                 </>
+                              ) : (
+                                /* 3. MỤC TẤT CẢ: Chỉ hiển thị nút Kiểm định & Nhật ký */
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInspectingRoommate(post);
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="px-3 py-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Kiểm định & Nhật ký</span>
+                                </button>
                               )}
-
-                              {/* NÚT KIỂM ĐỊNH & NHẬT KÝ ĐỒNG BỘ */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setInspectingRoommate(post);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="px-3 py-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Kiểm định & Nhật ký</span>
-                              </button>
                             </div>
                           </div>
                         );

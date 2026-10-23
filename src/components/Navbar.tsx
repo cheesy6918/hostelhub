@@ -318,16 +318,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             ) : user.VaiTro === 'ChuTro' ? (
               <>
-                {/* Hợp đồng & Xác nhận thuê */}
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('landlord-contracts')}
-                  className={`transition-colors cursor-pointer py-1 text-xs font-semibold ${
-                    currentView === 'landlord-contracts' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600'
-                  }`}
-                >
-                  Hợp đồng & Xác nhận thuê
-                </button>
 
                 {/* Lịch hẹn xem phòng */}
                 <button

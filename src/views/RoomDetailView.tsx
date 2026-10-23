@@ -798,14 +798,18 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Giá điện</span>
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-1 mt-1">
                   <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  {room.GiaDien || '3.800 đ/kWh'}
+                  {typeof room.GiaDien === 'number'
+                    ? (room.GiaDien === 0 ? 'Miễn phí' : `${room.GiaDien.toLocaleString('vi-VN')} đ/kWh`)
+                    : (room.GiaDien || '3.800 đ/kWh')}
                 </span>
               </div>
               <div>
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Giá nước</span>
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-1 mt-1">
                   <Droplets className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                  {room.GiaNuoc || '30.000 đ/khối'}
+                  {typeof room.GiaNuoc === 'number'
+                    ? (room.GiaNuoc === 0 ? 'Miễn phí' : `${room.GiaNuoc.toLocaleString('vi-VN')} đ/khối`)
+                    : (room.GiaNuoc || '30.000 đ/khối')}
                 </span>
               </div>
               <div>
@@ -1122,7 +1126,15 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 <span className="text-sm font-semibold text-slate-600">VNĐ / tháng</span>
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                ⚡ Điện: <strong className="text-slate-700">{room.GiaDien}</strong> · 💧 Nước: <strong className="text-slate-700">{room.GiaNuoc}</strong>
+                 Điện: <strong className="text-slate-700">
+                  {typeof room.GiaDien === 'number'
+                    ? (room.GiaDien === 0 ? 'Miễn phí' : `${room.GiaDien.toLocaleString('vi-VN')} đ/kWh`)
+                    : room.GiaDien}
+                </strong> ·  Nước: <strong className="text-slate-700">
+                  {typeof room.GiaNuoc === 'number'
+                    ? (room.GiaNuoc === 0 ? 'Miễn phí' : `${room.GiaNuoc.toLocaleString('vi-VN')} đ/khối`)
+                    : room.GiaNuoc}
+                </strong>
               </div>
             </div>
 

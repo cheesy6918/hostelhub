@@ -189,6 +189,8 @@ export interface DatabaseSchema {
   rental_contracts: RentalContract[];
   reviews: ReviewRecord[];
   wallet_transactions?: GiaoDichVi[];
+  articles?: any[];     // 👈 Bổ sung dòng này
+  roommates?: any[];    // 👈 Bổ sung dòng này
 }
 
 // Determine candidate paths for database file to support both local dev and Vercel Serverless
@@ -263,8 +265,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 88 Trần Đại Nghĩa, Phường Đồng Tâm',
       QuanHuyen: 'Hai Bà Trưng, Hà Nội',
       GiaThue: 1200000,
-      GiaDien: 'Miễn phí (bao trọn gói tiền phòng)',
-      GiaNuoc: 'Miễn phí (nước sinh hoạt + nước lọc RO)',
+      GiaDien: 0,
+      GiaNuoc: 0,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Giờ tự do', 'Wifi', 'Dọn phòng', 'Khóa vân tay'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -304,8 +306,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Ngõ 29/8 Đường Cầu Diễn, Phường Phúc Diễn',
       QuanHuyen: 'Bắc Từ Liêm, Hà Nội',
       GiaThue: 1500000,
-      GiaDien: '3.500 đ/kWh (đồng hồ riêng từng phòng)',
-      GiaNuoc: '80.000 đ/người/tháng',
+      GiaDien: 3500,
+      GiaNuoc: 80000,
       TienIch: ['Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Wifi', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -338,8 +340,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 45 Ngách 185 Chùa Láng, Phường Láng Thượng',
       QuanHuyen: 'Đống Đa, Hà Nội',
       GiaThue: 1800000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '100.000 đ/người/tháng',
+      GiaDien: 3800,
+      GiaNuoc: 100000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Wifi', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -372,8 +374,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 16 Ngõ 199 Trần Quốc Hoàn, Phường Dịch Vọng Hậu',
       QuanHuyen: 'Cầu Giấy, Hà Nội',
       GiaThue: 2200000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Gác lửng', 'Wifi'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -406,8 +408,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 18 Ngõ 204 Tạ Quang Bửu, Phường Bách Khoa',
       QuanHuyen: 'Hai Bà Trưng, Hà Nội',
       GiaThue: 2600000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Gác lửng', 'Khóa vân tay', 'Wifi'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -440,8 +442,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 12 Ngõ 10 Tôn Thất Tùng, Phường Khương Thượng',
       QuanHuyen: 'Đống Đa, Hà Nội',
       GiaThue: 2900000,
-      GiaDien: '4.000 đ/kWh',
-      GiaNuoc: '100.000 đ/người/tháng',
+      GiaDien: 4000,
+      GiaNuoc: 100000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Tủ lạnh', 'Ban công', 'Wifi'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -474,8 +476,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Ngõ 52 Tân Nhuệ, Phường Cổ Nhuế 2',
       QuanHuyen: 'Bắc Từ Liêm, Hà Nội',
       GiaThue: 3200000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '35.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 35000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Máy giặt', 'Tủ lạnh', 'Thang máy', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -508,8 +510,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 130 Xuân Thủy, Phường Dịch Vọng Hậu',
       QuanHuyen: 'Cầu Giấy, Hà Nội',
       GiaThue: 3500000,
-      GiaDien: '4.000 đ/kWh',
-      GiaNuoc: '100.000 đ/người/tháng',
+      GiaDien: 4000,
+      GiaNuoc: 100000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Máy giặt', 'Tủ lạnh', 'Gác lửng', 'Thang máy', 'Khóa vân tay'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -542,8 +544,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Ngõ 91 Nguyễn Chí Thanh, Phường Láng Hạ',
       QuanHuyen: 'Đống Đa, Hà Nội',
       GiaThue: 3800000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Máy giặt', 'Tủ lạnh', 'Ban công', 'Wifi'],
       TrangThai: 'Hết phòng',
       IdChuTro: 'usr_chutro',
@@ -576,8 +578,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Ngõ 102 Cầu Giấy, Phường Quan Hoa',
       QuanHuyen: 'Cầu Giấy, Hà Nội',
       GiaThue: 1300000,
-      GiaDien: '3.500 đ/kWh',
-      GiaNuoc: '70.000 đ/người/tháng',
+      GiaDien: 3500,
+      GiaNuoc: 70000,
       TienIch: ['Nóng lạnh', 'Vệ sinh riêng', 'Wifi', 'Giờ tự do', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -609,8 +611,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 25 Ngõ 167 Tây Sơn, Phường Quang Trung',
       QuanHuyen: 'Đống Đa, Hà Nội',
       GiaThue: 3400000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Máy giặt', 'Tủ lạnh', 'Thang máy', 'Khóa vân tay'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -643,8 +645,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Ngõ 12 Hồ Tùng Mậu, Phường Mai Dịch',
       QuanHuyen: 'Cầu Giấy, Hà Nội',
       GiaThue: 1100000,
-      GiaDien: 'Miễn phí (bao trọn gói)',
-      GiaNuoc: 'Miễn phí (bao trọn gói)',
+      GiaDien: 0,
+      GiaNuoc: 0,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Giờ tự do', 'Wifi', 'Dọn phòng', 'Khóa vân tay'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -676,8 +678,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 38 Ngõ 75 Hồ Tùng Mậu, Phường Mai Dịch',
       QuanHuyen: 'Nam Từ Liêm, Hà Nội',
       GiaThue: 1900000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '80.000 đ/người/tháng',
+      GiaDien: 3800,
+      GiaNuoc: 80000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Wifi', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -709,8 +711,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 19 Ngõ 10 Phố Ao Sen, Phường Mộ Lao',
       QuanHuyen: 'Hà Đông, Hà Nội',
       GiaThue: 2700000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Gác lửng', 'Tủ lạnh', 'Khóa vân tay', 'Wifi'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -742,8 +744,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 42 Ngõ 330 Nguyễn Trãi, Phường Thanh Xuân Trung',
       QuanHuyen: 'Thanh Xuân, Hà Nội',
       GiaThue: 2100000,
-      GiaDien: '3.800 đ/kWh',
-      GiaNuoc: '30.000 đ/khối',
+      GiaDien: 3800,
+      GiaNuoc: 30000,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Vệ sinh riêng', 'Giờ tự do', 'Wifi', 'Khóa vân tay', 'Chỗ để xe'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -775,8 +777,8 @@ export function getInitialData(): DatabaseSchema {
       DiaChi: 'Số 10 Ngõ 30 Tạ Quang Bửu, Phường Bách Khoa',
       QuanHuyen: 'Hai Bà Trưng, Hà Nội',
       GiaThue: 1250000,
-      GiaDien: 'Miễn phí (bao trọn gói)',
-      GiaNuoc: 'Miễn phí (bao trọn gói)',
+      GiaDien: 0,
+      GiaNuoc: 0,
       TienIch: ['Điều hòa', 'Nóng lạnh', 'Giờ tự do', 'Wifi', 'Dọn phòng', 'Khóa vân tay'],
       TrangThai: 'Còn phòng',
       IdChuTro: 'usr_chutro',
@@ -911,41 +913,7 @@ export function getInitialData(): DatabaseSchema {
     },
   ];
 
-  const rental_contracts: RentalContract[] = [
-    {
-      id: 1,
-      room_id: 'room_1',
-      renter_id: 'usr_sinhvien',
-      landlord_id: 'usr_chutro',
-      status: 'active',
-      start_date: '2026-09-01T08:00:00.000Z',
-      end_date: null,
-      created_at: '2026-09-01T07:30:00.000Z',
-      updated_at: '2026-09-01T08:00:00.000Z',
-    },
-    {
-      id: 2,
-      room_id: 'room_14',
-      renter_id: 'usr_sinhvien',
-      landlord_id: 'usr_chutro',
-      status: 'pending_landlord',
-      start_date: '2026-10-01T08:00:00.000Z',
-      end_date: null,
-      created_at: '2026-09-27T08:00:00.000Z',
-      updated_at: '2026-09-27T08:00:00.000Z',
-    },
-    {
-      id: 3,
-      room_id: 'room_15',
-      renter_id: 'usr_sinhvien',
-      landlord_id: 'usr_chutro',
-      status: 'pending_renter',
-      start_date: '2026-10-05T08:00:00.000Z',
-      end_date: null,
-      created_at: '2026-09-27T09:00:00.000Z',
-      updated_at: '2026-09-27T09:00:00.000Z',
-    },
-  ];
+  const rental_contracts: RentalContract[] = [];
 
   const reviews: ReviewRecord[] = [
     {
@@ -1037,6 +1005,8 @@ export function readDb(): DatabaseSchema {
       if (!parsed.rental_contracts) parsed.rental_contracts = [];
       if (!parsed.reviews) parsed.reviews = [];
       if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
+      if (!parsed.articles) parsed.articles = [];    // 👈 Bổ sung dòng này
+      if (!parsed.roommates) parsed.roommates = [];  // 👈 Bổ sung dòng này
       memoryDbCache = parsed;
       return parsed;
     } catch (parseErr) {
@@ -1159,15 +1129,27 @@ export async function queryMySql(sql: string, params: any[] = []): Promise<any> 
   return null;
 }
 
-// Parse room row from MySQL to PhongTro
 export function parseRoomRow(row: any): PhongTro {
+  const giaDienRaw = row.GiaDien !== undefined ? row.GiaDien : row.gia_dien;
+  const giaNuocRaw = row.GiaNuoc !== undefined ? row.GiaNuoc : row.gia_nuoc;
+
+  const giaDienNum = typeof giaDienRaw === 'number'
+    ? giaDienRaw
+    : Number(String(giaDienRaw || '').replace(/[^\d]/g, ''));
+
+  const giaNuocNum = typeof giaNuocRaw === 'number'
+    ? giaNuocRaw
+    : Number(String(giaNuocRaw || '').replace(/[^\d]/g, ''));
+
   return {
     ...row,
-    GiaThue: Number(row.GiaThue),
-    DienTich: Number(row.DienTich || 20),
-    TienIch: safeJsonParse<string[]>(row.TienIch, []),
-    HinhAnh: safeJsonParse<string[]>(row.HinhAnh, []),
-    DanhGia: safeJsonParse<ReviewItem[]>(row.DanhGia, []),
+    GiaThue: Number(row.GiaThue !== undefined ? row.GiaThue : row.gia_thue),
+    GiaDien: isNaN(giaDienNum) ? 3800 : giaDienNum,
+    GiaNuoc: isNaN(giaNuocNum) ? 30000 : giaNuocNum,
+    DienTich: Number((row.DienTich !== undefined ? row.DienTich : row.dien_tich) || 20),
+    TienIch: safeJsonParse<string[]>(row.TienIch !== undefined ? row.TienIch : row.tien_ich, []),
+    HinhAnh: safeJsonParse<string[]>(row.HinhAnh !== undefined ? row.HinhAnh : row.hinh_anh, []),
+    DanhGia: safeJsonParse<ReviewItem[]>(row.DanhGia !== undefined ? row.DanhGia : row.danh_gia, []),
   };
 }
 
@@ -2356,77 +2338,37 @@ export async function canUserReviewRoomInDb(
   roomId: string,
   userId: string
 ): Promise<{ canReview: boolean; reason: string; contractId?: number; contract?: RentalContract }> {
-  // 1. Kiểm tra trong MySQL nếu có kết nối
-  const isConn = await isMySqlConnected();
-  if (isConn) {
-    try {
-      const [contracts] = await pool.query(
-        'SELECT * FROM rental_contracts WHERE room_id = ? AND renter_id = ? AND status IN ("active", "completed")',
-        [roomId, userId]
-      );
-      const contractList = contracts as any[];
-      if (!contractList || contractList.length === 0) {
-        return {
-          canReview: false,
-          reason: 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.',
-        };
-      }
-
-      for (const contract of contractList) {
-        const [existing] = await pool.query(
-          'SELECT id FROM reviews WHERE room_id = ? AND renter_id = ? AND contract_id = ? LIMIT 1',
-          [roomId, userId, contract.id]
-        );
-        if ((existing as any[]).length === 0) {
-          return {
-            canReview: true,
-            reason: 'Đủ điều kiện đánh giá phòng trọ',
-            contractId: Number(contract.id),
-            contract: enrichContract({ ...contract, id: Number(contract.id) }),
-          };
-        }
-      }
-
-      return {
-        canReview: false,
-        reason: 'Bạn đã gửi đánh giá cho đợt thuê phòng này rồi.',
-      };
-    } catch (err) {
-      console.warn('[MySQL] Error checking review permission:', err);
-    }
-  }
-
-  // 2. Fallback kiểm tra trong memory / JSON
   const db = readDb();
-  const contracts = (db.rental_contracts || []).filter(
-    c => c.room_id === roomId && c.renter_id === userId && (c.status === 'active' || c.status === 'completed')
+  
+  // Kiểm tra xem sinh viên đã có đơn đặt cọc thành công cho phòng này chưa
+  const deposit = (db.deposits || []).find(
+    d => d.IdPhong === roomId && d.IdSinhVien === userId && (d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận')
   );
 
-  if (!contracts || contracts.length === 0) {
+  if (!deposit) {
     return {
       canReview: false,
-      reason: 'Chỉ người thuê phòng đã được xác minh mới có thể gửi đánh giá và nhận xét.',
+      reason: 'Chỉ sinh viên đã đặt cọc giữ chỗ thành công mới có thể gửi đánh giá và nhận xét phòng.',
     };
   }
 
+  // Kiểm tra xem sinh viên đã gửi đánh giá cho phòng này chưa
   const allReviews = db.reviews || [];
-  for (const contract of contracts) {
-    const hasReviewed = allReviews.some(
-      r => r.room_id === roomId && r.renter_id === userId && Number(r.contract_id) === Number(contract.id)
-    );
-    if (!hasReviewed) {
-      return {
-        canReview: true,
-        reason: 'Đủ điều kiện đánh giá phòng trọ',
-        contractId: Number(contract.id),
-        contract: enrichContract(contract),
-      };
-    }
+  const hasReviewed = allReviews.some(
+    r => r.room_id === roomId && r.renter_id === userId
+  );
+
+  if (hasReviewed) {
+    return {
+      canReview: false,
+      reason: 'Bạn đã gửi đánh giá cho phòng trọ này rồi.',
+    };
   }
 
   return {
-    canReview: false,
-    reason: 'Bạn đã gửi đánh giá cho đợt thuê phòng này rồi.',
+    canReview: true,
+    reason: 'Đủ điều kiện đánh giá phòng trọ',
+    contractId: 1, // Định danh tương thích
   };
 }
 

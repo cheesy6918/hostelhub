@@ -314,7 +314,12 @@ export const DistrictRoomListView: React.FC<DistrictRoomListViewProps> = ({
                               <Maximize2 className="w-3 h-3 text-slate-500" />
                               {room.DienTich || 25} m²
                             </span>
-                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                            <span className={`px-2 py-0.5 rounded-md font-bold ${room.TrangThai === 'Hết phòng'
+                                ? 'text-rose-700 bg-rose-50'
+                                : (room.TrangThai === 'Đã cọc' || room.TrangThai === 'Chờ chủ trọ xác nhận cọc')
+                                  ? 'text-purple-700 bg-purple-50'
+                                  : 'text-emerald-700 bg-emerald-50'
+                              }`}>
                               {room.TrangThai || 'Còn phòng'}
                             </span>
                           </div>
