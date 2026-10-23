@@ -1,8 +1,8 @@
 export interface TinOGhep {
   Id: string;
   TieuDe: string;
-  GiaThue: number; // VNĐ / tháng
-  DienTich: number; // m2
+  GiaThue: number;
+  DienTich: number;
   QuanHuyen: string;
   DiaChi: string;
   MoTa: string;
@@ -19,6 +19,8 @@ export interface TinOGhep {
   NgayHetHan: string;
   TienNghi: string[];
   HinhAnh: string[];
+  VideoUrl?: string; // 👈 THÊM DÒNG NÀY
+  TrangThaiDuyet?: 'Chờ duyệt' | 'Đã duyệt' | 'Từ chối';
 }
 
 export const mockRoommates: TinOGhep[] = [
@@ -50,7 +52,8 @@ Tổng chi phí dịch vụ tiết kiệm: Điện 3.8k/số, nước 30k/khối
       'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Chờ duyệt' // 👈 Để Chờ duyệt test duyệt tin Admin
   },
   {
     Id: 'oghep_2',
@@ -76,7 +79,8 @@ Miễn phí máy giặt, tủ lạnh, bếp từ nấu ăn rộng rãi. Khu vự
     HinhAnh: [
       'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Chờ duyệt' // 👈 Để Chờ duyệt test duyệt tin Admin
   },
   {
     Id: 'oghep_3',
@@ -102,7 +106,8 @@ Phòng đã có sẵn điều hòa Inverter, bình nóng lạnh Rossi, tủ qu�
     HinhAnh: [
       'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   },
   {
     Id: 'oghep_4',
@@ -129,7 +134,8 @@ Giờ giấc tự do, khóa cửa vân tay, an ninh đảm bảo. Yêu cầu b�
     HinhAnh: [
       'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   },
   {
     Id: 'oghep_5',
@@ -156,7 +162,8 @@ Phòng khép kín sạch sẽ, có bình nóng lạnh, quạt trần, giường 
     HinhAnh: [
       'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   },
   {
     Id: 'oghep_6',
@@ -183,7 +190,8 @@ Giá trọn gói 1.350.000đ/tháng đã bao gồm toàn bộ tiền phòng, đi
     HinhAnh: [
       'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   },
   {
     Id: 'oghep_7',
@@ -210,7 +218,8 @@ Tìm 1 bạn nam sinh viên hoặc mới ra trường đi làm tính tình văn 
     HinhAnh: [
       'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   },
   {
     Id: 'oghep_8',
@@ -237,6 +246,7 @@ Gần các trường ĐH Sư Phạm, Quốc Gia, Ngoại Ngữ và chợ Nhà Xa
     HinhAnh: [
       'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80'
-    ]
+    ],
+    TrangThaiDuyet: 'Đã duyệt'
   }
 ];

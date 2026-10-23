@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { mockRoommates, TinOGhep } from '../utils/roommatesData';
 import { RoommateDetailView } from './RoommateDetailView';
+import { RoommateCreatePostView } from './RoommateCreatePostView';
 
 interface RoommateViewProps {
   onNavigate?: (view: string) => void;
@@ -49,6 +50,12 @@ const AREA_RANGES = [
 
 export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
   const { user } = useAuth();
+
+  // Đọc danh sách mới nhất đã được Admin duyệt từ localStorage (nếu có)
+  const savedRoommates = localStorage.getItem('hostelhub_roommates');
+  const allPosts: TinOGhep[] = savedRoommates ? JSON.parse(savedRoommates) : mockRoommates;
+
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<TinOGhep | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Tất cả');
   const [selectedPriceRange, setSelectedPriceRange] = useState<string>('Tất cả');
@@ -88,13 +95,9 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
       }, 1200);
       return;
     }
-    // Nếu đã đăng nhập thì mở modal
-    setFormData((prev) => ({
-      ...prev,
-      phone: (user as any)?.Sdt || '',
-      zalo: (user as any)?.Sdt || ''
-    }));
-    setIsModalOpen(true);
+    // Mở trang tạo bài riêng
+    setIsCreatingPost(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmitPost = (e: React.FormEvent) => {
@@ -123,6 +126,23 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
     });
   };
 
+  // Nếu người dùng bấm đăng tin -> Hiển thị trang riêng RoommateCreatePostView
+  if (isCreatingPost) {
+    return (
+      <RoommateCreatePostView
+        onBack={() => {
+          setIsCreatingPost(false);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onSuccess={() => {
+          setIsCreatingPost(false);
+          showToast('Tin đăng tìm ở ghép của bạn đã được gửi thành công và đang chờ ban quản trị duyệt!', 'success');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
+    );
+  }
+  
   // Xem chi tiết bài viết
   if (selectedPost) {
     return (
@@ -158,19 +178,22 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
     return 10;
   };
 
-  const filteredList = mockRoommates.filter((post) => {
+  const filteredList = allPosts.filter((post) => {
+    // Chỉ hiển thị bài đã duyệt (ẩn bài chờ duyệt và từ chối)
+    if (post.TrangThaiDuyet === 'Chờ duyệt' || post.TrangThaiDuyet === 'Từ chối') {
+      return false;
+    }
+
     if (selectedDistrict !== 'Tất cả' && post.QuanHuyen !== selectedDistrict) return false;
     
     if (selectedPriceRange !== 'Tất cả') {
       const pRange = PRICE_RANGES.find((r) => r.label === selectedPriceRange);
       if (pRange && (post.GiaThue < pRange.min || post.GiaThue > pRange.max)) return false;
     }
-
     if (selectedAreaRange !== 'Tất cả') {
       const aRange = AREA_RANGES.find((r) => r.label === selectedAreaRange);
       if (aRange && (post.DienTich < aRange.min || post.DienTich > aRange.max)) return false;
     }
-
     return true;
   });
 
@@ -580,155 +603,6 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
         </div>
 
       </div>
-
-      {/* ========================================================= */}
-      {/* MODAL ĐĂNG BÀI TÌM Ở GHÉP                                  */}
-      {/* ========================================================= */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">
-                  Đăng tin tìm bạn ở ghép
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Tin đăng sẽ được duyệt trong vòng 2-4 giờ bởi ban quản trị HostelHub.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitPost} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Tiêu đề bài viết <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Tìm bạn nữ ở ghép CCMN ngõ 138 Triều Khúc..."
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Quận/Huyện <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={formData.district}
-                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600 bg-white"
-                  >
-                    {DISTRICTS.map((d) => (
-                      <option key={d} value={d}>Quận {d}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Đối tượng ghép <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600 bg-white"
-                  >
-                    <option value="Tất cả">Tất cả (Nam hoặc Nữ)</option>
-                    <option value="Nam">Chỉ tìm Nam</option>
-                    <option value="Nữ">Chỉ tìm Nữ</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Giá thuê (đ/tháng/người) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Ví dụ: 1500000"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Diện tích phòng (m²) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Ví dụ: 25"
-                    value={formData.area}
-                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Địa chỉ chi tiết <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Số nhà, tên ngõ, phố, phường..."
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Thông tin mô tả & yêu cầu ở ghép
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="Mô tả về phòng: điều hòa, nóng lạnh, giờ giấc, tiền điện nước, yêu cầu tính cách bạn cùng phòng..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:border-blue-600"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Gửi tin để duyệt</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

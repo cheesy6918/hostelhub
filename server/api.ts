@@ -399,7 +399,6 @@ const handleGetTransactions = async (req: Request, res: Response) => {
 apiRouter.get('/wallet/transactions', requireAuth, handleGetTransactions);
 apiRouter.get('/auth/wallet/transactions', requireAuth, handleGetTransactions);
 apiRouter.get('/student/transactions', requireAuth, handleGetTransactions);
-apiRouter.get('/auth/wallet/transactions', requireAuth, handleGetTransactions);
 
 // -------------------------------------------------------------
 // 2. PHÒNG TRỌ (ROOMS API)
@@ -2782,5 +2781,125 @@ apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message || 'Lỗi cập nhật trạng thái bài viết' });
+  }
+});
+
+// -------------------------------------------------------------
+// 12. TÌM BẠN Ở GHÉP (ROOMMATES API)
+// -------------------------------------------------------------
+
+// GET /api/roommates - Lấy danh sách tin ở ghép
+apiRouter.get('/roommates', async (req: Request, res: Response) => {
+  try {
+    const userRole = req.headers['x-user-role'];
+    const db: any = readDb();
+    let posts = Array.isArray(db.roommates) ? db.roommates : [];
+
+    // Nếu không phải Admin thì chỉ lấy bài đã duyệt
+    if (userRole !== 'Admin') {
+      posts = posts.filter((p: any) => p.TrangThaiDuyet === 'Đã duyệt' || !p.TrangThaiDuyet);
+    }
+
+    res.json({ success: true, count: posts.length, data: posts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi lấy tin ở ghép' });
+  }
+});
+
+// POST /api/roommates - Sinh viên đăng tin tìm bạn ở ghép
+apiRouter.post('/roommates', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    const { TieuDe, QuanHuyen, DiaChi, GiaThue, DienTich, DoiTuongGhep, MoTa, TienNghi, HinhAnh, VideoUrl } = req.body;
+
+    const newPost = {
+      Id: `oghep_${Date.now()}`,
+      TieuDe: (TieuDe || '').trim(),
+      QuanHuyen: QuanHuyen || 'Cầu Giấy',
+      DiaChi: (DiaChi || '').trim(),
+      GiaThue: Number(GiaThue) || 1500000,
+      DienTich: Number(DienTich) || 25,
+      DoiTuongGhep: DoiTuongGhep || 'Tất cả',
+      MoTa: (MoTa || '').trim(),
+      TienNghi: Array.isArray(TienNghi) ? TienNghi : [],
+      HinhAnh: Array.isArray(HinhAnh) ? HinhAnh : [],
+      VideoUrl: (VideoUrl || '').trim() || undefined,
+      TacGia: {
+        Ten: user.HoTen,
+        Sdt: user.Sdt,
+        Zalo: user.Sdt,
+        NgayThamGia: new Date().toLocaleDateString('vi-VN'),
+        TrangThai: 'Đang online',
+      },
+      NgayDang: `Hôm nay, ${new Date().toLocaleDateString('vi-VN')}`,
+      TrangThaiDuyet: 'Chờ duyệt',
+    };
+
+    const db: any = readDb();
+    if (!db.roommates) db.roommates = [];
+    db.roommates.unshift(newPost);
+    writeDb(db);
+
+    res.status(201).json({
+      success: true,
+      message: 'Đăng tin tìm ở ghép thành công! Tin đang chờ Admin duyệt.',
+      data: newPost,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi gửi tin ở ghép' });
+  }
+});
+
+// PATCH /api/roommates/:id/status - Admin duyệt / từ chối tin
+apiRouter.patch('/roommates/:id/status', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Admin mới có quyền duyệt tin ở ghép.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { TrangThaiDuyet } = req.body; // 'Đã duyệt' | 'Từ chối'
+
+    const db: any = readDb();
+    if (!db.roommates) db.roommates = [];
+    const item = db.roommates.find((p: any) => p.Id === id);
+
+    if (!item) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy tin đăng.' });
+      return;
+    }
+
+    item.TrangThaiDuyet = TrangThaiDuyet;
+    writeDb(db);
+
+    res.json({
+      success: true,
+      message: `Đã cập nhật trạng thái tin thành: ${TrangThaiDuyet}`,
+      data: item,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi cập nhật trạng thái' });
+  }
+});
+
+// DELETE /api/roommates/:id - Gỡ bỏ bài vi phạm
+apiRouter.delete('/roommates/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Admin mới có quyền gỡ tin đăng.' });
+      return;
+    }
+
+    const db: any = readDb();
+    if (!db.roommates) db.roommates = [];
+    db.roommates = db.roommates.filter((p: any) => p.Id !== req.params.id);
+    writeDb(db);
+
+    res.json({ success: true, message: 'Đã gỡ bài đăng vi phạm khỏi hệ thống.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi xóa tin' });
   }
 });

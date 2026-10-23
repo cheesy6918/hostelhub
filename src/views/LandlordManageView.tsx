@@ -6,6 +6,7 @@ import { LandlordRoomCard } from '../components/landlord/LandlordRoomCard';
 import { LandlordWalletModal } from '../components/landlord/LandlordWalletModal';
 import { LandlordCreateArticleModal } from '../components/landlord/LandlordCreateArticleModal';
 import { ARTICLES_DATA as INITIAL_ARTICLES } from '../utils/articlesData';
+import { LandlordRoomDetailModal } from '../components/landlord/LandlordRoomDetailModal';
 
 import {
   Search,
@@ -93,6 +94,7 @@ const AVAILABLE_AMENITIES_LIST = [
   // State modal ví & bài viết:
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showArticleModal, setShowArticleModal] = useState(false);
+  const [viewingRoom, setViewingRoom] = useState<Room | null>(null); // 👈 DÁN DÒNG NÀY
 
   // --- State xem trước & chỉnh sửa cẩm nang của Chủ trọ ---
   const [previewArticle, setPreviewArticle] = useState<any | null>(null);
@@ -258,15 +260,47 @@ const AVAILABLE_AMENITIES_LIST = [
         district.includes(searchTerm.toLowerCase());
 
       // Lọc theo trạng thái mở rộng chuẩn xác
+      // Lọc theo trạng thái mở rộng chuẩn xác
       const rawStatus = (room.TrangThai || '').toLowerCase().trim();
+      const isAvailable =
+        rawStatus.includes('còn phòng') ||
+        rawStatus.includes('conphong') ||
+        rawStatus.includes('controng') ||
+        rawStatus.includes('công khai') ||
+        rawStatus.includes('congkhai');
+
+      const isPending =
+        rawStatus.includes('chờ duyệt') ||
+        rawStatus.includes('choduyet') ||
+        rawStatus.includes('pending');
+
+      const isRentedOrOccupied =
+        rawStatus.includes('hết phòng') ||
+        rawStatus.includes('hetphong') ||
+        rawStatus.includes('đã cho thuê') ||
+        rawStatus.includes('dathue') ||
+        rawStatus.includes('đã cọc') ||
+        rawStatus.includes('dacoc') ||
+        rawStatus.includes('rented') ||
+        rawStatus.includes('occupied');
+
       let matchesStatus = true;
-      
-      if (statusFilter === 'available' || statusFilter === 'Còn phòng') {
-        matchesStatus = rawStatus.includes('còn phòng') || rawStatus.includes('controng');
-      } else if (statusFilter === 'rented' || statusFilter === 'Hết phòng' || statusFilter === 'Đã cho thuê') {
-        matchesStatus = !rawStatus.includes('còn phòng') && !rawStatus.includes('controng');
-      } else if (statusFilter === 'pending' || statusFilter === 'Chờ duyệt') {
-        matchesStatus = rawStatus.includes('chờ duyệt') || rawStatus.includes('choduyet');
+      const lowerFilter = (statusFilter || '').toLowerCase().trim();
+
+      if (lowerFilter === 'available' || lowerFilter === 'còn phòng' || lowerFilter === 'controng') {
+        matchesStatus = isAvailable;
+      } else if (
+        lowerFilter === 'rented' ||
+        lowerFilter === 'occupied' ||
+        lowerFilter === 'hết phòng' ||
+        lowerFilter === 'đã cho thuê' ||
+        lowerFilter.includes('hết') ||
+        lowerFilter.includes('thuê')
+      ) {
+        // Chỉ lấy những phòng thực sự đã hết/đã thuê/đã cọc, TUYỆT ĐỐI không lấy phòng còn trống
+        matchesStatus = !isAvailable && (isRentedOrOccupied || !isPending);
+      } else if (lowerFilter === 'pending' || lowerFilter === 'chờ duyệt' || lowerFilter === 'choduyet') {
+        matchesStatus = isPending;
       }
 
       // Lọc theo quận/huyện
@@ -369,9 +403,7 @@ const AVAILABLE_AMENITIES_LIST = [
   const currentArticles = filteredArticles.slice(indexOfFirstArticle, indexOfLastArticle);
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
+    setActiveTab(initialTab || 'rooms');
   }, [initialTab]);
 
   // Contract Action loading states
@@ -892,10 +924,16 @@ const AVAILABLE_AMENITIES_LIST = [
     }
   };
 
-  const availableCount = rooms.filter((r) => r.TrangThai === 'Còn phòng').length;
-  const occupiedCount = rooms.filter((r) => {
-    const st = (r.TrangThai || '').toLowerCase();
-    return !st.includes('còn phòng') && !st.includes('controng');
+  const availableCount = rooms.filter((r) => {
+  const st = (r.TrangThai || '').toLowerCase().trim();
+  return st.includes('còn phòng') || st.includes('conphong') || st.includes('controng') || st.includes('công khai') || st.includes('congkhai');
+}).length;
+
+ const occupiedCount = rooms.filter((r) => {
+    const st = (r.TrangThai || '').toLowerCase().trim();
+    const isAvail = st.includes('còn phòng') || st.includes('controng') || st.includes('công khai');
+    const isPend = st.includes('chờ duyệt') || st.includes('choduyet');
+    return !isAvail && !isPend;
   }).length;
   const pendingCount = rooms.filter((r) => r.TrangThai === 'Chờ duyệt' || r.TrangThai === 'ChoDuyet' || (r.TrangThai as string)?.toLowerCase() === 'choduyet').length;
 
@@ -920,6 +958,13 @@ const AVAILABLE_AMENITIES_LIST = [
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rooms')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <span>Về Quản lý phòng</span>
+                </button>
               </div>
             </div>
 
@@ -958,14 +1003,15 @@ const AVAILABLE_AMENITIES_LIST = [
                   Xác nhận hoặc dời lịch để sinh viên chủ động thời gian qua xem phòng
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={fetchLandlordData}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Làm mới danh sách</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rooms')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <span>Về Quản lý phòng</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
@@ -1003,14 +1049,15 @@ const AVAILABLE_AMENITIES_LIST = [
                   Tiếp nhận tiền cọc vào ví và tự động chuyển trạng thái phòng sang Đã cọc
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={fetchLandlordData}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Làm mới đơn cọc</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rooms')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <span>Về Quản lý phòng</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
@@ -1048,14 +1095,16 @@ const AVAILABLE_AMENITIES_LIST = [
                   Quản lý và giải đáp thắc mắc của sinh viên gửi tới các phòng trọ của bạn
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={fetchLandlordData}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Làm mới hộp thư</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rooms')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <span>Về Quản lý phòng</span>
+                </button>
+
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
@@ -1193,34 +1242,35 @@ const AVAILABLE_AMENITIES_LIST = [
         )}
       </div>
 
-      {/* 2 nút chuyển đổi: Quản lý phòng & Quản lý cẩm nang */}
-      <div className="flex items-center gap-2 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab('rooms')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'rooms'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Quản lý phòng ({rooms.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('articles')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'articles'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Quản lý cẩm nang ({articles.length})</span>
-        </button>
-      </div>
+      {/* 2 nút chuyển đổi: CHỈ HIỂN THỊ KHI Ở TAB PHÒNG HOẶC CẨM NANG */}
+      {(activeTab === 'rooms' || activeTab === 'articles') && (
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('rooms')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'rooms'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Quản lý phòng ({rooms.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('articles')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'articles'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Quản lý cẩm nang ({articles.length})</span>
+          </button>
+        </div>
+      )}
 
       {/* Nội dung hiển thị theo tab đang chọn (Đồng bộ từ Navbar & Nút chuyển tab) */}
       {activeTab === 'articles' ? (
@@ -1473,27 +1523,6 @@ const AVAILABLE_AMENITIES_LIST = [
       ) : activeTab === 'contracts' ? (
         /* Tab: Hợp đồng */
         <div className="space-y-5 animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-100">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                <span>Xác nhận thuê phòng 2 chiều & Cấp quyền đánh giá</span>
-              </h2>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Khi bạn bấm xác nhận đồng ý cho thuê, hợp đồng kích hoạt (Đang ở), người thuê được gắn huy hiệu xác minh khi đánh giá phòng.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={fetchLandlordData}
-                className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
-                title="Làm mới"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
           <div className="p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-600 flex items-start gap-3 shadow-2xs">
             <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
@@ -1668,7 +1697,11 @@ const AVAILABLE_AMENITIES_LIST = [
                         )}
                         {contract.room_id && (
                           <button
-                            onClick={() => onViewRoomDetail?.(contract.room_id)}
+                            type="button"
+                            onClick={() => {
+                              const target = rooms.find(r => String(r.Id) === String(contract.room_id));
+                              if (target) setViewingRoom(target);
+                            }}
                             className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
                           >
                             Xem phòng
@@ -1685,16 +1718,11 @@ const AVAILABLE_AMENITIES_LIST = [
       ) : activeTab === 'appointments' ? (
         /* Tab: Lịch hẹn */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Lịch hẹn xem phòng từ sinh viên ({appointments.length})
-              </h2>
-              <p className="text-xs text-slate-500">Xác nhận hoặc hủy hẹn để thông báo kịp thời cho sinh viên</p>
-            </div>
-            <button onClick={fetchLandlordData} className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer">
-              Làm mới
-            </button>
+          <div className="pb-3 border-b border-slate-100 mb-4">
+            <h2 className="text-base font-bold text-slate-900">
+              Lịch hẹn xem phòng từ sinh viên ({appointments.length})
+            </h2>
+            <p className="text-xs text-slate-500">Xác nhận hoặc hủy hẹn để thông báo kịp thời cho sinh viên</p>
           </div>
           {appointments.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
@@ -1779,9 +1807,6 @@ const AVAILABLE_AMENITIES_LIST = [
                 "Xác nhận" sẽ tiếp nhận đơn thành công, phòng chuyển sang "Đã cọc". "Từ chối" yêu cầu nhập lý do và tự động hoàn lại 100% tiền cọc vào ví sinh viên.
               </p>
             </div>
-            <button onClick={fetchLandlordData} className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer">
-              Làm mới
-            </button>
           </div>
           {deposits.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
@@ -1866,7 +1891,7 @@ const AVAILABLE_AMENITIES_LIST = [
                 Danh sách sinh viên gửi yêu cầu liên hệ ({inquiries.length})
               </h2>
               <p className="text-xs text-slate-500">
-                Phản hồi tin nhắn hoặc liên hệ trực tiếp qua SĐT/Zalo để tư vấn cho sinh viên[cite: 19]
+                Phản hồi tin nhắn hoặc liên hệ trực tiếp qua SĐT/Zalo để tư vấn cho sinh viên
               </p>
             </div>
             <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
@@ -1934,33 +1959,14 @@ const AVAILABLE_AMENITIES_LIST = [
                             "{inq.GhiChu || 'Sinh viên quan tâm và muốn được tư vấn thêm về phòng trọ này.'}"
                           </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
-                          {inq.SinhVienSdt && (
-                            <a
-                              href={`tel:${inq.SinhVienSdt}`}
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
-                            >
-                              <Phone className="w-3.5 h-3.5 text-blue-600" />
-                              <span>{inq.SinhVienSdt}</span>
-                            </a>
-                          )}
-                          {rawPhone && (
-                            <a
-                              href={`https://zalo.me/${rawPhone}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              <span>Chat Zalo</span>
-                            </a>
-                          )}
+                        <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-44 self-center">
+                          {/* 1. Trạng thái tiếp nhận */}
                           {inq.TrangThai === 'ChoXacNhan' ? (
-                            <div className="flex items-center gap-1.5">
+                            <div className="grid grid-cols-2 gap-1.5 w-full">
                               <button
                                 type="button"
                                 onClick={() => handleInquiryAction(inq.Id, 'DaDuyet')}
-                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs cursor-pointer transition-all"
+                                className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-98 transition-all"
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>Tiếp nhận</span>
@@ -1968,30 +1974,59 @@ const AVAILABLE_AMENITIES_LIST = [
                               <button
                                 type="button"
                                 onClick={() => handleInquiryAction(inq.Id, 'TuChoi')}
-                                className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
+                                className="px-2.5 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-colors"
                               >
                                 <X className="w-3.5 h-3.5" />
                                 <span>Bỏ qua</span>
                               </button>
                             </div>
                           ) : (
-                            <span
-                              className={`px-3 py-1 text-xs font-bold rounded-xl inline-flex items-center gap-1 ${
+                            <div
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 ${
                                 inq.TrangThai === 'DaDuyet'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'bg-slate-100 text-slate-600'
                               }`}
                             >
-                              {inq.TrangThai === 'DaDuyet' ? '✓ Đã tiếp nhận' : '✕ Đã từ chối'}
-                            </span>
+                              <span>{inq.TrangThai === 'DaDuyet' ? '✓ Đã tiếp nhận' : '✕ Đã từ chối'}</span>
+                            </div>
                           )}
+
+                          {/* 2. Nút Trả lời nhanh */}
                           <button
                             type="button"
                             onClick={() => setReplyingId(isReplying ? null : inq.Id)}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                            className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
                           >
-                            {isReplying ? 'Đóng trả lời' : 'Trả lời nhanh'}
+                            <Send className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{isReplying ? 'Đóng trả lời' : 'Trả lời nhanh'}</span>
                           </button>
+
+                          {/* 3. Nút Chat Zalo & Gọi điện xếp đôi hoặc nút Zalo nổi bật */}
+                          <div className="grid grid-cols-2 gap-1.5 w-full">
+                            {rawPhone ? (
+                              <a
+                                href={`https://zalo.me/${rawPhone}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1 transition-colors"
+                              >
+                                <Send className="w-3 h-3" />
+                                <span>Zalo</span>
+                              </a>
+                            ) : null}
+
+                            {inq.SinhVienSdt && (
+                              <a
+                                href={`tel:${inq.SinhVienSdt}`}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1 transition-colors"
+                                title="Gọi điện thoại trực tiếp"
+                              >
+                                <Phone className="w-3 h-3 text-blue-600" />
+                                <span>Gọi điện</span>
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
                       {isReplying && (
@@ -2110,7 +2145,10 @@ const AVAILABLE_AMENITIES_LIST = [
                   <LandlordRoomCard
                     key={room.Id}
                     room={room}
-                    onViewDetail={(id) => onViewRoomDetail?.(id)}
+                    onViewDetail={(id) => {
+                      const target = rooms.find(r => String(r.Id) === String(id));
+                      if (target) setViewingRoom(target);
+                    }}
                     onEditRoom={() => handleOpenEditModal(room)}
                     onToggleStatus={() => handleToggleRoomStatus(room)}
                     onDeleteRoom={() => handleDeleteRoom(room.Id, room.TieuDe)}
@@ -2717,6 +2755,15 @@ const AVAILABLE_AMENITIES_LIST = [
           </div>
         </div>
       )}
+
+      {/* Modal xem chi tiết phòng cho Chủ trọ */}
+      <LandlordRoomDetailModal
+        room={viewingRoom}
+        isOpen={!!viewingRoom}
+        onClose={() => setViewingRoom(null)}
+        onEditRoom={(r) => handleOpenEditModal(r)}
+        onToggleStatus={(r) => handleToggleRoomStatus(r)}
+      />
     </div>
   );
 };

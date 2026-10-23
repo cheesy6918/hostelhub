@@ -11,9 +11,13 @@ import {
   Share2, 
   Flag,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  Video,
+  Play,
+  ExternalLink
 } from 'lucide-react';
 import { TinOGhep } from '../utils/roommatesData';
+import { parseVideoUrl } from '../utils/video';
 
 interface RoommateDetailViewProps {
   post: TinOGhep;
@@ -191,6 +195,65 @@ export const RoommateDetailView: React.FC<RoommateDetailViewProps> = ({
               </div>
             )}
 
+            {/* Video thực tế phòng ở ghép (nếu có) */}
+            {post.VideoUrl && (
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Video className="w-4 h-4 text-rose-600" />
+                    <span>Video thực tế phòng trọ</span>
+                  </h3>
+                  <a
+                    href={post.VideoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Mở tab mới</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+
+                {(() => {
+                  const parsed = parseVideoUrl(post.VideoUrl);
+                  return (
+                    <div className="space-y-2">
+                      <div className="aspect-16/9 w-full rounded-2xl overflow-hidden bg-black border border-slate-200 shadow-inner">
+                        {parsed.isIframe ? (
+                          <iframe
+                            src={parsed.embedUrl}
+                            title="Video thực tế phòng ở ghép"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="w-full h-full border-0"
+                          />
+                        ) : parsed.type === 'direct' ? (
+                          <video controls src={parsed.embedUrl} className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-6 text-center space-y-3">
+                            <Play className="w-10 h-10 text-rose-500" />
+                            <p className="text-slate-300">Video lưu trữ ngoài nền tảng.</p>
+                            <a
+                              href={parsed.originalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <span>Bấm để xem video</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 block text-right">
+                        Nguồn video: {parsed.type === 'gdrive' ? 'Google Drive' : parsed.type === 'youtube' ? 'YouTube' : 'Trực tiếp'}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Thông tin mô tả */}
             <div className="space-y-3 pt-3">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
@@ -283,7 +346,7 @@ export const RoommateDetailView: React.FC<RoommateDetailViewProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* MỤC 1: TIN ĐĂNG CÙNG KHU VỰC                             */}
+        {/* MỤC 1: TIN ĐĂNG CÙNG KHU VỰC                              */}
         {/* ========================================================= */}
         <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-2xs space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -342,7 +405,7 @@ export const RoommateDetailView: React.FC<RoommateDetailViewProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* MỤC 2: XEM THEO QUẬN HUYỆN KHÁC                          */}
+        {/* MỤC 2: XEM THEO QUẬN HUYỆN KHÁC                           */}
         {/* ========================================================= */}
         <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-2xs space-y-4">
           <h3 className="text-base font-bold text-slate-900 tracking-tight pb-3 border-b border-slate-100">

@@ -80,7 +80,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
   const [giaNuoc, setGiaNuoc] = useState<number | ''>(30000);
   const [dienTich, setDienTich] = useState<number | ''>(25);
   const [loaiPhong, setLoaiPhong] = useState<'GacLung' | 'Studio' | 'ChungCuMini' | 'KyTucXa'>('GacLung');
-  
+
   // Selected amenities
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
     'Điều hòa',
@@ -314,7 +314,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
 
       {/* Form Container */}
       <form onSubmit={handleSubmit} className="space-y-8">
-        
+
         {/* Step 1: Basic Information */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -360,16 +360,16 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
               <select
                 value={quanHuyen}
                 onChange={(e) => setQuanHuyen(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-hidden focus:bg-white focus:ring-2 focus:ring-blue-500"
               >
                 <option value="Cầu Giấy, Hà Nội">Cầu Giấy, Hà Nội</option>
-                <option value="Hai Bà Trưng, Hà Nội">Hai Bà Trưng, Hà Nội</option>
                 <option value="Đống Đa, Hà Nội">Đống Đa, Hà Nội</option>
-                <option value="Bắc Từ Liêm, Hà Nội">Bắc Từ Liêm, Hà Nội</option>
+                <option value="Hai Bà Trưng, Hà Nội">Hai Bà Trưng, Hà Nội</option>
                 <option value="Thanh Xuân, Hà Nội">Thanh Xuân, Hà Nội</option>
+                <option value="Nam Từ Liêm, Hà Nội">Nam Từ Liêm, Hà Nội</option>
+                <option value="Bắc Từ Liêm, Hà Nội">Bắc Từ Liêm, Hà Nội</option>
                 <option value="Hà Đông, Hà Nội">Hà Đông, Hà Nội</option>
-                <option value="Quận 1, TP.HCM">Quận 1, TP.HCM</option>
-                <option value="Thủ Đức, TP.HCM">Thủ Đức, TP.HCM</option>
+                <option value="Ba Đình, Hà Nội">Ba Đình, Hà Nội</option>
               </select>
             </div>
           </div>
@@ -489,11 +489,10 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
                 return (
                   <label
                     key={item}
-                    className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none ${
-                      checked
+                    className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none ${checked
                         ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold shadow-xs'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -660,7 +659,7 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white"
               />
             </div>
-            
+
             <div className="mt-2.5 p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 space-y-1">
               <p className="font-semibold flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
