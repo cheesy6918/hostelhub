@@ -38,6 +38,83 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [topupLoading, setTopupLoading] = useState(false);
 
+  // State phục vụ modal đánh giá phòng
+  const [reviewModal, setReviewModal] = useState<{
+    isOpen: boolean;
+    roomId: string;
+    roomTitle: string;
+    soSao: number;
+    nhanXet: string;
+    submitting: boolean;
+    error: string;
+  }>({
+    isOpen: false,
+    roomId: '',
+    roomTitle: '',
+    soSao: 5,
+    nhanXet: '',
+    submitting: false,
+    error: '',
+  });
+
+  // Hàm mở modal đánh giá
+  const handleOpenReviewModal = (roomId: string, roomTitle: string) => {
+    setReviewModal({
+      isOpen: true,
+      roomId,
+      roomTitle,
+      soSao: 5,
+      nhanXet: '',
+      submitting: false,
+      error: '',
+    });
+  };
+
+  // Hàm gửi đánh giá lên API backend
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewModal.nhanXet.trim()) {
+      setReviewModal(prev => ({ ...prev, error: 'Vui lòng nhập nội dung nhận xét chi tiết.' }));
+      return;
+    }
+
+    try {
+      setReviewModal(prev => ({ ...prev, submitting: true, error: '' }));
+      const res = await fetch(`/api/rooms/${reviewModal.roomId}/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          soSao: reviewModal.soSao,
+          nhanXet: reviewModal.nhanXet.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActionMessage({
+          text: 'Gửi đánh giá phòng trọ thành công! Đánh giá của bạn đã được hiển thị công khai.',
+          type: 'success',
+        });
+        setReviewModal(prev => ({ ...prev, isOpen: false }));
+      } else {
+        setReviewModal(prev => ({
+          ...prev,
+          error: data.message || 'Không thể gửi đánh giá.',
+        }));
+      }
+    } catch {
+      setReviewModal(prev => ({
+        ...prev,
+        error: 'Lỗi kết nối máy chủ khi gửi đánh giá.',
+      }));
+    } finally {
+      setReviewModal(prev => ({ ...prev, submitting: false }));
+    }
+  };
+
   const fetchData = async () => {
     if (!token) return;
     try {
@@ -584,16 +661,17 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
                         {/* Nút Đánh giá phòng mở ngay khi cọc thành công */}
-                        {isAccepted && dep.IdPhong && (
-                          <button
-                            type="button"
-                            onClick={() => onViewRoom?.(dep.IdPhong)}
-                            className="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                          >
-                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                            <span>Đánh giá phòng</span>
-                          </button>
-                        )}
+                        {/* SỬA LẠI ONCLICK: gọi handleOpenReviewModal */}
+{isAccepted && dep.IdPhong && (
+  <button
+    type="button"
+    onClick={() => handleOpenReviewModal(dep.IdPhong, dep.TieuDePhong || 'Phòng trọ')}
+    className="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+  >
+    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+    <span>Đánh giá phòng</span>
+  </button>
+)}
                         {dep.IdPhong && (
                           <button
                             onClick={() => onViewRoom?.(dep.IdPhong)}
@@ -701,6 +779,108 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
               })}
             </div>
           )}
+        </div>
+      )}
+      {/* Modal Popup Nhận xét & Đánh giá phòng */}
+      {reviewModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-150">
+            {/* Header modal */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-amber-600">
+                <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+                <h3 className="font-bold text-slate-900 text-base">Đánh giá & Nhận xét phòng trọ</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Thông tin phòng được đánh giá */}
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs space-y-1">
+              <span className="text-[11px] text-slate-400 font-semibold uppercase block">Phòng trọ:</span>
+              <p className="font-bold text-slate-800 line-clamp-1">{reviewModal.roomTitle}</p>
+            </div>
+
+            {reviewModal.error && (
+              <div className="p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-200">
+                {reviewModal.error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReview} className="space-y-4 text-xs">
+              {/* Chọn số sao */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700">Mức độ hài lòng của bạn:</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewModal(prev => ({ ...prev, soSao: star }))}
+                      className="p-1 text-slate-300 hover:scale-110 transition-transform cursor-pointer"
+                    >
+                      <Star
+                        className={`w-7 h-7 ${
+                          star <= reviewModal.soSao
+                            ? 'fill-amber-400 text-amber-400'
+                            : 'text-slate-200'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-amber-600 ml-2">
+                    {reviewModal.soSao === 5
+                      ? '5/5 - Rất hài lòng'
+                      : reviewModal.soSao === 4
+                      ? '4/5 - Hài lòng'
+                      : reviewModal.soSao === 3
+                      ? '3/5 - Bình thường'
+                      : reviewModal.soSao === 2
+                      ? '2/5 - Chưa ưng ý'
+                      : '1/5 - Kém'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Ô viết comment nhận xét */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">
+                  Nội dung nhận xét chi tiết <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={reviewModal.nhanXet}
+                  onChange={(e) => setReviewModal(prev => ({ ...prev, nhanXet: e.target.value, error: '' }))}
+                  placeholder="Chia sẻ trải nghiệm thực tế về phòng trọ, thái độ chủ nhà, an ninh, tiện nghi..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 leading-relaxed"
+                />
+              </div>
+
+              {/* Nút hành động */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReviewModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={reviewModal.submitting}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-98 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {reviewModal.submitting ? 'Đang gửi...' : 'Gửi nhận xét ngay'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
