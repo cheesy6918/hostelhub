@@ -734,6 +734,23 @@
   ],
   "appointments": [
     {
+      "Id": "hen_1792922819640_p51v",
+      "IdSinhVien": "usr_sinhvien",
+      "IdPhong": "room_19",
+      "ThoiGianHen": "2026-10-26T02:00:00.000Z",
+      "GhiChu": "",
+      "TrangThai": "Đã hủy",
+      "TieuDePhong": "Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội",
+      "DiaChiPhong": "Số 42 Ngõ 330 Nguyễn Trãi, Phường Thanh Xuân Trung, Thanh Xuân, Hà Nội",
+      "SinhVienTen": "Nguyễn Văn Sinh",
+      "SinhVienSdt": "0912345699",
+      "ChuTroId": "usr_chutro",
+      "ChuTroTen": "Trần Thị Bích",
+      "ChuTroSdt": "0987654321",
+      "NgayTao": "2026-10-25T10:06:59.640Z",
+      "LyDoTuChoi": "Trùng lịch bận đột xuất của chủ trọ"
+    },
+    {
       "Id": "hen_1790151502696_9560",
       "IdSinhVien": "usr_sinhvien",
       "IdPhong": "room_1",
@@ -802,6 +819,33 @@
     }
   ],
   "notifications": [
+    {
+      "Id": "tb_1792922914090_cyu1",
+      "UserId": "usr_sinhvien",
+      "TieuDe": "Lịch hẹn xem phòng bị từ chối",
+      "NoiDung": "Chủ trọ Trần Thị Bích đã từ chối lịch hẹn xem phòng \"Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội\". Lý do: Trùng lịch bận đột xuất của chủ trọ",
+      "Loai": "LichHen",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-25T10:08:34.090Z"
+    },
+    {
+      "Id": "tb_1792922819664_x6a7",
+      "UserId": "usr_sinhvien",
+      "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
+      "NoiDung": "Yêu cầu đặt lịch xem phòng \"Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội\" vào lúc 09:00:00 26/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
+      "Loai": "LichHen",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-25T10:06:59.664Z"
+    },
+    {
+      "Id": "tb_1792922819654_irk9",
+      "UserId": "usr_chutro",
+      "TieuDe": "Yêu cầu đặt lịch hẹn xem phòng mới!",
+      "NoiDung": "Sinh viên Nguyễn Văn Sinh vừa gửi yêu cầu đặt lịch hẹn xem phòng \"Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội\" vào lúc 09:00:00 26/10/2026. Vui lòng kiểm tra và phản hồi.",
+      "Loai": "LichHen",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-25T10:06:59.654Z"
+    },
     {
       "Id": "tb_1792773620160_ixq7",
       "UserId": "usr_chutro",

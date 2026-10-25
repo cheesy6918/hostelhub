@@ -147,14 +147,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [canReviewLoading, setCanReviewLoading] = useState(false);
   const [contractInfo, setContractInfo] = useState<any>(null);
 
-  // Rental Contract 2-Way Verification Modal states
-  const [showRentalModal, setShowRentalModal] = useState(false);
-  const [rentalStartDate, setRentalStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [rentalSubmitting, setRentalSubmitting] = useState(false);
-  const [rentalSuccessMsg, setRentalSuccessMsg] = useState('');
-  const [rentalError, setRentalError] = useState('');
-  const [confirmingRentalId, setConfirmingRentalId] = useState<number | null>(null);
-
   // Kiểm tra quyền đánh giá từ API
   useEffect(() => {
     const checkReviewEligibility = async () => {
@@ -337,71 +329,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
       setDepositSuccess(false);
       setShowDepositModal(true);
     });
-  };
-
-  // Gửi yêu cầu xác nhận thuê phòng
-  const handleRequestRental = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !token) {
-      alert('Vui lòng đăng nhập để gửi yêu cầu thuê phòng.');
-      return;
-    }
-    try {
-      setRentalSubmitting(true);
-      setRentalError('');
-      const res = await fetch('/api/rentals/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          roomId: room.Id,
-          startDate: rentalStartDate,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setRentalSuccessMsg('Đã gửi yêu cầu xác nhận thuê phòng thành công! Đang chờ chủ trọ duyệt.');
-        setShowRentalModal(false);
-        setContractInfo(data.contract || { status: 'pending_landlord' });
-        setTimeout(() => setRentalSuccessMsg(''), 6000);
-      } else {
-        setRentalError(data.message || 'Không thể gửi yêu cầu thuê phòng.');
-      }
-    } catch {
-      setRentalError('Lỗi kết nối máy chủ.');
-    } finally {
-      setRentalSubmitting(false);
-    }
-  };
-
-  // Xác nhận đồng ý thuê phòng trực tiếp
-  const handleConfirmRentalDirect = async (contractId: number) => {
-    if (!token) return;
-    try {
-      setConfirmingRentalId(contractId);
-      const res = await fetch(`/api/rentals/${contractId}/confirm`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setRentalSuccessMsg('Xác nhận thuê phòng thành công! Hợp đồng đã có hiệu lực (Đang ở). Bạn có thể viết đánh giá bên dưới.');
-        setContractInfo({ ...contractInfo, status: 'active' });
-        setCanReview(true);
-        setTimeout(() => setRentalSuccessMsg(''), 6000);
-      } else {
-        alert(data.message || 'Không thể xác nhận hợp đồng.');
-      }
-    } catch {
-      alert('Lỗi kết nối khi xác nhận thuê phòng.');
-    } finally {
-      setConfirmingRentalId(null);
-    }
   };
 
   // Nạp nhanh tiền demo trong modal
@@ -1218,46 +1145,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     </div>
                   )}
 
-                  {/* Feedback or Status of 2-way Rental Confirmation */}
-                  {rentalSuccessMsg && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{rentalSuccessMsg}</span>
-                    </div>
-                  )}
-
-                  {contractInfo?.status === 'pending_renter' && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl space-y-2">
-                      <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
-                        Chủ trọ đã gửi đề xuất cho bạn thuê phòng này!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmRentalDirect(contractInfo.id)}
-                        disabled={confirmingRentalId === contractInfo.id}
-                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-98"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>{confirmingRentalId === contractInfo.id ? 'Đang xác nhận...' : 'Xác nhận đồng ý thuê ngay'}</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {contractInfo?.status === 'pending_landlord' && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 font-semibold flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Bạn đã gửi yêu cầu thuê phòng này (Đang chờ chủ trọ duyệt).</span>
-                    </div>
-                  )}
-
-                  {contractInfo?.status === 'active' && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-semibold flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Bạn đang thuê phòng này (Đang ở thực tế - Đã xác minh 2 chiều).</span>
-                    </div>
-                  )}
-
                   <button
                     onClick={handleOpenAppointmentModal}
                     className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
@@ -1296,17 +1183,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     >
                       <CreditCard className="w-4 h-4" />
                       <span>Đặt cọc giữ phòng (500.000 VNĐ)</span>
-                    </button>
-                  )}
-
-                  {(!contractInfo || contractInfo.status === 'cancelled' || contractInfo.status === 'completed') && (
-                    <button
-                      type="button"
-                      onClick={() => requireAuth(() => setShowRentalModal(true))}
-                      className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Xác nhận thuê phòng / Gửi yêu cầu</span>
                     </button>
                   )}
 
@@ -1951,100 +1827,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
           </div>
         </div>
       )}
-
-      {/* Modal 3: Xác nhận thuê phòng / Gửi yêu cầu thuê phòng */}
-      {showRentalModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-indigo-600">
-                <ShieldCheck className="w-5 h-5" />
-                <h3 className="font-bold text-slate-900 text-base">Xác nhận thuê phòng (2 chiều)</h3>
-              </div>
-              <button
-                onClick={() => setShowRentalModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-2xl text-xs text-indigo-900 space-y-1.5">
-              <p className="font-bold flex items-center gap-1.5">
-                <span>🛡️ Cơ chế xác minh thuê phòng 2 chiều:</span>
-              </p>
-              <p className="text-[11px] leading-relaxed text-indigo-800">
-                Khi bạn gửi đề xuất và được chủ trọ ({room.ChuTroTen}) duyệt chấp thuận, hợp đồng thuê phòng sẽ chuyển sang trạng thái <strong>"Đang ở"</strong>, đồng thời mở khóa tính năng viết nhận xét đánh giá thực tế kèm huy hiệu xác minh chống đánh giá ảo.
-              </p>
-            </div>
-
-            {rentalError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{rentalError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleRequestRental} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Phòng trọ đề xuất thuê:
-                </label>
-                <input
-                  type="text"
-                  disabled
-                  value={room.TieuDe}
-                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Giá thuê niêm yết:
-                </label>
-                <input
-                  type="text"
-                  disabled
-                  value={`${room.GiaThue.toLocaleString('vi-VN')} đ/tháng`}
-                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-blue-700 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Ngày dự kiến bắt đầu thuê / dọn vào: <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={rentalStartDate}
-                  onChange={(e) => setRentalStartDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white font-medium"
-                />
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowRentalModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={rentalSubmitting}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all active:scale-98"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{rentalSubmitting ? 'Đang gửi yêu cầu...' : 'Gửi yêu cầu xác nhận thuê'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };

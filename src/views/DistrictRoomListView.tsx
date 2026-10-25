@@ -31,11 +31,7 @@ const HANOI_DISTRICTS = [
   'Quận Nam Từ Liêm',
   'Quận Bắc Từ Liêm',
   'Quận Ba Đình',
-  'Quận Hà Đông',
-  'Quận Hoàng Mai',
-  'Quận Tây Hồ',
-  'Quận Long Biên',
-  'Quận Hoàn Kiếm'
+  'Quận Hà Đông'
 ];
 
 export const DistrictRoomListView: React.FC<DistrictRoomListViewProps> = ({
