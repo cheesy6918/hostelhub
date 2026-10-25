@@ -405,10 +405,16 @@ apiRouter.get('/student/transactions', requireAuth, handleGetTransactions);
 // -------------------------------------------------------------
 
 // GET /api/rooms
+// GET /api/rooms
 apiRouter.get('/rooms', async (req: Request, res: Response) => {
   const { search, district, minPrice, maxPrice, minArea, maxArea, amenities, type, landlordId, status } = req.query;
-  const dbRooms = await getRoomsFromDb();
-
+  
+  // Truyền thẳng landlordId vào getRoomsFromDb để lấy đúng từ SQL
+  const dbRooms = await getRoomsFromDb({
+    status: typeof status === 'string' && status !== 'all' ? status : undefined,
+    district: typeof district === 'string' && district !== 'all' ? district : undefined,
+    landlordId: typeof landlordId === 'string' && landlordId.trim() ? landlordId.trim() : undefined,
+  });
   let results = [...dbRooms];
 
   // Validate price range if both minPrice and maxPrice are provided
@@ -437,9 +443,13 @@ apiRouter.get('/rooms', async (req: Request, res: Response) => {
     }
   }
 
-  // Filter by landlord ID (for Landlord management page)
-  if (landlordId && typeof landlordId === 'string') {
-    results = results.filter(r => r.IdChuTro === landlordId || r.ChuTroId === landlordId);
+  // Lọc an toàn tuyệt đối cho landlordId (không phân biệt hoa/thường hay tên cột)
+  if (landlordId && typeof landlordId === 'string' && landlordId.trim() !== '') {
+    const targetId = landlordId.trim().toLowerCase();
+    results = results.filter(r => {
+      const cId = String(r.ChuTroId || r.IdChuTro || (r as any).chu_tro_id || '').trim().toLowerCase();
+      return cId === targetId;
+    });
   }
 
   // Filter by search keyword (area, street name, title, description)

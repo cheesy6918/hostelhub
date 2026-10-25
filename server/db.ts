@@ -1132,17 +1132,20 @@ export async function queryMySql(sql: string, params: any[] = []): Promise<any> 
 export function parseRoomRow(row: any): PhongTro {
   const giaDienRaw = row.GiaDien !== undefined ? row.GiaDien : row.gia_dien;
   const giaNuocRaw = row.GiaNuoc !== undefined ? row.GiaNuoc : row.gia_nuoc;
-
   const giaDienNum = typeof giaDienRaw === 'number'
     ? giaDienRaw
     : Number(String(giaDienRaw || '').replace(/[^\d]/g, ''));
-
   const giaNuocNum = typeof giaNuocRaw === 'number'
     ? giaNuocRaw
     : Number(String(giaNuocRaw || '').replace(/[^\d]/g, ''));
 
+  // Đảm bảo luôn lấy được ID chủ trọ bất kể tên cột trả về từ TiDB Cloud
+  const landlordId = String(row.ChuTroId || row.IdChuTro || row.chu_tro_id || 'usr_chutro').trim();
+
   return {
     ...row,
+    IdChuTro: landlordId,
+    ChuTroId: landlordId,
     GiaThue: Number(row.GiaThue !== undefined ? row.GiaThue : row.gia_thue),
     GiaDien: isNaN(giaDienNum) ? 3800 : giaDienNum,
     GiaNuoc: isNaN(giaNuocNum) ? 30000 : giaNuocNum,
@@ -1156,14 +1159,13 @@ export function parseRoomRow(row: any): PhongTro {
 // -------------------------------------------------------------
 // 1. ROOMS (PHÒNG TRỌ)
 // -------------------------------------------------------------
-export async function getRoomsFromDb(filter?: { status?: string; district?: string }): Promise<PhongTro[]> {
+export async function getRoomsFromDb(filter?: { status?: string; district?: string; landlordId?: string }): Promise<PhongTro[]> {
   const isConn = await isMySqlConnected();
   if (isConn) {
     try {
       let sql = 'SELECT * FROM rooms';
       const params: any[] = [];
       const conditions: string[] = [];
-
       if (filter?.status) {
         conditions.push('TrangThai = ?');
         params.push(filter.status);
@@ -1172,30 +1174,30 @@ export async function getRoomsFromDb(filter?: { status?: string; district?: stri
         conditions.push('QuanHuyen = ?');
         params.push(filter.district);
       }
-
+      if (filter?.landlordId) {
+        conditions.push('(ChuTroId = ? OR IdChuTro = ?)');
+        params.push(filter.landlordId, filter.landlordId);
+      }
       if (conditions.length > 0) {
         sql += ' WHERE ' + conditions.join(' AND ');
       }
       sql += ' ORDER BY NgayDang DESC';
-
       const [rows] = await pool.query(sql, params);
       const rooms = (rows as any[]).map(parseRoomRow);
-
-      // Đồng bộ vào cache bộ nhớ
-      const db = readDb();
-      db.rooms = rooms;
-
       return rooms;
     } catch (err) {
       console.warn('[MySQL] Error querying rooms, falling back to local store:', err);
     }
   }
-
   // Fallback local memory/JSON
   const db = readDb();
   let result = db.rooms || [];
   if (filter?.status) result = result.filter(r => r.TrangThai === filter.status);
   if (filter?.district) result = result.filter(r => r.QuanHuyen === filter.district);
+  if (filter?.landlordId) {
+    const lId = filter.landlordId.toLowerCase();
+    result = result.filter(r => (r.ChuTroId && r.ChuTroId.toLowerCase() === lId) || (r.IdChuTro && r.IdChuTro.toLowerCase() === lId));
+  }
   return result;
 }
 

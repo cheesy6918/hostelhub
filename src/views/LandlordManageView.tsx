@@ -406,18 +406,6 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
     setActiveTab(initialTab || 'rooms');
   }, [initialTab]);
 
-  // Contract Action loading states
-  const [confirmingContractId, setConfirmingContractId] = useState<number | null>(null);
-  const [completingContractId, setCompletingContractId] = useState<number | null>(null);
-  const [cancelingContractId, setCancelingContractId] = useState<number | null>(null);
-
-  // Proposal modal state (Chủ trọ gửi đề xuất thuê phòng)
-  const [showProposalModal, setShowProposalModal] = useState(false);
-  const [candidates, setCandidates] = useState<any[]>([]);
-  const [proposalRoomId, setProposalRoomId] = useState('');
-  const [proposalStudentId, setProposalStudentId] = useState('');
-  const [proposalStartDate, setProposalStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [submittingProposal, setSubmittingProposal] = useState(false);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -466,34 +454,31 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   });
 
   const fetchLandlordData = async () => {
-    if (!user || !token) return;
+    // Luôn đảm bảo có ID chủ trọ (dù user.Id hay user.id)
+    const currentLandlordId = user?.Id || (user as any)?.id || 'usr_chutro';
+    if (!token && !user) return;
+
     try {
       setLoading(true);
-      // 1. Fetch dữ liệu phòng, hợp đồng, cọc, lịch hẹn chính
-      const [resRooms, resInq, resApp, resDep, resContracts, resCandidates] = await Promise.all([
-        fetch(`/api/rooms?landlordId=${user.Id}`),
+      // Chỉ fetch đúng các mục còn dùng: phòng, tin nhắn, lịch hẹn, đơn cọc (BỎ HẲN /api/rentals)
+      const [resRooms, resInq, resApp, resDep] = await Promise.all([
+        fetch(`/api/rooms?landlordId=${currentLandlordId}`),
         fetch('/api/inquiries', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/appointments', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/deposits', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/rentals', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/rentals/candidates', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
-      const [dataRooms, dataInq, dataApp, dataDep, dataContracts, dataCandidates] = await Promise.all([
+      const [dataRooms, dataInq, dataApp, dataDep] = await Promise.all([
         resRooms.json(),
         resInq.json(),
         resApp.json(),
         resDep.json(),
-        resContracts.json(),
-        resCandidates.json(),
       ]);
 
       if (dataRooms.success) setRooms(dataRooms.data || []);
       if (dataInq.success) setInquiries(dataInq.data || []);
       if (dataApp.success) setAppointments(dataApp.data || []);
       if (dataDep.success) setDeposits(dataDep.data || []);
-      if (dataCandidates.success) setCandidates(dataCandidates.data || []);
-
       // Lấy danh sách cẩm nang từ API CSDL (ưu tiên bài viết thực tế)
       try {
         const resArticles = await fetch('/api/articles', {
@@ -525,125 +510,6 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
   useEffect(() => {
     fetchLandlordData();
   }, [user, token]);
-
-  // Chủ trọ xác nhận đồng ý cho thuê (khi sinh viên gửi yêu cầu pending_landlord)
-  const handleConfirmContract = async (id: number) => {
-    try {
-      setConfirmingContractId(id);
-      const res = await fetch(`/api/rentals/${id}/confirm`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionMessage('Xác nhận đồng ý cho thuê thành công! Hợp đồng đã có hiệu lực (Đang ở).');
-        setTimeout(() => setActionMessage(''), 4000);
-        fetchLandlordData();
-      } else {
-        alert(data.message || 'Không thể xác nhận hợp đồng.');
-      }
-    } catch {
-      alert('Lỗi kết nối máy chủ.');
-    } finally {
-      setConfirmingContractId(null);
-    }
-  };
-
-  // Ghi nhận hoàn tất trả phòng
-  const handleCompleteContract = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn ghi nhận sinh viên đã trả phòng và kết thúc đợt thuê này?')) return;
-    try {
-      setCompletingContractId(id);
-      const res = await fetch(`/api/rentals/${id}/complete`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionMessage('Đã cập nhật trạng thái hợp đồng thành Đã hoàn tất (Trả phòng).');
-        setTimeout(() => setActionMessage(''), 4000);
-        fetchLandlordData();
-      } else {
-        alert(data.message || 'Không thể cập nhật hợp đồng.');
-      }
-    } catch {
-      alert('Lỗi kết nối máy chủ.');
-    } finally {
-      setCompletingContractId(null);
-    }
-  };
-
-  // Hủy hoặc từ chối đề xuất thuê phòng
-  const handleCancelContract = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn hủy / từ chối đề xuất thuê phòng này?')) return;
-    try {
-      setCancelingContractId(id);
-      const res = await fetch(`/api/rentals/${id}/cancel`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionMessage('Đã hủy đề xuất thuê phòng.');
-        setTimeout(() => setActionMessage(''), 4000);
-        fetchLandlordData();
-      } else {
-        alert(data.message || 'Không thể hủy đề xuất.');
-      }
-    } catch {
-      alert('Lỗi kết nối máy chủ.');
-    } finally {
-      setCancelingContractId(null);
-    }
-  };
-
-  // Chủ trọ gửi đề xuất xác nhận thuê phòng tới sinh viên
-  const handleCreateProposal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!proposalRoomId || !proposalStudentId) {
-      alert('Vui lòng chọn đầy đủ phòng trọ và sinh viên cần gửi đề xuất!');
-      return;
-    }
-    try {
-      setSubmittingProposal(true);
-      const res = await fetch('/api/rentals/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          roomId: proposalRoomId,
-          renterId: proposalStudentId,
-          startDate: proposalStartDate,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionMessage('Đã gửi đề xuất xác nhận thuê phòng đến sinh viên thành công!');
-        setTimeout(() => setActionMessage(''), 4000);
-        setShowProposalModal(false);
-        setProposalRoomId('');
-        setProposalStudentId('');
-        fetchLandlordData();
-      } else {
-        alert(data.message || 'Không thể gửi đề xuất.');
-      }
-    } catch {
-      alert('Lỗi kết nối máy chủ.');
-    } finally {
-      setSubmittingProposal(false);
-    }
-  };
 
   // Cập nhật trạng thái Lịch hẹn (Xác nhận)
   const handleAppointmentStatus = async (id: string, status: 'Đã xác nhận' | 'Đã hủy', reason?: string) => {
