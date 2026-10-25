@@ -971,32 +971,11 @@ function locateExistingDbFile(): string | null {
 }
 
 export function readDb(): DatabaseSchema {
-  // If in-memory cache exists and has rooms, return it directly so shared state between Landlord and Admin is instantaneous
-  if (memoryDbCache && memoryDbCache.rooms && memoryDbCache.rooms.length > 0) {
-    return memoryDbCache;
-  }
-
-  // Check candidate database files and select the one with the latest mtime
-  let targetFile: string | null = null;
-  let latestMtime = -1;
-
-  for (const candidate of CANDIDATE_DB_FILES) {
+  // 1. Luôn ưu tiên đọc trực tiếp từ file data/database.json trong dự án được build mới nhất
+  const projectDbFile = path.resolve(process.cwd(), 'data/database.json');
+  if (fs.existsSync(projectDbFile)) {
     try {
-      if (fs.existsSync(candidate)) {
-        const stat = fs.statSync(candidate);
-        if (stat.mtimeMs > latestMtime) {
-          latestMtime = stat.mtimeMs;
-          targetFile = candidate;
-        }
-      }
-    } catch {
-      // Continue
-    }
-  }
-
-  if (targetFile) {
-    try {
-      const raw = fs.readFileSync(targetFile, 'utf-8');
+      const raw = fs.readFileSync(projectDbFile, 'utf-8');
       const parsed: DatabaseSchema = JSON.parse(raw);
       if (!parsed.appointments) parsed.appointments = [];
       if (!parsed.deposits) parsed.deposits = [];
@@ -1005,25 +984,23 @@ export function readDb(): DatabaseSchema {
       if (!parsed.rental_contracts) parsed.rental_contracts = [];
       if (!parsed.reviews) parsed.reviews = [];
       if (!parsed.wallet_transactions) parsed.wallet_transactions = [];
-      if (!parsed.articles) parsed.articles = [];    // 👈 Bổ sung dòng này
-      if (!parsed.roommates) parsed.roommates = [];  // 👈 Bổ sung dòng này
+      if (!parsed.articles) parsed.articles = [];
+      if (!parsed.roommates) parsed.roommates = [];
       memoryDbCache = parsed;
       return parsed;
     } catch (parseErr) {
-      console.warn('Error reading db file at', targetFile, parseErr);
+      console.warn('Error reading project db file, falling back:', parseErr);
     }
   }
 
-  // If in-memory cache exists, return it
-  if (memoryDbCache) {
-    if (!memoryDbCache.wallet_transactions) memoryDbCache.wallet_transactions = [];
+  // 2. Nếu in-memory cache tồn tại thì trả về
+  if (memoryDbCache && memoryDbCache.rooms && memoryDbCache.rooms.length > 0) {
     return memoryDbCache;
   }
 
-  // Default to initial dataset
+  // 3. Fallback khởi tạo mặc định nếu không tìm thấy file
   const initial = getInitialData();
   memoryDbCache = initial;
-  writeDb(initial);
   return initial;
 }
 
