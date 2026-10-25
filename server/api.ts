@@ -2485,11 +2485,17 @@ apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 // GET /api/roommates - Lấy danh sách tin ở ghép
+// GET /api/roommates - Lấy danh sách tin ở ghép (Chống cache trên Vercel)
 apiRouter.get('/roommates', async (req: Request, res: Response) => {
   try {
+    // 1. Tắt triệt để cache của trình duyệt và Vercel CDN
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const userRole = req.headers['x-user-role'];
     const db: any = readDb();
-    let posts = Array.isArray(db.roommates) ? db.roommates : [];
+    let posts = Array.isArray(db.roommates) ? [...db.roommates] : [];
 
     // Nếu không phải Admin thì chỉ lấy bài đã duyệt
     if (userRole !== 'Admin') {
