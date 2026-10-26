@@ -910,7 +910,7 @@
       "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
       "NoiDung": "Yêu cầu đặt lịch xem phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\" vào lúc 10:00:00 27/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T07:06:33.248Z"
     },
     {
@@ -928,7 +928,7 @@
       "TieuDe": "Chủ trọ đã tiếp nhận câu hỏi tư vấn!",
       "NoiDung": "Phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\": Chủ trọ đã tiếp nhận lời nhắn và sẽ sớm liên hệ tư vấn trực tiếp cho bạn.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T06:08:36.032Z"
     },
     {
@@ -937,7 +937,7 @@
       "TieuDe": "Đã gửi câu hỏi tư vấn tới chủ trọ thành công",
       "NoiDung": "Câu hỏi của bạn cho phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\" đã được gửi tới chủ trọ. Chủ trọ sẽ phản hồi qua hệ thống hoặc gọi điện/Zalo tới số 0912345699.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T06:08:25.586Z"
     },
     {
@@ -964,7 +964,7 @@
       "TieuDe": "Lịch hẹn xem phòng đã được xác nhận!",
       "NoiDung": "Chủ trọ Trần Thị Bích đã xác nhận lịch hẹn xem phòng \"Phòng gác lửng sinh viên cao ráo, gần ĐH Sư Phạm - ĐHQG Hà Nội\" vào lúc 05:12:24 29/10/2026. Vui lòng đến đúng giờ nhé!",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T05:12:24.970Z"
     },
     {
@@ -973,7 +973,7 @@
       "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
       "NoiDung": "Yêu cầu đặt lịch xem phòng \"Phòng gác lửng sinh viên cao ráo, gần ĐH Sư Phạm - ĐHQG Hà Nội\" vào lúc 05:12:24 29/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T05:12:24.748Z"
     },
     {
@@ -1000,7 +1000,7 @@
       "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
       "NoiDung": "Yêu cầu đặt lịch xem phòng \"Studio Duplex trần cao hiện đại gần ĐH Kiến Trúc & Học viện Bưu Chính\" vào lúc 04:25:05 28/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-26T04:25:05.678Z"
     },
     {
@@ -1018,7 +1018,7 @@
       "TieuDe": "Lịch hẹn xem phòng bị từ chối",
       "NoiDung": "Chủ trọ Trần Thị Bích đã từ chối lịch hẹn xem phòng \"Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội\". Lý do: Trùng lịch bận đột xuất của chủ trọ",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-25T10:08:34.090Z"
     },
     {
@@ -1027,7 +1027,7 @@
       "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
       "NoiDung": "Yêu cầu đặt lịch xem phòng \"Phòng trọ mới xây ngõ ô tô gần ĐH Khoa Học Tự Nhiên & ĐH Hà Nội\" vào lúc 09:00:00 26/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-25T10:06:59.664Z"
     },
     {
@@ -1054,7 +1054,7 @@
       "TieuDe": "Hợp đồng thuê phòng đã kích hoạt thành công! ✔",
       "NoiDung": "Hợp đồng thuê phòng \"Studio cao cấp full nội thất phong cách Hàn Quốc sát ĐH Quốc Gia HN\" đã chính thức có hiệu lực từ ngày 27/10/2026. Bạn đã có quyền viết đánh giá trải nghiệm thực tế kèm huy hiệu Đã xác minh thuê phòng!",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:40:20.152Z"
     },
     {
@@ -1063,7 +1063,7 @@
       "TieuDe": "Đã gửi yêu cầu thuê phòng",
       "NoiDung": "Yêu cầu thuê phòng \"Studio cao cấp full nội thất phong cách Hàn Quốc sát ĐH Quốc Gia HN\" đã được gửi tới chủ trọ Trần Thị Bích. Vui lòng chờ chủ trọ duyệt.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:40:06.862Z"
     },
     {
@@ -1081,7 +1081,7 @@
       "TieuDe": "Đề xuất thuê phòng đã bị hủy / từ chối",
       "NoiDung": "Đề xuất thuê phòng \"Phòng gác lửng sinh viên cao ráo, gần ĐH Sư Phạm - ĐHQG Hà Nội\" đã bị hủy bởi Trần Thị Bích.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:37:29.279Z"
     },
     {
@@ -1099,7 +1099,7 @@
       "TieuDe": "Hợp đồng thuê phòng đã kích hoạt thành công! ✔",
       "NoiDung": "Hợp đồng thuê phòng \"Chung cư mini có thang máy, full đồ gần Học viện Tài Chính & Mỏ Địa Chất\" đã chính thức có hiệu lực từ ngày 30/10/2026. Bạn đã có quyền viết đánh giá trải nghiệm thực tế kèm huy hiệu Đã xác minh thuê phòng!",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:37:22.968Z"
     },
     {
@@ -1108,7 +1108,7 @@
       "TieuDe": "Đã gửi yêu cầu thuê phòng",
       "NoiDung": "Yêu cầu thuê phòng \"Phòng gác lửng sinh viên cao ráo, gần ĐH Sư Phạm - ĐHQG Hà Nội\" đã được gửi tới chủ trọ Trần Thị Bích. Vui lòng chờ chủ trọ duyệt.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:35:44.098Z"
     },
     {
@@ -1126,7 +1126,7 @@
       "TieuDe": "Đã gửi yêu cầu thuê phòng",
       "NoiDung": "Yêu cầu thuê phòng \"Chung cư mini có thang máy, full đồ gần Học viện Tài Chính & Mỏ Địa Chất\" đã được gửi tới chủ trọ Trần Thị Bích. Vui lòng chờ chủ trọ duyệt.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-23T16:34:09.126Z"
     },
     {
@@ -1144,7 +1144,7 @@
       "TieuDe": "Đơn đặt cọc đã được tiếp nhận thành công!",
       "NoiDung": "Chủ trọ Trần Thị Bích đã tiếp nhận thành công đơn đặt cọc 500.000 VNĐ cho phòng \"Phòng gác lửng sinh viên cao ráo, gần ĐH Sư Phạm - ĐHQG Hà Nội\". Phòng đã được chuyển sang trạng thái \"Đã cọc\" và bảo lưu chỗ cho bạn.",
       "Loai": "DatCoc",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-18T04:09:56.992Z"
     },
     {
@@ -1162,7 +1162,7 @@
       "TieuDe": "Đơn đặt cọc đã được tiếp nhận thành công!",
       "NoiDung": "Chủ trọ Trần Thị Bích đã tiếp nhận thành công đơn đặt cọc 500.000 VNĐ cho phòng \"Phòng trọ sinh viên giá rẻ cách cổng ĐH Giao Thông Vận Tải 300m\". Phòng đã được chuyển sang trạng thái \"Đã cọc\" và bảo lưu chỗ cho bạn.",
       "Loai": "DatCoc",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-18T03:25:48.402Z"
     },
     {
@@ -1171,7 +1171,7 @@
       "TieuDe": "Đơn đặt cọc đã được tiếp nhận thành công!",
       "NoiDung": "Chủ trọ Trần Thị Bích đã tiếp nhận thành công đơn đặt cọc 500.000 VNĐ cho phòng \"Chung cư mini cao cấp có thang máy gần ĐH Thủy Lợi & ĐH Công Đoàn\". Phòng đã được chuyển sang trạng thái \"Đã cọc\" và bảo lưu chỗ cho bạn.",
       "Loai": "DatCoc",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-18T03:25:43.039Z"
     },
     {
@@ -1198,7 +1198,7 @@
       "TieuDe": "Đề xuất thuê phòng đã bị hủy / từ chối",
       "NoiDung": "Đề xuất thuê phòng \"Chung cư mini cao cấp có thang máy gần ĐH Thủy Lợi & ĐH Công Đoàn\" đã bị hủy bởi Trần Thị Bích.",
       "Loai": "PhongTro",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-10-06T03:47:27.796Z"
     },
     {
@@ -1216,7 +1216,7 @@
       "TieuDe": "Lịch hẹn xem phòng bị từ chối",
       "NoiDung": "Chủ trọ Trần Thị Bích (Chủ trọ Cầu Giấy) đã từ chối lịch hẹn xem phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\". Lý do: Chủ trọ bận đột xuất vào khung giờ này",
       "Loai": "LichHen",
-      "TrangThai": "ChuaDoc",
+      "TrangThai": "DaDoc",
       "NgayTao": "2026-09-23T08:18:28.541Z"
     },
     {

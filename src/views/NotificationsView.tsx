@@ -212,17 +212,17 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
               {user?.VaiTro === 'SinhVien'
                 ? 'Theo dõi cập nhật tức thời về xác nhận lịch hẹn xem phòng, tiến độ phê duyệt đơn cọc, hoàn tiền ví và trạng thái phòng đã đặt.'
                 : user?.VaiTro === 'ChuTro'
-                ? 'Nhận thông báo ngay lập tức khi có sinh viên đặt lịch xem phòng mới, gửi tiền cọc giữ chỗ và trạng thái kiểm duyệt bài đăng phòng.'
-                : 'Theo dõi các hoạt động kiểm duyệt tin đăng, giao dịch cọc và thông báo vận hành toàn hệ thống.'}
+                  ? 'Nhận thông báo ngay lập tức khi có sinh viên đặt lịch xem phòng mới, gửi tiền cọc giữ chỗ và trạng thái kiểm duyệt bài đăng phòng.'
+                  : 'Theo dõi các hoạt động kiểm duyệt tin đăng, giao dịch cọc và thông báo vận hành toàn hệ thống.'}
             </p>
           </div>
 
-          {/* Action Bar */}
-          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          {/* Action Bar - Xếp theo chiều dọc */}
+          <div className="flex flex-col gap-2 shrink-0 self-start md:self-center">
             <button
               onClick={handleManualRefresh}
               disabled={isRefreshing}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="w-full px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               title="Kiểm tra thông báo mới ngay lập tức"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
@@ -232,7 +232,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="w-full px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 title="Đánh dấu tất cả thông báo là đã đọc"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
@@ -243,11 +243,11 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             {notifications.some((n) => n.TrangThai === 'DaDoc') && (
               <button
                 onClick={clearReadNotifications}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="w-full px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                 title="Dọn dẹp các thông báo đã đọc để bảng tin gọn gàng"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Dọn thông báo đã đọc</span>
+                <span>Dọn thông báo đã đọc</span>
               </button>
             )}
           </div>
@@ -274,7 +274,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                  <span>🧪 Xác nhận đặt chỗ</span>
+                  <span>Xác nhận đặt chỗ</span>
                 </button>
                 <button
                   onClick={() => handleTestTrigger('deposit-success')}
@@ -282,7 +282,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>🧪 Trạng thái nhận cọc thành công</span>
+                  <span>Trạng thái nhận cọc thành công</span>
                 </button>
                 <button
                   onClick={() => handleTestTrigger('deposit-refund')}
@@ -290,7 +290,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-rose-600" />
-                  <span>🧪 Hoàn tiền cọc về ví</span>
+                  <span>Hoàn tiền cọc về ví</span>
                 </button>
               </>
             )}
@@ -345,11 +345,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                filterType === 'all'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${filterType === 'all'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <span>Tất cả</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-white">
@@ -359,11 +358,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
             <button
               onClick={() => setFilterType('unread')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                filterType === 'unread'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${filterType === 'unread'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <span>Chưa đọc</span>
               {categoryCounts.unread > 0 && (
@@ -375,11 +373,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
             <button
               onClick={() => setFilterType('LichHen')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                filterType === 'LichHen'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${filterType === 'LichHen'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>Đặt chỗ & Lịch hẹn</span>
@@ -390,11 +387,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
             <button
               onClick={() => setFilterType('DatCoc')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                filterType === 'DatCoc'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${filterType === 'DatCoc'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <CreditCard className="w-3.5 h-3.5" />
               <span>Tiền đặt cọc</span>
@@ -405,11 +401,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
             <button
               onClick={() => setFilterType('PhongTro')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                filterType === 'PhongTro'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${filterType === 'PhongTro'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
+                }`}
             >
               <Building2 className="w-3.5 h-3.5" />
               <span>Phòng trọ</span>
@@ -468,11 +463,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             return (
               <div
                 key={item.Id}
-                className={`bg-white rounded-3xl border transition-all p-5 shadow-2xs hover:shadow-xs flex flex-col sm:flex-row items-start justify-between gap-4 ${
-                  isUnread
+                className={`bg-white rounded-3xl border transition-all p-5 shadow-2xs hover:shadow-xs flex flex-col sm:flex-row items-start justify-between gap-4 ${isUnread
                     ? 'border-blue-300 bg-blue-50/20 ring-1 ring-blue-100'
                     : 'border-slate-200 hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
                   {getNotificationIcon(item.Loai)}
@@ -492,9 +486,8 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                     </div>
 
                     <h3
-                      className={`text-sm tracking-tight ${
-                        isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'
-                      }`}
+                      className={`text-sm tracking-tight ${isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'
+                        }`}
                     >
                       {item.TieuDe}
                     </h3>
@@ -515,15 +508,15 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                             ? item.Loai === 'LichHen'
                               ? 'Xem lịch hẹn của tôi'
                               : item.Loai === 'DatCoc'
-                              ? 'Xem đơn cọc & Ví'
-                              : 'Xem phòng trọ'
+                                ? 'Xem đơn cọc & Ví'
+                                : 'Xem phòng trọ'
                             : user?.VaiTro === 'ChuTro'
-                            ? item.Loai === 'LichHen'
-                              ? 'Xử lý yêu cầu lịch hẹn'
-                              : item.Loai === 'DatCoc'
-                              ? 'Xác nhận đơn cọc'
-                              : 'Quản lý phòng trọ'
-                            : 'Bảng quản trị'}
+                              ? item.Loai === 'LichHen'
+                                ? 'Xử lý yêu cầu lịch hẹn'
+                                : item.Loai === 'DatCoc'
+                                  ? 'Xác nhận đơn cọc'
+                                  : 'Quản lý phòng trọ'
+                              : 'Bảng quản trị'}
                         </span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
