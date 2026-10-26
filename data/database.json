@@ -18,7 +18,7 @@
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0987654321",
       "VaiTro": "ChuTro",
-      "soDuVi": 4000000,
+      "soDuVi": 2500000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
     },
@@ -29,7 +29,7 @@
       "MatKhau": "$2b$10$Bz10KPwmYz3a3EzTDn04OufTvi1No65PLqBFUyV/kkeZTWmGbJMm2",
       "Sdt": "0912345699",
       "VaiTro": "SinhVien",
-      "soDuVi": 6000000,
+      "soDuVi": 1500000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
     }

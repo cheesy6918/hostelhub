@@ -2166,16 +2166,31 @@ apiRouter.put('/admin/rooms/:id/moderate', requireAuth, async (req: Request, res
   }
 });
 
-apiRouter.get('/admin/users', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  if (user.VaiTro !== 'Admin') {
-    res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền truy cập.' });
-    return;
-  }
+apiRouter.get('/admin/users', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền truy cập.' });
+      return;
+    }
 
-  const db = readDb();
-  const sanitized = db.users.map(sanitizeUser);
-  res.json({ success: true, data: sanitized });
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
+
+    const rawUsers = await getUsersFromDb();
+    const users = (rawUsers || []).map(u => ({
+      ...u,
+      soDuVi: Number(u.soDuVi || 0),
+    }));
+
+    res.json({ success: true, data: users.map(sanitizeUser) });
+  } catch (error: any) {
+    console.error('Lỗi khi lấy danh sách người dùng cho Admin:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi máy chủ khi lấy danh sách người dùng' });
+  }
 });
 
 apiRouter.put('/admin/users/:id/status', requireAuth, (req: Request, res: Response) => {
@@ -2208,107 +2223,124 @@ apiRouter.put('/admin/users/:id/status', requireAuth, (req: Request, res: Respon
   });
 });
 
-apiRouter.get('/admin/stats', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  if (user.VaiTro !== 'Admin') {
-    res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền xem thống kê.' });
-    return;
-  }
-
-  const db = readDb();
-  const totalUsers = db.users.length;
-  const sinhVienCount = db.users.filter(u => u.VaiTro === 'SinhVien').length;
-  const chuTroCount = db.users.filter(u => u.VaiTro === 'ChuTro').length;
-  const totalRooms = db.rooms.length;
-  const availableRooms = db.rooms.filter(r => r.TrangThai === 'Còn phòng' || r.TrangThai === 'Công khai').length;
-  const totalInquiries = db.inquiries.length;
-  const totalWallet = db.users.reduce((sum, u) => sum + (u.soDuVi || 0), 0);
-
-  // Requirements from prompt:
-  // 1. Tổng số phòng đã đăng (theo trạng thái)
-  // 2. Lượt đặt lịch hàng tháng
-  // 3. Tỷ lệ đặt cọc thành công (Đã xác nhận / Tổng số đơn)
-  const roomsByStatus = {
-    'Công khai': db.rooms.filter(r => r.TrangThai === 'Công khai').length,
-    'Còn phòng': db.rooms.filter(r => r.TrangThai === 'Còn phòng').length,
-    'Chờ duyệt': db.rooms.filter(r => r.TrangThai === 'Chờ duyệt').length,
-    'Đã cọc': db.rooms.filter(r => r.TrangThai === 'Đã cọc').length,
-    'Hết phòng': db.rooms.filter(r => r.TrangThai === 'Hết phòng').length,
-    'Từ chối': db.rooms.filter(r => r.TrangThai === 'Từ chối').length,
-  };
-
-  // 2. Lượt đặt lịch hàng tháng (12 tháng của năm)
-  const monthLabels = [
-    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
-  ];
-  // Baseline realistic trends for academic calendar (peaks around student move-in periods Jul-Sep)
-  const baselineMonthly = [12, 18, 25, 22, 30, 48, 72, 88, 95, 42, 26, 32];
-  const appointmentsByMonth = new Array(12).fill(0);
-
-  (db.appointments || []).forEach(app => {
-    const d = new Date(app.NgayTao || app.ThoiGianHen);
-    if (!isNaN(d.getTime())) {
-      const m = d.getMonth();
-      if (m >= 0 && m < 12) {
-        appointmentsByMonth[m] += 1;
-      }
+apiRouter.get('/admin/stats', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền xem thống kê.' });
+      return;
     }
-  });
 
-  const monthlyAppointmentsData = baselineMonthly.map((base, idx) => base + appointmentsByMonth[idx]);
-  const totalAppointments = (db.appointments || []).length;
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
 
-  // 3. Tỷ lệ cọc thành công & Chi tiết đơn cọc
-  const allDeposits = db.deposits || [];
-  const totalDeposits = allDeposits.length;
-  const successfulDeposits = allDeposits.filter(
-    d => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận'
-  ).length;
-  const pendingDeposits = allDeposits.filter(
-    d => d.TrangThaiCoc === 'Chờ xác nhận'
-  ).length;
-  const cancelledDeposits = allDeposits.filter(
-    d => d.TrangThaiCoc === 'Đã hủy'
-  ).length;
+    const db = readDb();
+    const rawUsers = await getUsersFromDb();
+    const users = (rawUsers || []).map(u => ({
+      ...u,
+      soDuVi: Number(u.soDuVi || 0),
+    }));
 
-  const depositSuccessRate = totalDeposits > 0 ? Math.round((successfulDeposits / totalDeposits) * 100) : 0;
-  const pendingRoomsCount = db.rooms.filter(r => r.TrangThai === 'Chờ duyệt').length;
+    const totalUsers = users.length;
+    const sinhVienCount = users.filter(u => u.VaiTro === 'SinhVien').length;
+    const chuTroCount = users.filter(u => u.VaiTro === 'ChuTro').length;
+    const totalRooms = db.rooms.length;
+    const availableRooms = db.rooms.filter(r => r.TrangThai === 'Còn phòng' || r.TrangThai === 'Công khai').length;
+    const totalInquiries = db.inquiries.length;
+    const totalWallet = users.reduce((sum, u) => sum + (Number(u.soDuVi) || 0), 0);
 
-  const depositStats = {
-    total: totalDeposits,
-    successful: successfulDeposits,
-    pending: pendingDeposits,
-    cancelled: cancelledDeposits,
-    successRate: depositSuccessRate,
-    totalDepositMoney: allDeposits
-      .filter(d => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận')
-      .reduce((sum, d) => sum + (d.SoTienCoc || 0), 0),
-  };
+    // Requirements from prompt:
+    // 1. Tổng số phòng đã đăng (theo trạng thái)
+    // 2. Lượt đặt lịch hàng tháng
+    // 3. Tỷ lệ đặt cọc thành công (Đã xác nhận / Tổng số đơn)
+    const roomsByStatus = {
+      'Công khai': db.rooms.filter(r => r.TrangThai === 'Công khai').length,
+      'Còn phòng': db.rooms.filter(r => r.TrangThai === 'Còn phòng').length,
+      'Chờ duyệt': db.rooms.filter(r => r.TrangThai === 'Chờ duyệt').length,
+      'Đã cọc': db.rooms.filter(r => r.TrangThai === 'Đã cọc').length,
+      'Hết phòng': db.rooms.filter(r => r.TrangThai === 'Hết phòng').length,
+      'Từ chối': db.rooms.filter(r => r.TrangThai === 'Từ chối').length,
+    };
 
-  res.json({
-    success: true,
-    data: {
-      totalUsers,
-      sinhVienCount,
-      chuTroCount,
-      totalRooms,
-      availableRooms,
-      totalInquiries,
-      totalWallet,
-      totalAppointments,
-      totalDeposits,
-      successfulDeposits,
-      depositSuccessRate,
-      roomsByStatus,
-      pendingRoomsCount,
-      monthlyAppointments: {
-        labels: monthLabels,
-        data: monthlyAppointmentsData,
+    // 2. Lượt đặt lịch hàng tháng (12 tháng của năm)
+    const monthLabels = [
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+    ];
+    // Baseline realistic trends for academic calendar (peaks around student move-in periods Jul-Sep)
+    const baselineMonthly = [12, 18, 25, 22, 30, 48, 72, 88, 95, 42, 26, 32];
+    const appointmentsByMonth = new Array(12).fill(0);
+
+    (db.appointments || []).forEach(app => {
+      const d = new Date(app.NgayTao || app.ThoiGianHen);
+      if (!isNaN(d.getTime())) {
+        const m = d.getMonth();
+        if (m >= 0 && m < 12) {
+          appointmentsByMonth[m] += 1;
+        }
+      }
+    });
+
+    const monthlyAppointmentsData = baselineMonthly.map((base, idx) => base + appointmentsByMonth[idx]);
+    const totalAppointments = (db.appointments || []).length;
+
+    // 3. Tỷ lệ cọc thành công & Chi tiết đơn cọc
+    const allDeposits = db.deposits || [];
+    const totalDeposits = allDeposits.length;
+    const successfulDeposits = allDeposits.filter(
+      d => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận'
+    ).length;
+    const pendingDeposits = allDeposits.filter(
+      d => d.TrangThaiCoc === 'Chờ xác nhận'
+    ).length;
+    const cancelledDeposits = allDeposits.filter(
+      d => d.TrangThaiCoc === 'Đã hủy'
+    ).length;
+
+    const depositSuccessRate = totalDeposits > 0 ? Math.round((successfulDeposits / totalDeposits) * 100) : 0;
+    const pendingRoomsCount = db.rooms.filter(r => r.TrangThai === 'Chờ duyệt').length;
+
+    const depositStats = {
+      total: totalDeposits,
+      successful: successfulDeposits,
+      pending: pendingDeposits,
+      cancelled: cancelledDeposits,
+      successRate: depositSuccessRate,
+      totalDepositMoney: allDeposits
+        .filter(d => d.TrangThaiCoc === 'Đã tiếp nhận thành công' || d.TrangThaiCoc === 'Đã xác nhận')
+        .reduce((sum, d) => sum + (d.SoTienCoc || 0), 0),
+    };
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        sinhVienCount,
+        chuTroCount,
+        totalRooms,
+        availableRooms,
+        totalInquiries,
+        totalWallet,
+        totalAppointments,
+        totalDeposits,
+        successfulDeposits,
+        depositSuccessRate,
+        roomsByStatus,
+        pendingRoomsCount,
+        monthlyAppointments: {
+          labels: monthLabels,
+          data: monthlyAppointmentsData,
+        },
+        depositStats,
       },
-      depositStats,
-    },
-  });
+    });
+  } catch (error: any) {
+    console.error('Lỗi khi lấy thống kê Admin:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi máy chủ khi lấy dữ liệu thống kê' });
+  }
 });
 
 // -------------------------------------------------------------

@@ -1461,6 +1461,7 @@ export async function getUsersFromDb(): Promise<NguoiDung[]> {
       const users = (rows as any[]).map(u => ({ ...u, soDuVi: Number(u.soDuVi || 0) }));
       const db = readDb();
       db.users = users;
+      try { writeDb(db); } catch {}
       return users;
     } catch (err) {
       console.warn('[MySQL] Error querying users:', err);
@@ -1468,7 +1469,7 @@ export async function getUsersFromDb(): Promise<NguoiDung[]> {
   }
 
   const db = readDb();
-  return db.users || [];
+  return (db.users || []).map(u => ({ ...u, soDuVi: Number(u.soDuVi || 0) }));
 }
 
 export async function getUserByIdFromDb(id: string): Promise<NguoiDung | null> {
