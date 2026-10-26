@@ -2310,7 +2310,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     </div>
 
                     {/* Status Filter Chips & Export CSV */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {[
                           { label: 'Chờ duyệt', value: 'Chờ duyệt', count: pendingRooms.length },
@@ -2335,7 +2335,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       <button
                         type="button"
                         onClick={exportRoomsToCSV}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs whitespace-nowrap active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs whitespace-nowrap shrink-0 active:scale-95"
                         title="Tải về file CSV danh sách phòng trọ cho Microsoft Excel"
                       >
                         <Download className="w-3.5 h-3.5 text-emerald-600" />
