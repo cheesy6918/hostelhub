@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Room } from '../types';
+import { Room, LichHen } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useComparison } from '../context/ComparisonContext';
@@ -39,7 +39,9 @@ import {
   Video,
   Play,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import { parseVideoUrl } from '../utils/video';
 
@@ -79,6 +81,16 @@ const BANK_OPTIONS = [
   },
 ];
 
+// Danh sách gợi ý câu hỏi nhanh khi sinh viên hỏi chủ trọ
+const INQUIRY_QUICK_CHIPS = [
+  'Phòng có cho nuôi mèo/cún cưng không ạ?',
+  'Giá điện nước tính theo công tơ riêng hay giá chung?',
+  'Giờ giấc ra vào có tự do không ạ?',
+  'Phòng còn trống có thể chuyển vào ở ngay trong tuần này không ạ?',
+  'Có chỗ để xe máy an toàn, miễn phí không ạ?',
+  'Tiền cọc phòng là bao nhiêu tháng ạ?',
+];
+
 interface RoomDetailViewProps {
   roomId: string;
   onBack: () => void;
@@ -115,6 +127,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [appointmentLoading, setAppointmentLoading] = useState(false);
   const [appointmentSuccess, setAppointmentSuccess] = useState(false);
 
+  // Appointment status for current student on this room
+  const [existingAppointment, setExistingAppointment] = useState<LichHen | null>(null);
+  const [checkingAppointment, setCheckingAppointment] = useState(false);
+
   // Deposit form state
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositError, setDepositError] = useState('');
@@ -140,6 +156,13 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [showReviewForm, setShowReviewForm] = useState(false);
+
+  // Inquiry / Gửi tin nhắn hỏi chủ trọ state
+  const [showInquiryModal, setShowInquiryModal] = useState(false);
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [inquiryLoading, setInquiryLoading] = useState(false);
+  const [inquiryError, setInquiryError] = useState('');
+  const [inquirySuccessMsg, setInquirySuccessMsg] = useState('');
 
   // Review Verification & Eligibility state (Xác minh thuê phòng 2 chiều)
   const [canReview, setCanReview] = useState(false);
@@ -179,6 +202,71 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
     };
 
     checkReviewEligibility();
+  }, [roomId, user, token]);
+
+  const formatAppointmentTime = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const hours = d.getHours().toString().padStart(2, '0');
+      const minutes = d.getMinutes().toString().padStart(2, '0');
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const year = d.getFullYear();
+      return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const fetchExistingAppointment = async () => {
+    if (!roomId || !user || !token || user.VaiTro !== 'SinhVien') {
+      setExistingAppointment(null);
+      return;
+    }
+    try {
+      setCheckingAppointment(true);
+      const res = await fetch('/api/appointments', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        const targetRoomId = String(roomId).trim().toLowerCase();
+        const currentStudentId = String(user.Id || (user as any).id || '').trim().toLowerCase();
+
+        // Lọc tất cả lịch hẹn của sinh viên hiện tại đối với phòng này
+        const matchedAppointments = (data.data as LichHen[]).filter((apt) => {
+          const aptRoomId = String(apt.IdPhong || (apt as any).PhongId || (apt as any).room_id || '').trim().toLowerCase();
+          const aptStudentId = String(apt.IdSinhVien || (apt as any).SinhVienId || (apt as any).sinh_vien_id || '').trim().toLowerCase();
+          return aptRoomId === targetRoomId && aptStudentId === currentStudentId;
+        });
+
+        // Tìm lịch hẹn còn hiệu lực: "Chờ xác nhận" hoặc "Đã xác nhận"
+        const activeAppointment = matchedAppointments.find(
+          (apt) => apt.TrangThai === 'Chờ xác nhận' || apt.TrangThai === 'Đã xác nhận'
+        );
+
+        setExistingAppointment(activeAppointment || null);
+      }
+    } catch (err) {
+      console.warn('Không thể kiểm tra lịch hẹn hiện tại:', err);
+    } finally {
+      setCheckingAppointment(false);
+    }
+  };
+
+  // Tự động kiểm tra lịch hẹn khi mở phòng hoặc khi cửa sổ focus lại
+  useEffect(() => {
+    fetchExistingAppointment();
+
+    const handleWindowFocus = () => {
+      fetchExistingAppointment();
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, [roomId, user, token]);
 
   useEffect(() => {
@@ -312,6 +400,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
       const data = await res.json();
       if (res.ok && data.success) {
         setAppointmentSuccess(true);
+        if (data.appointment) {
+          setExistingAppointment(data.appointment);
+        } else {
+          fetchExistingAppointment();
+        }
       } else {
         setAppointmentError(data.message || 'Không thể đặt lịch hẹn.');
       }
@@ -480,6 +573,56 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
       setReviewError('Lỗi kết nối mạng, vui lòng thử lại.');
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const handleOpenInquiryModal = () => {
+    requireAuth(() => {
+      setInquiryError('');
+      setShowInquiryModal(true);
+    });
+  };
+
+  const handleSendInquiry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !token) {
+      setInquiryError('Vui lòng đăng nhập để gửi câu hỏi tư vấn.');
+      return;
+    }
+    if (!inquiryMessage.trim()) {
+      setInquiryError('Vui lòng nhập nội dung câu hỏi hoặc chọn một câu gợi ý bên dưới.');
+      return;
+    }
+    if (!room) return;
+
+    try {
+      setInquiryLoading(true);
+      setInquiryError('');
+      const res = await fetch('/api/inquiries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          roomId: room.Id,
+          message: inquiryMessage.trim(),
+          depositAmount: 0,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInquiryMessage('');
+        setShowInquiryModal(false);
+        setInquirySuccessMsg('Đã gửi câu hỏi tư vấn tới chủ trọ thành công! Vui lòng chờ phản hồi trong mục thông báo hoặc điện thoại/Zalo.');
+        setTimeout(() => setInquirySuccessMsg(''), 6000);
+      } else {
+        setInquiryError(data.message || 'Không thể gửi câu hỏi, vui lòng thử lại.');
+      }
+    } catch {
+      setInquiryError('Lỗi kết nối mạng, vui lòng thử lại.');
+    } finally {
+      setInquiryLoading(false);
     }
   };
 
@@ -1090,6 +1233,16 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                   {room.ChuTroSdt || '0987654321'}
                 </a>
               </div>
+
+              {/* Nút Nhắn tin hỏi chủ trọ */}
+              <button
+                type="button"
+                onClick={handleOpenInquiryModal}
+                className="w-full py-2.5 px-3 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-98"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Nhắn tin hỏi chủ trọ</span>
+              </button>
             </div>
 
             {/* Quick bookmark to favorites */}
@@ -1145,13 +1298,78 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                     </div>
                   )}
 
-                  <button
-                    onClick={handleOpenAppointmentModal}
-                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span>Đặt lịch hẹn xem phòng</span>
-                  </button>
+                  {/* Trạng thái lịch hẹn của sinh viên cho phòng này */}
+                  {user?.VaiTro === 'SinhVien' && existingAppointment ? (
+                    existingAppointment.TrangThai === 'Chờ xác nhận' ? (
+                      <div className="space-y-2 p-3 bg-amber-50/90 border border-amber-300 rounded-2xl animate-in fade-in shadow-2xs">
+                        <button
+                          disabled
+                          className="w-full py-2.5 px-3 bg-amber-100/90 border border-amber-300 text-amber-900 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-2xs select-none"
+                        >
+                          <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span className="truncate">🕒 Đã đặt lịch hẹn (Chờ chủ trọ xác nhận)</span>
+                        </button>
+                        <div className="text-center space-y-0.5">
+                          <p className="text-[11px] text-amber-900 font-medium">
+                            Thời gian hẹn: <strong className="font-bold text-amber-950">{formatAppointmentTime(existingAppointment.ThoiGianHen)}</strong>
+                          </p>
+                          <p className="text-[10px] text-amber-700">
+                            Chủ trọ sẽ liên hệ hoặc xác nhận lịch hẹn của bạn sớm nhất.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('student-history-appointments')}
+                          className="w-full py-2 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <span>Quản lý lịch hẹn tại Lịch sử của tôi</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-amber-700" />
+                        </button>
+                      </div>
+                    ) : existingAppointment.TrangThai === 'Đã xác nhận' ? (
+                      <div className="space-y-2 p-3 bg-emerald-50/90 border border-emerald-300 rounded-2xl animate-in fade-in shadow-2xs">
+                        <button
+                          disabled
+                          className="w-full py-2.5 px-3 bg-emerald-100/90 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-2xs select-none"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <span className="truncate">✓ Lịch hẹn đã được xác nhận</span>
+                        </button>
+                        <div className="text-center space-y-0.5">
+                          <p className="text-[11px] text-emerald-900 font-medium">
+                            Hẹn lúc: <strong className="font-bold text-emerald-950">{formatAppointmentTime(existingAppointment.ThoiGianHen)}</strong>
+                          </p>
+                          <p className="text-[10px] text-emerald-700">
+                            Chủ trọ đã xác nhận! Bạn vui lòng đến đúng giờ để xem phòng trực tiếp nhé.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('student-history-appointments')}
+                          className="w-full py-2 px-3 bg-white hover:bg-emerald-100/60 text-emerald-900 border border-emerald-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <span>Xem chi tiết tại Lịch sử của tôi</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-emerald-700" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleOpenAppointmentModal}
+                        className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
+                      >
+                        <Calendar className="w-4 h-4" />
+                        <span>Đặt lịch hẹn xem phòng</span>
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={handleOpenAppointmentModal}
+                      className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span>Đặt lịch hẹn xem phòng</span>
+                    </button>
+                  )}
 
                   {/* Kiểm tra nếu phòng đang ở trạng thái Chờ xác nhận cọc HOẶC Đã cọc */}
                   {room.TrangThai === 'Chờ chủ trọ xác nhận cọc' || room.TrangThai === 'Đã cọc' ? (
@@ -1185,6 +1403,24 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                       <span>Đặt cọc giữ phòng (500.000 VNĐ)</span>
                     </button>
                   )}
+
+                  {/* Banner thông báo đã gửi câu hỏi tư vấn thành công */}
+                  {inquirySuccessMsg && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded-xl flex items-start gap-2 shadow-2xs animate-in fade-in">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="font-medium leading-relaxed">{inquirySuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Nút gửi tin nhắn tư vấn / Hỏi chủ trọ */}
+                  <button
+                    type="button"
+                    onClick={handleOpenInquiryModal}
+                    className="w-full py-2.5 px-4 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-98"
+                  >
+                    <MessageSquare className="w-4 h-4 text-indigo-600" />
+                    <span>Gửi tin nhắn tư vấn / Hỏi chủ trọ</span>
+                  </button>
 
                   {/* Student Wallet & VietQR Top-up Widget */}
                   <div className="pt-1">
@@ -1824,6 +2060,160 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Gửi tin nhắn / Thắc mắc tới chủ trọ */}
+      {showInquiryModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowInquiryModal(false);
+            }
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with Title and Close Button (X) */}
+            <div className="flex items-center justify-between p-5 pb-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5 text-indigo-600">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base leading-tight">Gửi tin nhắn / Thắc mắc tới chủ trọ</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Chủ trọ sẽ nhận được thông báo kèm SĐT liên hệ của bạn</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInquiryModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
+                title="Đóng (Esc)"
+                aria-label="Đóng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content Body */}
+            <form onSubmit={handleSendInquiry} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                {/* Room & Landlord Brief Summary */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Thông tin liên hệ</span>
+                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      Tư vấn trực tiếp
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      {room.ChuTroTen ? room.ChuTroTen.charAt(0) : 'C'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        Chủ trọ: <span className="text-indigo-950 font-bold">{room.ChuTroTen || 'Chủ trọ HostelHub'}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        Hotline / Zalo: {room.ChuTroSdt || '0987654321'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <p className="text-xs text-slate-600 truncate">
+                      <span className="text-slate-400">Phòng quan tâm: </span>
+                      <strong className="text-slate-900 font-semibold">{room.TieuDe}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Suggestion Chips */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Gợi ý câu hỏi nhanh (bấm để điền):</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {INQUIRY_QUICK_CHIPS.map((chip, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setInquiryMessage(chip);
+                          if (inquiryError) setInquiryError('');
+                        }}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-medium transition-all text-left cursor-pointer active:scale-98"
+                      >
+                        + {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Message Textarea */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nội dung câu hỏi / Lời nhắn tư vấn <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={inquiryMessage}
+                    onChange={(e) => {
+                      setInquiryMessage(e.target.value);
+                      if (inquiryError) setInquiryError('');
+                    }}
+                    placeholder="Ví dụ: Em muốn hỏi về giá điện nước, phòng có cho nuôi thú cưng không, giờ giấc ra vào, hoặc hẹn xem phòng vào tối nay được không ạ..."
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+                  />
+                  {inquiryError && (
+                    <div className="flex items-center gap-1.5 text-rose-600 text-xs font-semibold mt-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{inquiryError}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    Sau khi bạn gửi, tin nhắn sẽ được chuyển trực tiếp vào mục <strong>"Tin nhắn liên hệ"</strong> của Chủ trọ kèm thông tin SĐT của bạn ({user?.Sdt || 'SĐT tài khoản'}).
+                  </span>
+                </div>
+              </div>
+
+              {/* Fixed / Sticky Action Buttons Footer */}
+              <div className="p-4 px-5 bg-slate-50 border-t border-slate-100 shrink-0 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowInquiryModal(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/80 rounded-xl cursor-pointer transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={inquiryLoading}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-98 transition-all"
+                >
+                  {inquiryLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang gửi tin nhắn...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Gửi tin nhắn tư vấn</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

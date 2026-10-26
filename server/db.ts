@@ -1540,16 +1540,28 @@ export async function getInquiriesFromDb(filter?: { studentId?: string; landlord
       let sql = 'SELECT * FROM inquiries';
       const params: any[] = [];
       if (filter?.studentId) {
-        sql += ' WHERE SinhVienId = ?';
-        params.push(filter.studentId);
+        sql += ' WHERE (SinhVienId = ? OR IdSinhVien = ?)';
+        params.push(filter.studentId, filter.studentId);
       } else if (filter?.landlordId) {
-        sql += ' WHERE ChuTroId = ?';
-        params.push(filter.landlordId);
+        sql += ' WHERE (ChuTroId = ? OR IdChuTro = ?)';
+        params.push(filter.landlordId, filter.landlordId);
       }
       sql += ' ORDER BY NgayTao DESC';
 
       const [rows] = await pool.query(sql, params);
-      const inqs = (rows as any[]).map(i => ({ ...i, TienCoc: Number(i.TienCoc || 0) }));
+      const inqs = (rows as any[]).map(i => ({
+        Id: String(i.Id || i.id || ''),
+        PhongId: String(i.PhongId || i.phong_id || i.room_id || ''),
+        TieuDePhong: String(i.TieuDePhong || i.tieu_de_phong || 'Phòng trọ'),
+        SinhVienId: String(i.SinhVienId || i.IdSinhVien || i.sinh_vien_id || ''),
+        SinhVienTen: String(i.SinhVienTen || i.sinh_vien_ten || 'Sinh viên'),
+        SinhVienSdt: String(i.SinhVienSdt || i.sinh_vien_sdt || ''),
+        ChuTroId: String(i.ChuTroId || i.IdChuTro || i.chu_tro_id || 'usr_chutro'),
+        TienCoc: Number(i.TienCoc || i.tien_coc || 0),
+        GhiChu: String(i.GhiChu || i.ghi_chu || i.message || ''),
+        TrangThai: (i.TrangThai || i.trang_thai || 'ChoXacNhan') as any,
+        NgayTao: String(i.NgayTao || i.ngay_tao || new Date().toISOString()),
+      }));
       const db = readDb();
       db.inquiries = inqs;
       return inqs;
@@ -1560,8 +1572,15 @@ export async function getInquiriesFromDb(filter?: { studentId?: string; landlord
 
   const db = readDb();
   let result = db.inquiries || [];
-  if (filter?.studentId) result = result.filter(i => i.SinhVienId === filter.studentId);
-  if (filter?.landlordId) result = result.filter(i => i.ChuTroId === filter.landlordId);
+  if (filter?.studentId) {
+    const sId = filter.studentId.toLowerCase();
+    result = result.filter(i => (i.SinhVienId && i.SinhVienId.toLowerCase() === sId) || ((i as any).IdSinhVien && (i as any).IdSinhVien.toLowerCase() === sId));
+  }
+  if (filter?.landlordId) {
+    const lId = filter.landlordId.toLowerCase();
+    result = result.filter(i => (i.ChuTroId && i.ChuTroId.toLowerCase() === lId) || ((i as any).IdChuTro && (i as any).IdChuTro.toLowerCase() === lId));
+  }
+  result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
   return result;
 }
 
@@ -1571,17 +1590,45 @@ export async function getInquiryByIdFromDb(id: string): Promise<YeuCauLienHe | n
     try {
       const [rows] = await pool.query('SELECT * FROM inquiries WHERE Id = ? LIMIT 1', [id]);
       const i = (rows as any[])[0];
-      if (i) return { ...i, TienCoc: Number(i.TienCoc || 0) };
+      if (i) {
+        return {
+          Id: String(i.Id || i.id || ''),
+          PhongId: String(i.PhongId || i.phong_id || i.room_id || ''),
+          TieuDePhong: String(i.TieuDePhong || i.tieu_de_phong || 'Phòng trọ'),
+          SinhVienId: String(i.SinhVienId || i.IdSinhVien || i.sinh_vien_id || ''),
+          SinhVienTen: String(i.SinhVienTen || i.sinh_vien_ten || 'Sinh viên'),
+          SinhVienSdt: String(i.SinhVienSdt || i.sinh_vien_sdt || ''),
+          ChuTroId: String(i.ChuTroId || i.IdChuTro || i.chu_tro_id || 'usr_chutro'),
+          TienCoc: Number(i.TienCoc || i.tien_coc || 0),
+          GhiChu: String(i.GhiChu || i.ghi_chu || i.message || ''),
+          TrangThai: (i.TrangThai || i.trang_thai || 'ChoXacNhan') as any,
+          NgayTao: String(i.NgayTao || i.ngay_tao || new Date().toISOString()),
+        };
+      }
     } catch (err) {
       console.warn('[MySQL] Error fetching inquiry by Id:', err);
     }
   }
 
   const db = readDb();
-  return db.inquiries.find(i => i.Id === id) || null;
+  return (db.inquiries || []).find(i => i.Id === id) || null;
 }
 
 export async function createInquiryInDb(inq: YeuCauLienHe): Promise<YeuCauLienHe> {
+  const safeInq: YeuCauLienHe = {
+    Id: inq.Id || ('inq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+    PhongId: inq.PhongId || '',
+    TieuDePhong: inq.TieuDePhong || 'Phòng trọ sinh viên',
+    SinhVienId: inq.SinhVienId || '',
+    SinhVienTen: inq.SinhVienTen || 'Sinh viên',
+    SinhVienSdt: inq.SinhVienSdt || '',
+    ChuTroId: inq.ChuTroId || 'usr_chutro',
+    TienCoc: Number(inq.TienCoc) || 0,
+    GhiChu: inq.GhiChu || '',
+    TrangThai: inq.TrangThai || 'ChoXacNhan',
+    NgayTao: inq.NgayTao || new Date().toISOString(),
+  };
+
   const isConn = await isMySqlConnected();
   if (isConn) {
     try {
@@ -1589,28 +1636,47 @@ export async function createInquiryInDb(inq: YeuCauLienHe): Promise<YeuCauLienHe
         `INSERT INTO inquiries (Id, PhongId, TieuDePhong, SinhVienId, SinhVienTen, SinhVienSdt, ChuTroId, TienCoc, GhiChu, TrangThai, NgayTao)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          inq.Id,
-          inq.PhongId,
-          inq.TieuDePhong,
-          inq.SinhVienId,
-          inq.SinhVienTen,
-          inq.SinhVienSdt,
-          inq.ChuTroId,
-          inq.TienCoc || 0,
-          inq.GhiChu || '',
-          inq.TrangThai || 'ChoXacNhan',
-          inq.NgayTao,
+          safeInq.Id,
+          safeInq.PhongId,
+          safeInq.TieuDePhong,
+          safeInq.SinhVienId,
+          safeInq.SinhVienTen,
+          safeInq.SinhVienSdt,
+          safeInq.ChuTroId,
+          safeInq.TienCoc,
+          safeInq.GhiChu,
+          safeInq.TrangThai,
+          safeInq.NgayTao,
         ]
       );
     } catch (err) {
-      console.warn('[MySQL] Error creating inquiry:', err);
+      console.warn('[MySQL] Error creating inquiry in inquiries table:', err);
+      // Secondary fallback insert attempt
+      try {
+        await pool.execute(
+          `INSERT INTO inquiries (Id, PhongId, SinhVienId, ChuTroId, GhiChu, TrangThai, NgayTao)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            safeInq.Id,
+            safeInq.PhongId,
+            safeInq.SinhVienId,
+            safeInq.ChuTroId,
+            safeInq.GhiChu,
+            safeInq.TrangThai,
+            safeInq.NgayTao,
+          ]
+        );
+      } catch (err2) {
+        console.warn('[MySQL] Secondary fallback inquiry insert error:', err2);
+      }
     }
   }
 
   const db = readDb();
-  db.inquiries.unshift(inq);
+  if (!db.inquiries) db.inquiries = [];
+  db.inquiries.unshift(safeInq);
   writeDb(db);
-  return inq;
+  return safeInq;
 }
 
 export async function updateInquiryInDb(id: string, updates: Partial<YeuCauLienHe>): Promise<YeuCauLienHe | null> {
@@ -1643,35 +1709,126 @@ export async function updateInquiryInDb(id: string, updates: Partial<YeuCauLienH
 // -------------------------------------------------------------
 // 4. APPOINTMENTS (LỊCH HẸN XEM PHÒNG)
 // -------------------------------------------------------------
+export function parseAppointmentRow(row: any): LichHen {
+  const chuTroId = String(
+    row.ChuTroId || row.IdChuTro || row.chu_tro_id || row.landlordId || 'usr_chutro'
+  ).trim();
+  const sinhVienId = String(
+    row.IdSinhVien || row.SinhVienId || row.sinh_vien_id || row.studentId || ''
+  ).trim();
+  const phongId = String(
+    row.IdPhong || row.PhongId || row.phong_id || row.roomId || ''
+  ).trim();
+  const thoiGianHen = String(
+    row.ThoiGianHen || row.thoi_gian_hen || row.appointmentTime || ''
+  );
+  const ngayTao = String(
+    row.NgayTao || row.ngay_tao || row.created_at || new Date().toISOString()
+  );
+
+  return {
+    Id: String(row.Id || row.id),
+    IdSinhVien: sinhVienId,
+    IdPhong: phongId,
+    ThoiGianHen: thoiGianHen,
+    GhiChu: row.GhiChu || row.ghi_chu || '',
+    TrangThai: (row.TrangThai || row.trang_thai || 'Chờ xác nhận') as any,
+    LyDoTuChoi: row.LyDoTuChoi || row.ly_do_tu_choi || undefined,
+    TieuDePhong: row.TieuDePhong || row.tieu_de_phong || 'Phòng trọ sinh viên',
+    DiaChiPhong: row.DiaChiPhong || row.dia_chi_phong || '',
+    SinhVienTen: row.SinhVienTen || row.sinh_vien_ten || 'Sinh viên',
+    SinhVienSdt: row.SinhVienSdt || row.sinh_vien_sdt || '',
+    ChuTroId: chuTroId,
+    ChuTroTen: row.ChuTroTen || row.chu_tro_ten || 'Trần Thị Bích (Chủ trọ Cầu Giấy)',
+    ChuTroSdt: row.ChuTroSdt || row.chu_tro_sdt || '0987654321',
+    NgayTao: ngayTao,
+  };
+}
+
 export async function getAppointmentsFromDb(filter?: { studentId?: string; landlordId?: string }): Promise<LichHen[]> {
   const isConn = await isMySqlConnected();
   if (isConn) {
     try {
-      let sql = 'SELECT * FROM appointments';
-      const params: any[] = [];
+      let rows: any[] = [];
       if (filter?.studentId) {
-        sql += ' WHERE (IdSinhVien = ? OR SinhVienId = ?)';
-        params.push(filter.studentId, filter.studentId);
+        try {
+          const [res] = await pool.query('SELECT * FROM appointments WHERE IdSinhVien = ? ORDER BY NgayTao DESC, Id DESC', [filter.studentId]);
+          rows = res as any[];
+        } catch (err: any) {
+          if (err.code === 'ER_BAD_FIELD_ERROR') {
+            try {
+              const [res] = await pool.query('SELECT * FROM appointments WHERE SinhVienId = ? ORDER BY NgayTao DESC, Id DESC', [filter.studentId]);
+              rows = res as any[];
+            } catch {
+              const [res] = await pool.query('SELECT * FROM appointments WHERE sinh_vien_id = ? ORDER BY ngay_tao DESC, id DESC', [filter.studentId]);
+              rows = res as any[];
+            }
+          } else {
+            throw err;
+          }
+        }
       } else if (filter?.landlordId) {
-        sql += ' WHERE (ChuTroId = ? OR IdChuTro = ?)';
-        params.push(filter.landlordId, filter.landlordId);
+        try {
+          const [res] = await pool.query('SELECT * FROM appointments WHERE ChuTroId = ? ORDER BY NgayTao DESC, Id DESC', [filter.landlordId]);
+          rows = res as any[];
+        } catch (err: any) {
+          if (err.code === 'ER_BAD_FIELD_ERROR') {
+            try {
+              const [res] = await pool.query('SELECT * FROM appointments WHERE IdChuTro = ? ORDER BY NgayTao DESC, Id DESC', [filter.landlordId]);
+              rows = res as any[];
+            } catch {
+              const [res] = await pool.query('SELECT * FROM appointments WHERE chu_tro_id = ? ORDER BY ngay_tao DESC, id DESC', [filter.landlordId]);
+              rows = res as any[];
+            }
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        try {
+          const [res] = await pool.query('SELECT * FROM appointments ORDER BY NgayTao DESC, Id DESC');
+          rows = res as any[];
+        } catch {
+          const [res] = await pool.query('SELECT * FROM appointments');
+          rows = res as any[];
+        }
       }
-      sql += ' ORDER BY COALESCE(NgayTao, Id) DESC';
-      const [rows] = await pool.query(sql, params);
-      const apts = (rows as any[]).map(row => ({
-        ...row,
-        ChuTroId: row.ChuTroId || row.IdChuTro || 'usr_chutro',
-        IdSinhVien: row.IdSinhVien || row.SinhVienId,
-      })) as LichHen[];
+
+      const apts = rows.map(parseAppointmentRow);
+      apts.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
       return apts;
     } catch (err) {
-      console.warn('[MySQL] Error querying appointments, falling back to local store:', err);
+      console.warn('[MySQL] Error querying appointments with filter, trying fallback SELECT all:', err);
+      try {
+        const [allRows] = await pool.query('SELECT * FROM appointments');
+        let apts = (allRows as any[]).map(parseAppointmentRow);
+        if (filter?.studentId) {
+          const sId = String(filter.studentId).trim().toLowerCase();
+          apts = apts.filter(a => String(a.IdSinhVien || '').toLowerCase() === sId || ((a as any).SinhVienId && String((a as any).SinhVienId).toLowerCase() === sId));
+        }
+        if (filter?.landlordId) {
+          const lId = String(filter.landlordId).trim().toLowerCase();
+          apts = apts.filter(a => String(a.ChuTroId || '').toLowerCase() === lId || ((a as any).IdChuTro && String((a as any).IdChuTro).toLowerCase() === lId));
+        }
+        apts.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
+        return apts;
+      } catch (err2) {
+        console.warn('[MySQL] Error querying all appointments, falling back to local store:', err2);
+      }
     }
   }
+
   const db = readDb();
-  let result = db.appointments || [];
-  if (filter?.studentId) result = result.filter(a => a.IdSinhVien === filter.studentId || (a as any).SinhVienId === filter.studentId);
-  if (filter?.landlordId) result = result.filter(a => a.ChuTroId === filter.landlordId || (a as any).IdChuTro === filter.landlordId);
+  let result = (db.appointments || []).map(parseAppointmentRow);
+  if (filter?.studentId) {
+    const sId = String(filter.studentId).trim().toLowerCase();
+    result = result.filter(a => String(a.IdSinhVien || '').toLowerCase() === sId || ((a as any).SinhVienId && String((a as any).SinhVienId).toLowerCase() === sId));
+  }
+  if (filter?.landlordId) {
+    const lId = String(filter.landlordId).trim().toLowerCase();
+    result = result.filter(a => String(a.ChuTroId || '').toLowerCase() === lId || ((a as any).IdChuTro && String((a as any).IdChuTro).toLowerCase() === lId));
+  }
+  result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
   return result;
 }
 
@@ -1681,19 +1838,39 @@ export async function getAppointmentByIdFromDb(id: string): Promise<LichHen | nu
     try {
       const [rows] = await pool.query('SELECT * FROM appointments WHERE Id = ? LIMIT 1', [id]);
       const apt = (rows as any[])[0];
-      if (apt) return apt as LichHen;
+      if (apt) return parseAppointmentRow(apt);
     } catch (err) {
       console.warn('[MySQL] Error fetching appointment by Id:', err);
     }
   }
 
   const db = readDb();
-  return db.appointments.find(a => a.Id === id) || null;
+  const apt = db.appointments.find(a => a.Id === id);
+  return apt ? parseAppointmentRow(apt) : null;
 }
 
 export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
+  const finalId = String(apt.Id || ('hen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)));
+  const finalIdSinhVien = String(apt.IdSinhVien || (apt as any).SinhVienId || (apt as any).sinh_vien_id || 'usr_sinhvien').trim();
+  const finalIdPhong = String(apt.IdPhong || (apt as any).PhongId || (apt as any).room_id || '').trim();
+  const finalThoiGianHen = String(apt.ThoiGianHen || (apt as any).thoi_gian_hen || new Date(Date.now() + 86400000).toISOString()).trim();
+  const finalGhiChu = String(apt.GhiChu || (apt as any).ghi_chu || '').trim();
+  const finalTrangThai = String(apt.TrangThai || (apt as any).trang_thai || 'Chờ xác nhận').trim();
+  const finalLyDoTuChoi = apt.LyDoTuChoi ? String(apt.LyDoTuChoi).trim() : null;
+  const finalTieuDePhong = String(apt.TieuDePhong || (apt as any).tieu_de_phong || 'Phòng trọ sinh viên').trim();
+  const finalDiaChiPhong = String(apt.DiaChiPhong || (apt as any).dia_chi_phong || 'Hà Nội').trim();
+  const finalSinhVienTen = String(apt.SinhVienTen || (apt as any).sinh_vien_ten || 'Sinh viên').trim();
+  const finalSinhVienSdt = String(apt.SinhVienSdt || (apt as any).sinh_vien_sdt || '0912345678').trim();
+  const finalChuTroId = String(apt.ChuTroId || (apt as any).IdChuTro || (apt as any).chu_tro_id || 'usr_chutro').trim();
+  const finalChuTroTen = String(apt.ChuTroTen || (apt as any).chu_tro_ten || 'Trần Thị Bích (Chủ trọ Cầu Giấy)').trim();
+  const finalChuTroSdt = String(apt.ChuTroSdt || (apt as any).chu_tro_sdt || '0987654321').trim();
+  const finalNgayTao = String(apt.NgayTao || (apt as any).ngay_tao || new Date().toISOString()).trim();
+
   const isConn = await isMySqlConnected();
   if (isConn) {
+    let inserted = false;
+
+    // Lần 1: Cấu trúc chuẩn theo database.sql (Id, IdSinhVien, IdPhong, ThoiGianHen...)
     try {
       await pool.execute(
         `INSERT INTO appointments (
@@ -1702,49 +1879,149 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
           ChuTroId, ChuTroTen, ChuTroSdt, NgayTao
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          apt.Id,
-          apt.IdSinhVien,
-          apt.IdPhong,
-          String(apt.ThoiGianHen),
-          apt.GhiChu || '',
-          apt.TrangThai || 'Chờ xác nhận',
-          apt.LyDoTuChoi || null,
-          apt.TieuDePhong || 'Phòng trọ sinh viên',
-          apt.DiaChiPhong || '',
-          apt.SinhVienTen || 'Sinh viên',
-          apt.SinhVienSdt || '0912345678',
-          apt.ChuTroId || 'usr_chutro',
-          apt.ChuTroTen || 'Trần Thị Bích (Chủ trọ Cầu Giấy)',
-          apt.ChuTroSdt || '0987654321',
-          apt.NgayTao || new Date().toISOString(),
+          finalId,
+          finalIdSinhVien,
+          finalIdPhong,
+          finalThoiGianHen,
+          finalGhiChu,
+          finalTrangThai,
+          finalLyDoTuChoi,
+          finalTieuDePhong,
+          finalDiaChiPhong,
+          finalSinhVienTen,
+          finalSinhVienSdt,
+          finalChuTroId,
+          finalChuTroTen,
+          finalChuTroSdt,
+          finalNgayTao,
         ]
       );
-    } catch (err) {
-      console.warn('[MySQL] Error creating appointment in DB, trying minimal fallback:', err);
-      try {
-        await pool.execute(
-          `INSERT INTO appointments (Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, ChuTroId)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            apt.Id,
-            apt.IdSinhVien,
-            apt.IdPhong,
-            String(apt.ThoiGianHen),
-            apt.GhiChu || '',
-            apt.TrangThai || 'Chờ xác nhận',
-            apt.ChuTroId || 'usr_chutro',
-          ]
-        );
-      } catch (err2) {
-        console.error('[MySQL] FATAL: Could not insert appointment into TiDB Cloud:', err2);
+      inserted = true;
+    } catch (err: any) {
+      console.warn('[MySQL] Primary INSERT appointments failed, attempting fallback variants:', err?.message || err);
+
+      // Lần 2: Fallback nếu database dùng SinhVienId, PhongId
+      if (!inserted) {
+        try {
+          await pool.execute(
+            `INSERT INTO appointments (
+              Id, SinhVienId, PhongId, ThoiGianHen, GhiChu, TrangThai, 
+              LyDoTuChoi, TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, 
+              ChuTroId, ChuTroTen, ChuTroSdt, NgayTao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              finalId,
+              finalIdSinhVien,
+              finalIdPhong,
+              finalThoiGianHen,
+              finalGhiChu,
+              finalTrangThai,
+              finalLyDoTuChoi,
+              finalTieuDePhong,
+              finalDiaChiPhong,
+              finalSinhVienTen,
+              finalSinhVienSdt,
+              finalChuTroId,
+              finalChuTroTen,
+              finalChuTroSdt,
+              finalNgayTao,
+            ]
+          );
+          inserted = true;
+        } catch (err2: any) {
+          console.warn('[MySQL] Fallback 2 INSERT appointments failed:', err2?.message || err2);
+        }
+      }
+
+      // Lần 3: Fallback nếu database dùng snake_case (sinh_vien_id, phong_id...)
+      if (!inserted) {
+        try {
+          await pool.execute(
+            `INSERT INTO appointments (
+              id, sinh_vien_id, phong_id, thoi_gian_hen, ghi_chu, trang_thai, 
+              ly_do_tu_choi, tieu_de_phong, dia_chi_phong, sinh_vien_ten, sinh_vien_sdt, 
+              chu_tro_id, chu_tro_ten, chu_tro_sdt, ngay_tao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              finalId,
+              finalIdSinhVien,
+              finalIdPhong,
+              finalThoiGianHen,
+              finalGhiChu,
+              finalTrangThai,
+              finalLyDoTuChoi,
+              finalTieuDePhong,
+              finalDiaChiPhong,
+              finalSinhVienTen,
+              finalSinhVienSdt,
+              finalChuTroId,
+              finalChuTroTen,
+              finalChuTroSdt,
+              finalNgayTao,
+            ]
+          );
+          inserted = true;
+        } catch (err3: any) {
+          console.warn('[MySQL] Fallback 3 (snake_case) INSERT appointments failed:', err3?.message || err3);
+        }
+      }
+
+      // Lần 4: Câu lệnh INSERT tối giản không có LyDoTuChoi (phòng trường hợp cột này không tồn tại trong DB cũ)
+      if (!inserted) {
+        try {
+          await pool.execute(
+            `INSERT INTO appointments (
+              Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, 
+              TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, ChuTroId, ChuTroTen, ChuTroSdt, NgayTao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              finalId,
+              finalIdSinhVien,
+              finalIdPhong,
+              finalThoiGianHen,
+              finalGhiChu,
+              finalTrangThai,
+              finalTieuDePhong,
+              finalDiaChiPhong,
+              finalSinhVienTen,
+              finalSinhVienSdt,
+              finalChuTroId,
+              finalChuTroTen,
+              finalChuTroSdt,
+              finalNgayTao,
+            ]
+          );
+          inserted = true;
+        } catch (err4: any) {
+          console.error('[MySQL] FATAL: All SQL INSERT attempts for appointment failed:', err4);
+        }
       }
     }
   }
+
+  const aptToSave: LichHen = {
+    Id: finalId,
+    IdSinhVien: finalIdSinhVien,
+    IdPhong: finalIdPhong,
+    ThoiGianHen: finalThoiGianHen,
+    GhiChu: finalGhiChu,
+    TrangThai: finalTrangThai as any,
+    LyDoTuChoi: finalLyDoTuChoi || undefined,
+    TieuDePhong: finalTieuDePhong,
+    DiaChiPhong: finalDiaChiPhong,
+    SinhVienTen: finalSinhVienTen,
+    SinhVienSdt: finalSinhVienSdt,
+    ChuTroId: finalChuTroId,
+    ChuTroTen: finalChuTroTen,
+    ChuTroSdt: finalChuTroSdt,
+    NgayTao: finalNgayTao,
+  };
+
   const db = readDb();
   if (!db.appointments) db.appointments = [];
-  db.appointments.unshift(apt);
+  db.appointments.unshift(aptToSave);
   writeDb(db);
-  return apt;
+  return aptToSave;
 }
 
 export async function updateAppointmentInDb(id: string, updates: Partial<LichHen>): Promise<LichHen | null> {

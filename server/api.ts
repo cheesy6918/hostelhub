@@ -896,52 +896,86 @@ apiRouter.delete('/rooms/:id', requireAuth, async (req: Request, res: Response) 
 
 apiRouter.post('/inquiries', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const { roomId, message, depositAmount } = req.body;
+  const { roomId, message, depositAmount, PhongId, GhiChu } = req.body;
 
-  const room = await getRoomByIdFromDb(roomId);
+  const targetRoomId = roomId || PhongId;
+  if (!targetRoomId) {
+    res.status(400).json({ success: false, message: 'Vui lòng cung cấp mã phòng trọ.' });
+    return;
+  }
+
+  const room = await getRoomByIdFromDb(targetRoomId);
   if (!room) {
-    res.status(404).json({ success: false, message: 'Phòng không tồn tại.' });
+    res.status(404).json({ success: false, message: 'Phòng trọ không tồn tại.' });
     return;
   }
 
   const deposit = Number(depositAmount) || 0;
   if (deposit > 0) {
     const dbUser = await getUserByIdFromDb(user.Id);
-    if (!dbUser || dbUser.soDuVi < deposit) {
+    if (!dbUser || (dbUser.soDuVi || 0) < deposit) {
       res.status(400).json({
         success: false,
-        message: `Số dư ví không đủ để đặt cọc ${deposit.toLocaleString('vi-VN')} VNĐ. Số dư hiện tại: ${(dbUser ? dbUser.soDuVi : user.soDuVi).toLocaleString('vi-VN')} VNĐ.`
+        message: `Số dư ví không đủ để đặt cọc ${deposit.toLocaleString('vi-VN')} VNĐ. Số dư hiện tại: ${(dbUser ? dbUser.soDuVi : user.soDuVi || 0).toLocaleString('vi-VN')} VNĐ.`
       });
       return;
     }
     // Deduct deposit from student
-    const updatedBalance = dbUser.soDuVi - deposit;
+    const updatedBalance = (dbUser.soDuVi || 0) - deposit;
     await updateUserInDb(user.Id, { soDuVi: updatedBalance });
     user.soDuVi = updatedBalance;
   }
 
+  const studentName = user.HoTen || 'Sinh viên';
+  const studentPhone = user.Sdt || '0987654321';
+  const roomTitle = room.TieuDe || 'Phòng trọ';
+  const targetChuTroId = room.IdChuTro || room.ChuTroId || 'usr_chutro';
+  const inquiryNote = (message || GhiChu || '').trim() || 'Sinh viên muốn hỏi thêm thông tin phòng trọ';
+
   const newInq: YeuCauLienHe = {
-    Id: 'inq_' + Date.now(),
+    Id: 'inq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
     PhongId: room.Id,
-    TieuDePhong: room.TieuDe,
+    TieuDePhong: roomTitle,
     SinhVienId: user.Id,
-    SinhVienTen: user.HoTen,
-    SinhVienSdt: user.Sdt,
-    ChuTroId: room.IdChuTro || room.ChuTroId || '',
+    SinhVienTen: studentName,
+    SinhVienSdt: studentPhone,
+    ChuTroId: targetChuTroId,
     TienCoc: deposit,
-    GhiChu: message || 'Liên hệ hẹn xem phòng',
+    GhiChu: inquiryNote,
     TrangThai: 'ChoXacNhan',
     NgayTao: new Date().toISOString(),
   };
 
-  await createInquiryInDb(newInq);
+  const savedInq = await createInquiryInDb(newInq);
+
+  // Gửi thông báo đến chủ trọ
+  if (targetChuTroId) {
+    await addNotification(
+      null,
+      targetChuTroId,
+      'Tin nhắn tư vấn / hỏi đáp phòng trọ mới!',
+      `Sinh viên ${studentName} (SĐT: ${studentPhone}) vừa gửi tin nhắn hỏi về phòng "${roomTitle}": "${inquiryNote}". Vui lòng phản hồi sinh viên trong mục Tin nhắn liên hệ.`,
+      'PhongTro'
+    );
+  }
+
+  // Gửi thông báo xác nhận đến sinh viên
+  if (user.Id) {
+    await addNotification(
+      null,
+      user.Id,
+      'Đã gửi câu hỏi tư vấn tới chủ trọ thành công',
+      `Câu hỏi của bạn cho phòng "${roomTitle}" đã được gửi tới chủ trọ. Chủ trọ sẽ phản hồi qua hệ thống hoặc gọi điện/Zalo tới số ${studentPhone}.`,
+      'PhongTro'
+    );
+  }
 
   res.status(201).json({
     success: true,
     message: deposit > 0
       ? `Đã gửi yêu cầu giữ chỗ và trừ tạm ${deposit.toLocaleString('vi-VN')} VNĐ từ ví của bạn!`
-      : 'Đã gửi lời nhắn hẹn xem phòng đến chủ trọ thành công!',
-    inquiry: newInq,
+      : 'Đã gửi câu hỏi tư vấn tới chủ trọ thành công! Vui lòng chờ phản hồi trong mục thông báo hoặc điện thoại/Zalo.',
+    inquiry: savedInq,
     newBalance: user.soDuVi,
   });
 });
@@ -951,15 +985,26 @@ apiRouter.get('/inquiries', requireAuth, async (req: Request, res: Response) => 
   const allInqs = await getInquiriesFromDb();
 
   let list: YeuCauLienHe[] = [];
+  const currentUserId = String(user.Id || '').trim().toLowerCase();
+
   if (user.VaiTro === 'ChuTro') {
-    list = allInqs.filter(i => i.ChuTroId === user.Id);
+    list = allInqs.filter(i => {
+      const landlordId = String(i.ChuTroId || (i as any).IdChuTro || '').trim().toLowerCase();
+      return landlordId === currentUserId;
+    });
   } else if (user.VaiTro === 'SinhVien') {
-    list = allInqs.filter(i => i.SinhVienId === user.Id);
+    list = allInqs.filter(i => {
+      const studentId = String(i.SinhVienId || (i as any).IdSinhVien || '').trim().toLowerCase();
+      return studentId === currentUserId;
+    });
   } else if (user.VaiTro === 'Admin') {
     list = allInqs;
   }
 
-  res.json({ success: true, data: list });
+  // Đảm bảo tin nhắn mới nhất xếp lên đầu danh sách
+  list.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
+
+  res.json({ success: true, count: list.length, data: list });
 });
 
 apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Response) => {
@@ -972,8 +1017,11 @@ apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Re
     return;
   }
 
-  if (user.VaiTro !== 'Admin' && inq.ChuTroId !== user.Id) {
-    res.status(403).json({ success: false, message: 'Không có quyền xử lý.' });
+  const inqLandlordId = String(inq.ChuTroId || (inq as any).IdChuTro || '').trim().toLowerCase();
+  const currentUserId = String(user.Id || '').trim().toLowerCase();
+
+  if (user.VaiTro !== 'Admin' && inqLandlordId !== currentUserId) {
+    res.status(403).json({ success: false, message: 'Không có quyền xử lý yêu cầu này.' });
     return;
   }
 
@@ -996,6 +1044,20 @@ apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Re
     }
   }
 
+  // Gửi thông báo đến sinh viên khi chủ trọ tiếp nhận hoặc phản hồi
+  if (inq.SinhVienId) {
+    const statusNote = status === 'DaDuyet'
+      ? 'Chủ trọ đã tiếp nhận lời nhắn và sẽ sớm liên hệ tư vấn trực tiếp cho bạn.'
+      : 'Chủ trọ đã cập nhật trạng thái yêu cầu tư vấn.';
+    await addNotification(
+      null,
+      inq.SinhVienId,
+      status === 'DaDuyet' ? 'Chủ trọ đã tiếp nhận câu hỏi tư vấn!' : 'Cập nhật trạng thái tin nhắn tư vấn',
+      `Phòng "${inq.TieuDePhong || 'Phòng trọ'}": ${statusNote}`,
+      'PhongTro'
+    );
+  }
+
   res.json({ success: true, message: `Đã cập nhật trạng thái: ${status}`, inquiry: inq });
 });
 
@@ -1006,18 +1068,34 @@ apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Re
 // GET /api/appointments - Danh sách lịch hẹn
 apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const list = await getAppointmentsFromDb();
+  const filter: { studentId?: string; landlordId?: string } = {};
+
+  if (user.VaiTro === 'SinhVien') {
+    filter.studentId = user.Id;
+  } else if (user.VaiTro === 'ChuTro') {
+    filter.landlordId = user.Id;
+  }
+
+  const list = await getAppointmentsFromDb(filter);
 
   let result: LichHen[] = [];
   if (user.VaiTro === 'SinhVien') {
-    result = list.filter(a => a.IdSinhVien === user.Id || (a as any).SinhVienId === user.Id);
+    const sId = String(user.Id).trim().toLowerCase();
+    result = list.filter(a => {
+      const aptSvId = String(a.IdSinhVien || (a as any).SinhVienId || (a as any).sinh_vien_id || '').trim().toLowerCase();
+      return aptSvId === sId;
+    });
   } else if (user.VaiTro === 'ChuTro') {
-    result = list.filter(a => a.ChuTroId === user.Id || (a as any).IdChuTro === user.Id);
+    const lId = String(user.Id).trim().toLowerCase();
+    result = list.filter(a => {
+      const aptCtId = String(a.ChuTroId || (a as any).IdChuTro || (a as any).chu_tro_id || '').trim().toLowerCase();
+      return aptCtId === lId;
+    });
   } else {
     result = list;
   }
 
-  // Sort newest first
+  // Luôn sắp xếp lịch hẹn mới nhất lên đầu (theo NgayTao giảm dần)
   result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
 
   res.json({ success: true, count: result.length, data: result });
@@ -1048,29 +1126,59 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
     return;
   }
 
-  // Chuẩn hóa dữ liệu chủ trọ, tránh tuyệt đối undefined/null gây lỗi SQL trên TiDB Cloud
-  const targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || 'usr_chutro').trim();
-  const targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || 'Trần Thị Bích (Chủ trọ Cầu Giấy)').trim();
-  const targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '0987654321').trim();
+  // Chuẩn hóa dữ liệu chủ trọ, đảm bảo không bao giờ bị undefined/null gây lỗi SQL trên TiDB Cloud
+  let targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || '').trim();
+  let targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || '').trim();
+  let targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '').trim();
+
+  if (!targetChuTroId) {
+    targetChuTroId = 'usr_chutro';
+  }
+  if (!targetChuTroTen || !targetChuTroSdt) {
+    try {
+      const landlordUser = await getUserByIdFromDb(targetChuTroId);
+      if (landlordUser) {
+        if (!targetChuTroTen) targetChuTroTen = landlordUser.HoTen || '';
+        if (!targetChuTroSdt) targetChuTroSdt = landlordUser.Sdt || '';
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (!targetChuTroTen) targetChuTroTen = 'Trần Thị Bích (Chủ trọ Cầu Giấy)';
+  if (!targetChuTroSdt) targetChuTroSdt = '0987654321';
+
+  // Chuẩn hóa dữ liệu sinh viên
+  const studentId = String(user.Id || (user as any).id || '').trim();
+  const studentName = String(user.HoTen || (user as any).name || (user as any).ho_ten || 'Sinh viên').trim();
+  const studentPhone = String(user.Sdt || (user as any).phone || (user as any).sdt || '0912345678').trim();
+
+  // Chuẩn hóa tiêu đề & địa chỉ phòng
+  const roomTitle = String(room.TieuDe || (room as any).tieu_de || (room as any).title || 'Phòng trọ sinh viên').trim();
+  const roomAddress = String(
+    (room.DiaChi || (room as any).dia_chi || '') + 
+    (room.QuanHuyen ? ((room.DiaChi || (room as any).dia_chi) ? ', ' : '') + room.QuanHuyen : '') || 
+    'Hà Nội'
+  ).trim();
 
   const newAppointment: LichHen = {
     Id: 'hen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-    IdSinhVien: user.Id,
-    IdPhong: room.Id,
+    IdSinhVien: studentId,
+    IdPhong: String(room.Id || IdPhong),
     ThoiGianHen: henDate.toISOString(),
     GhiChu: (GhiChu || '').trim(),
     TrangThai: 'Chờ xác nhận',
-    TieuDePhong: room.TieuDe || 'Phòng trọ sinh viên',
-    DiaChiPhong: (room.DiaChi || '') + (room.QuanHuyen ? ', ' + room.QuanHuyen : ''),
-    SinhVienTen: user.HoTen || 'Sinh viên',
-    SinhVienSdt: user.Sdt || '0912345678',
+    TieuDePhong: roomTitle,
+    DiaChiPhong: roomAddress,
+    SinhVienTen: studentName,
+    SinhVienSdt: studentPhone,
     ChuTroId: targetChuTroId,
     ChuTroTen: targetChuTroTen,
     ChuTroSdt: targetChuTroSdt,
     NgayTao: new Date().toISOString(),
   };
 
-  await createAppointmentInDb(newAppointment);
+  const savedAppointment = await createAppointmentInDb(newAppointment);
 
   // Gửi thông báo đến chủ trọ
   if (targetChuTroId) {
@@ -1078,24 +1186,26 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
       null,
       targetChuTroId,
       'Yêu cầu đặt lịch hẹn xem phòng mới!',
-      `Sinh viên ${user.HoTen} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
+      `Sinh viên ${studentName} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
       'LichHen'
     );
   }
 
   // Gửi thông báo xác nhận đã tạo lịch hẹn đến sinh viên
-  await addNotification(
-    null,
-    user.Id,
-    'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
-    `Yêu cầu đặt lịch xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${targetChuTroTen}. Vui lòng chờ xác nhận.`,
-    'LichHen'
-  );
+  if (studentId) {
+    await addNotification(
+      null,
+      studentId,
+      'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
+      `Yêu cầu đặt lịch xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${targetChuTroTen}. Vui lòng chờ xác nhận.`,
+      'LichHen'
+    );
+  }
 
   res.status(201).json({
     success: true,
     message: 'Đặt lịch hẹn xem phòng thành công! Trạng thái: Chờ chủ trọ xác nhận',
-    appointment: newAppointment,
+    appointment: savedAppointment,
   });
 });
 
@@ -1109,12 +1219,10 @@ apiRouter.put('/appointments/:id/cancel', requireAuth, async (req: Request, res:
     return;
   }
 
-  if (
-    appointment.IdSinhVien !== user.Id &&
-    (appointment as any).SinhVienId !== user.Id &&
-    (appointment as any).sinh_vien_id !== user.Id &&
-    user.VaiTro !== 'Admin'
-  ) {
+  const aptStudentId = String(appointment.IdSinhVien || (appointment as any).SinhVienId || (appointment as any).sinh_vien_id || '').trim().toLowerCase();
+  const currentUserId = String(user.Id).trim().toLowerCase();
+
+  if (aptStudentId !== currentUserId && user.VaiTro !== 'Admin') {
     res.status(403).json({ success: false, message: 'Bạn không có quyền hủy lịch hẹn này.' });
     return;
   }
@@ -1152,7 +1260,10 @@ apiRouter.put('/appointments/:id/status', requireAuth, async (req: Request, res:
     return;
   }
 
-  if (user.VaiTro !== 'Admin' && appointment.ChuTroId !== user.Id) {
+  const aptChuTroId = String(appointment.ChuTroId || (appointment as any).IdChuTro || (appointment as any).chu_tro_id || '').trim().toLowerCase();
+  const currentUserId = String(user.Id).trim().toLowerCase();
+
+  if (user.VaiTro !== 'Admin' && aptChuTroId !== currentUserId) {
     res.status(403).json({ success: false, message: 'Không có quyền thao tác lịch hẹn này.' });
     return;
   }
