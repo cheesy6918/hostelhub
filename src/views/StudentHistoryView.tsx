@@ -1022,7 +1022,7 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
                     title="Xóa toàn bộ các đơn đặt cọc đã hủy hoặc bị từ chối"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span>🗑️ Xóa tất cả lịch sử đã hủy</span>
+                    <span>Xóa tất cả lịch sử đã hủy</span>
                   </button>
                 )}
               </div>
