@@ -602,9 +602,9 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
                   onChange={(e) => setDateFilter(e.target.value as any)}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                 >
-                  <option value="all">📅 Tất cả thời gian</option>
-                  <option value="7days">⚡ 7 ngày gần nhất</option>
-                  <option value="30days">🗓️ 30 ngày qua</option>
+                  <option value="all">Tất cả thời gian</option>
+                  <option value="7days">7 ngày gần nhất</option>
+                  <option value="30days">30 ngày qua</option>
                 </select>
               </div>
 
@@ -619,10 +619,10 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
                   }}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                 >
-                  <option value="all">🏷️ Tất cả trạng thái</option>
-                  <option value="pending">⏳ Chờ duyệt</option>
-                  <option value="confirmed">✅ Đã xác nhận / Thành công</option>
-                  <option value="cancelled_expired">❌ Đã hủy / Hết hạn</option>
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="pending">Chờ duyệt</option>
+                  <option value="confirmed">Đã xác nhận / Thành công</option>
+                  <option value="cancelled_expired">Đã hủy / Hết hạn</option>
                 </select>
               </div>
 
