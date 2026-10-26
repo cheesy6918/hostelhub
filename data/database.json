@@ -32,6 +32,17 @@
       "soDuVi": 1500000,
       "NgayTao": "2026-09-23T07:53:06.312Z",
       "TrangThai": "HoatDong"
+    },
+    {
+      "Id": "usr_1793020831770_57uxh",
+      "HoTen": "lê văn c",
+      "Email": "levanc@gmail.vn",
+      "MatKhau": "$2b$10$YFC6UQ4HccYAXRvhse.jG..dvfnQoigqGmW03nFEwZaYKS9h27.aC",
+      "Sdt": "0935791001",
+      "VaiTro": "SinhVien",
+      "soDuVi": 2000000,
+      "NgayTao": "2026-10-26T13:20:31.770Z",
+      "TrangThai": "HoatDong"
     }
   ],
   "rooms": [
