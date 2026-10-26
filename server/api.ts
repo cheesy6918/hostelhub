@@ -1048,7 +1048,7 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
     return;
   }
 
-  // Chuẩn hóa dữ liệu chủ trọ để TiDB Cloud không bao giờ bị null hoặc rỗng
+  // Chuẩn hóa dữ liệu chủ trọ, tránh tuyệt đối undefined/null gây lỗi SQL trên TiDB Cloud
   const targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || 'usr_chutro').trim();
   const targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || 'Trần Thị Bích (Chủ trọ Cầu Giấy)').trim();
   const targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '0987654321').trim();
@@ -1072,7 +1072,7 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
 
   await createAppointmentInDb(newAppointment);
 
-  // Gửi thông báo đến chủ trọ về yêu cầu đặt lịch hẹn mới
+  // Gửi thông báo đến chủ trọ
   if (targetChuTroId) {
     await addNotification(
       null,
