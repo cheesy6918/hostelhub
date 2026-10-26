@@ -64,24 +64,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setUser(data.user);
-        localStorage.setItem('user', JSON.stringify(data.user));
-      } else if (res.status === 401) {
-        // Only clear session if strictly 401 Unauthorized
-        console.warn('Session expired, logging out');
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setToken(null);
-        setUser(null);
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new Event('auth-change'));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+      } else {
+        // Nếu /api/auth/me trả về 401 (do Vercel serverless khởi động lại container làm mất token in-memory),
+        // KHÔNG ĐƯỢC XÓA localStorage mà tiếp tục tin cậy dữ liệu user đã lưu lúc login.
+        console.warn('Backend /api/auth/me không phản hồi 200, duy trì phiên từ localStorage.');
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+          try {
+            setUser(JSON.parse(savedUser));
+          } catch {
+            // ignore
+          }
+        }
       }
     } catch {
-      // Don't log user out on transient network error
-      console.warn('Network error fetching current user');
+      console.warn('Lỗi kết nối khi fetch current user');
     } finally {
       setLoading(false);
     }
