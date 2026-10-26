@@ -172,9 +172,9 @@ apiRouter.post('/auth/register', async (req: Request, res: Response) => {
     }
 
     // Hash password
+    // Hash password
     const salt = bcrypt.genSaltSync(10);
     const hashedPassword = bcrypt.hashSync(MatKhau, salt);
-
     const newUser: NguoiDung = {
       Id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       HoTen: HoTen.trim(),
@@ -182,15 +182,28 @@ apiRouter.post('/auth/register', async (req: Request, res: Response) => {
       MatKhau: hashedPassword,
       Sdt: cleanPhone,
       VaiTro,
-      soDuVi: 2000000, // Mặc định 2.000.000 VNĐ cho demo
+      soDuVi: 2000000,
       NgayTao: new Date().toISOString(),
       TrangThai: 'HoatDong',
     };
 
+    // 1. Lưu vào TiDB Cloud (qua hàm createUserInDb)
     await createUserInDb(newUser);
 
-    const token = createSessionToken(newUser.Id);
+    // 2. Ghi dự phòng thêm vào database.json
+    try {
+      const db = readDb();
+      if (!db.users) db.users = [];
+      const userExistsInJson = db.users.some(u => u.Email.toLowerCase() === cleanEmail);
+      if (!userExistsInJson) {
+        db.users.push(newUser);
+        writeDb(db);
+      }
+    } catch (fallbackErr) {
+      console.warn('[JSON Fallback] Không thể ghi vào database.json:', fallbackErr);
+    }
 
+    const token = createSessionToken(newUser.Id);
     res.status(201).json({
       success: true,
       message: 'Đăng ký tài khoản thành công!',
@@ -214,7 +227,16 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
     }
 
     const cleanEmail = Email.trim().toLowerCase();
-    const user = await getUserByEmailFromDb(cleanEmail);
+    
+    // 1. Tìm user từ TiDB Cloud trước
+    let user = await getUserByEmailFromDb(cleanEmail);
+
+    // 2. Dự phòng: Nếu TiDB Cloud không có hoặc kết nối gặp sự cố, tìm tiếp trong database.json
+    if (!user) {
+      const db = readDb();
+      user = (db.users || []).find(u => u.Email.trim().toLowerCase() === cleanEmail) || null;
+    }
+
     if (!user) {
       res.status(400).json({
         success: false,
@@ -222,7 +244,6 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       });
       return;
     }
-
     if (user.TrangThai === 'BiKhoa') {
       res.status(403).json({
         success: false,
@@ -231,8 +252,14 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       return;
     }
 
-    // Compare password
-    const isMatch = bcrypt.compareSync(MatKhau, user.MatKhau);
+    // 3. So khớp mật khẩu: Hỗ trợ cả bcrypt ($2a$, $2b$) lẫn chuỗi thường của tài khoản mock
+    let isMatch = false;
+    if (user.MatKhau && (user.MatKhau.startsWith('$2a$') || user.MatKhau.startsWith('$2b$'))) {
+      isMatch = bcrypt.compareSync(MatKhau, user.MatKhau);
+    } else {
+      isMatch = (user.MatKhau === MatKhau);
+    }
+
     if (!isMatch) {
       res.status(400).json({
         success: false,

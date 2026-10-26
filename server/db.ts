@@ -1037,16 +1037,16 @@ export const dbConfig: mysql.PoolOptions = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
-  database: process.env.DB_NAME || 'hostelhub',
+  database: process.env.DB_NAME || 'test',
   port: Number(process.env.DB_PORT) || (process.env.DB_HOST && process.env.DB_HOST.includes('tidb') ? 4000 : 3306),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
-  ssl: (process.env.DB_SSL === 'false') ? undefined : {
-    rejectUnauthorized: true,
+  ssl: {
     minVersion: 'TLSv1.2',
+    rejectUnauthorized: false, // Bắt buộc đặt false để vượt qua SSL handshake trên môi trường Serverless Vercel
   },
 };
 
@@ -1062,12 +1062,12 @@ try {
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 10000,
-      ssl: (process.env.DB_SSL === 'false') ? undefined : {
-        rejectUnauthorized: true,
+      ssl: {
         minVersion: 'TLSv1.2',
+        rejectUnauthorized: false,
       },
     });
-  } else if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+  } else if (process.env.DB_HOST) {
     realPool = mysql.createPool(dbConfig);
   }
 } catch (poolErr) {
