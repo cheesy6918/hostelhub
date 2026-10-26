@@ -129,6 +129,7 @@ export interface Room {
   DienTich: number;
   LoaiPhong?: 'GacLung' | 'Studio' | 'KyTucXa' | 'ChungCuMini';
   NgayDang?: string;
+  NgayTao?: string;
   DanhGia?: Review[];
   VideoUrl?: string;
 }
