@@ -2344,34 +2344,58 @@ apiRouter.get('/admin/users', requireAuth, async (req: Request, res: Response) =
   }
 });
 
-apiRouter.put('/admin/users/:id/status', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  if (user.VaiTro !== 'Admin') {
-    res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền thực hiện.' });
-    return;
+apiRouter.put('/admin/users/:id/status', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    if (user.VaiTro !== 'Admin') {
+      res.status(403).json({ success: false, message: 'Chỉ Quản trị viên mới có quyền thực hiện.' });
+      return;
+    }
+    const targetId = req.params.id;
+    if (targetId === user.Id) {
+      res.status(400).json({ success: false, message: 'Không thể tự khóa tài khoản Quản trị viên của chính bạn.' });
+      return;
+    }
+
+    // 1. Tìm người dùng từ TiDB Cloud trước, nếu không có mới tìm trong database.json
+    let target = await getUserByIdFromDb(targetId);
+    if (!target) {
+      const db = readDb();
+      target = (db.users || []).find(u => u.Id === targetId) || null;
+    }
+
+    if (!target) {
+      res.status(404).json({ success: false, message: 'Người dùng không tồn tại.' });
+      return;
+    }
+
+    const newStatus = target.TrangThai === 'HoatDong' ? 'BiKhoa' : 'HoatDong';
+
+    // 2. Cập nhật trạng thái vào TiDB Cloud
+    await updateUserInDb(targetId, { TrangThai: newStatus });
+    target.TrangThai = newStatus;
+
+    // 3. Đồng bộ lại vào database.json nếu có bản ghi trong file tĩnh
+    try {
+      const db = readDb();
+      const localUser = (db.users || []).find(u => u.Id === targetId);
+      if (localUser) {
+        localUser.TrangThai = newStatus;
+        writeDb(db);
+      }
+    } catch (fsErr) {
+      console.warn('[JSON] Bỏ qua cập nhật database.json:', fsErr);
+    }
+
+    res.json({
+      success: true,
+      message: `Đã ${newStatus === 'HoatDong' ? 'mở khóa' : 'khóa'} tài khoản ${target.HoTen}!`,
+      user: sanitizeUser(target),
+    });
+  } catch (error: any) {
+    console.error('Lỗi cập nhật trạng thái người dùng:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi xử lý yêu cầu' });
   }
-
-  const targetId = req.params.id;
-  if (targetId === user.Id) {
-    res.status(400).json({ success: false, message: 'Không thể tự khóa tài khoản Quản trị viên của chính bạn.' });
-    return;
-  }
-
-  const db = readDb();
-  const target = db.users.find(u => u.Id === targetId);
-  if (!target) {
-    res.status(404).json({ success: false, message: 'Người dùng không tồn tại.' });
-    return;
-  }
-
-  target.TrangThai = target.TrangThai === 'HoatDong' ? 'BiKhoa' : 'HoatDong';
-  writeDb(db);
-
-  res.json({
-    success: true,
-    message: `Đã ${target.TrangThai === 'HoatDong' ? 'mở khóa' : 'khóa'} tài khoản ${target.HoTen}!`,
-    user: sanitizeUser(target),
-  });
 });
 
 apiRouter.get('/admin/stats', requireAuth, async (req: Request, res: Response) => {
