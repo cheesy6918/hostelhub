@@ -40,18 +40,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
     setIsSubmitting(false);
 
     if (res.success) {
+      // 1. Lưu token và thông tin user vào localStorage
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+      }
+      if (res.user) {
+        localStorage.setItem('user', JSON.stringify(res.user));
+      }
+
+      // 2. Kích hoạt event cập nhật bộ nhớ
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('auth-change'));
+
       setSuccessMsg('Đăng nhập thành công! Đang điều hướng theo vai trò...');
       setTimeout(() => {
         if (res.role === 'SinhVien') {
-          onNavigate('home'); // 👈 Đổi thành 'home' để chuyển về Trang chủ
+          onNavigate('home');
         } else if (res.role === 'ChuTro') {
           onNavigate('landlord-rooms');
         } else if (res.role === 'Admin') {
           onNavigate('admin-dashboard');
         } else {
-          onNavigate('home'); // 👈 Trường hợp mặc định cũng về 'home'
+          onNavigate('home');
         }
-      }, 500);
+      }, 400);
     } else {
       setErrorMsg(res.message);
     }

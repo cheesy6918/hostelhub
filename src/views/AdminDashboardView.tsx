@@ -32,7 +32,8 @@ import {
   Maximize2,
   DollarSign,
   RefreshCw,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -668,6 +669,110 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     } catch {
       // ignore
     }
+  };
+
+  // Helper chuẩn hóa giá trị ô CSV chống lỗi dấu phẩy, nháy kép và xuống dòng
+  const escapeCsvValue = (val: any): string => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  // Xuất danh sách Người dùng ra file CSV (có ký tự BOM UTF-8 chống lỗi font tiếng Việt trong Excel)
+  const exportUsersToCSV = () => {
+    if (!users || users.length === 0) {
+      alert('Không có dữ liệu người dùng để xuất CSV.');
+      return;
+    }
+
+    const headers = [
+      'Mã người dùng (ID)',
+      'Họ và tên',
+      'Email',
+      'Số điện thoại',
+      'Vai trò',
+      'Số dư ví (VNĐ)',
+      'Trạng thái tài khoản',
+    ].map(escapeCsvValue).join(',');
+
+    const rows = users.map((u) => {
+      const vaiTroText = u.VaiTro === 'Admin' ? 'Quản trị viên (Admin)' : u.VaiTro === 'ChuTro' ? 'Chủ trọ' : 'Sinh viên';
+      const soDuText = u.VaiTro === 'Admin' ? 'Không áp dụng' : String(Number(u.soDuVi) || 0);
+      const trangThaiText = u.TrangThai === 'HoatDong' ? 'Đang hoạt động' : 'Bị khóa';
+
+      return [
+        escapeCsvValue(u.Id || ''),
+        escapeCsvValue(u.HoTen || ''),
+        escapeCsvValue(u.Email || ''),
+        escapeCsvValue(u.Sdt || ''),
+        escapeCsvValue(vaiTroText),
+        escapeCsvValue(soDuText),
+        escapeCsvValue(trangThaiText),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const today = new Date().toISOString().split('T')[0];
+    link.href = url;
+    link.setAttribute('download', `HostelHub_NguoiDung_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setActionNotice('Đã xuất danh sách Người dùng ra file CSV thành công!');
+    setTimeout(() => setActionNotice(''), 3500);
+  };
+
+  // Xuất danh sách Phòng trọ ra file CSV (có ký tự BOM UTF-8 chống lỗi font tiếng Việt trong Excel)
+  const exportRoomsToCSV = () => {
+    if (!rooms || rooms.length === 0) {
+      alert('Không có dữ liệu phòng trọ để xuất CSV.');
+      return;
+    }
+
+    const headers = [
+      'Mã phòng (ID)',
+      'Tiêu đề phòng',
+      'Tên chủ trọ',
+      'SĐT chủ trọ',
+      'Giá thuê (VNĐ/tháng)',
+      'Diện tích (m2)',
+      'Địa chỉ',
+      'Trạng thái',
+    ].map(escapeCsvValue).join(',');
+
+    const rows = rooms.map((r) => {
+      const fullAddress = `${r.DiaChi || ''}${r.QuanHuyen ? `, ${r.QuanHuyen}` : ''}`;
+      return [
+        escapeCsvValue(r.Id || ''),
+        escapeCsvValue(r.TieuDe || ''),
+        escapeCsvValue(r.ChuTroTen || 'Chủ trọ'),
+        escapeCsvValue(r.ChuTroSdt || 'Chưa cập nhật'),
+        escapeCsvValue(Number(r.GiaThue) || 0),
+        escapeCsvValue(r.DienTich || 0),
+        escapeCsvValue(fullAddress),
+        escapeCsvValue(r.TrangThai || 'Còn phòng'),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const today = new Date().toISOString().split('T')[0];
+    link.href = url;
+    link.setAttribute('download', `HostelHub_DanhSachPhong_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setActionNotice('Đã xuất danh sách Phòng trọ ra file CSV thành công!');
+    setTimeout(() => setActionNotice(''), 3500);
   };
 
   const filteredUsers = users.filter((u) => {
@@ -2204,26 +2309,38 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       </p>
                     </div>
 
-                    {/* Status Filter Chips */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {[
-                        { label: 'Chờ duyệt', value: 'Chờ duyệt', count: pendingRooms.length },
-                        { label: 'Từ chối', value: 'Từ chối', count: rooms.filter(r => isRejectedRoom(r.TrangThai)).length },
-                        { label: 'Còn phòng', value: 'Còn phòng', count: rooms.filter(r => isApprovedRoom(r.TrangThai)).length },
-                        { label: 'Tất cả', value: 'all', count: rooms.length },
-                      ].map((tab) => (
-                        <button
-                          key={tab.value}
-                          onClick={() => setRoomStatusFilter(tab.value)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${roomStatusFilter === tab.value
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                            }`}
-                        >
-                          {tab.label} ({tab.count})
-                        </button>
-                      ))}
+                    {/* Status Filter Chips & Export CSV */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[
+                          { label: 'Chờ duyệt', value: 'Chờ duyệt', count: pendingRooms.length },
+                          { label: 'Từ chối', value: 'Từ chối', count: rooms.filter(r => isRejectedRoom(r.TrangThai)).length },
+                          { label: 'Còn phòng', value: 'Còn phòng', count: rooms.filter(r => isApprovedRoom(r.TrangThai)).length },
+                          { label: 'Tất cả', value: 'all', count: rooms.length },
+                        ].map((tab) => (
+                          <button
+                            key={tab.value}
+                            onClick={() => setRoomStatusFilter(tab.value)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${roomStatusFilter === tab.value
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                              }`}
+                          >
+                            {tab.label} ({tab.count})
+                          </button>
+                        ))}
+                      </div>
 
+                      {/* Nút Xuất danh sách Phòng trọ CSV */}
+                      <button
+                        type="button"
+                        onClick={exportRoomsToCSV}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs whitespace-nowrap active:scale-95"
+                        title="Tải về file CSV danh sách phòng trọ cho Microsoft Excel"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>📥 Xuất danh sách Phòng trọ (CSV)</span>
+                      </button>
                     </div>
                   </div>
 
@@ -2908,14 +3025,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
             {/* Tab 3: Quản lý tài khoản */}
             {activeTab === 'users' && (
               <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-100">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-100">
                   <div>
                     <h2 className="text-base font-bold text-slate-900">Danh sách tài khoản người dùng ({users.length})</h2>
                     <p className="text-xs text-slate-500">Giám sát tài khoản sinh viên, chủ trọ và phân quyền hệ thống</p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                    <div className="relative w-full sm:w-72">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
+                    <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
@@ -2929,13 +3046,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                     <select
                       value={roleFilter}
                       onChange={(e) => setRoleFilter(e.target.value)}
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 w-full sm:w-auto"
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 w-full sm:w-auto cursor-pointer"
                     >
                       <option value="all">Tất cả vai trò</option>
                       <option value="SinhVien">Sinh viên</option>
                       <option value="ChuTro">Chủ trọ</option>
                       <option value="Admin">Quản trị viên (Admin)</option>
                     </select>
+
+                    {/* Nút Xuất danh sách Người dùng CSV */}
+                    <button
+                      type="button"
+                      onClick={exportUsersToCSV}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs whitespace-nowrap active:scale-95"
+                      title="Tải về file CSV danh sách người dùng cho Microsoft Excel"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>📥 Xuất danh sách Người dùng (CSV)</span>
+                    </button>
                   </div>
                 </div>
 

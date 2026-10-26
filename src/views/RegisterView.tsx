@@ -65,6 +65,15 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
     setIsSubmitting(false);
 
     if (res.success) {
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+      }
+      if (res.user) {
+        localStorage.setItem('user', JSON.stringify(res.user));
+      }
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('auth-change'));
+
       setSuccessMsg(`Đăng ký thành công tài khoản ${vaiTro === 'SinhVien' ? 'Sinh viên' : 'Chủ trọ'}! Đang chuyển hướng...`);
       setTimeout(() => {
         if (res.role === 'SinhVien') {
@@ -74,7 +83,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
         } else {
           onNavigate('student-rooms');
         }
-      }, 700);
+      }, 500);
     } else {
       setErrorMsg(res.message);
     }

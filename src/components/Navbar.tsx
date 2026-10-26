@@ -36,10 +36,69 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectGuideCategory,
   onOpenWallet
 }) => {
-  const { user, logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const { favoriteRoomIds } = useFavorites();
   const { comparisonRooms, openComparisonModal } = useComparison();
   const { unreadCount } = useNotifications();
+
+  // Local state to track authentication state reactively
+  const [localUser, setLocalUser] = React.useState<any>(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      const token = localStorage.getItem('token') || localStorage.getItem('hostelhub_token');
+      return token && stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const checkAuthStatus = React.useCallback(() => {
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('hostelhub_token');
+      const storedUser = localStorage.getItem('user');
+      if (token && storedUser) {
+        setLocalUser(JSON.parse(storedUser));
+      } else {
+        setLocalUser(null);
+      }
+    } catch {
+      setLocalUser(null);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    checkAuthStatus();
+    window.addEventListener('storage', checkAuthStatus);
+    window.addEventListener('auth-change', checkAuthStatus);
+    return () => {
+      window.removeEventListener('storage', checkAuthStatus);
+      window.removeEventListener('auth-change', checkAuthStatus);
+    };
+  }, [checkAuthStatus]);
+
+  React.useEffect(() => {
+    if (authUser) {
+      setLocalUser(authUser);
+    } else {
+      const token = localStorage.getItem('token') || localStorage.getItem('hostelhub_token');
+      if (!token) {
+        setLocalUser(null);
+      }
+    }
+  }, [authUser]);
+
+  const user = authUser || localUser;
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('hostelhub_token');
+    localStorage.removeItem('user');
+    setLocalUser(null);
+    logout();
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('auth-change'));
+    setCurrentView('login');
+  };
 
   const getRoleLabel = () => {
     if (!user) return '';
@@ -464,10 +523,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="flex items-center gap-2 p-1 pl-2 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                  {user.HoTen.charAt(0).toUpperCase()}
+                  {user.HoTen ? user.HoTen.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <div className="text-left pr-2 hidden lg:block">
-                  <div className="font-semibold text-slate-800 text-xs truncate max-w-[110px]">{user.HoTen}</div>
+                  <div className="font-semibold text-slate-800 text-xs truncate max-w-[110px]">{user.HoTen || 'Người dùng'}</div>
                   <div className="text-[10px] text-slate-400 flex items-center gap-1">
                     {getRoleIcon()}
                     <span>{getRoleLabel()}</span>
@@ -477,10 +536,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Nút Đăng xuất */}
               <button
-                onClick={() => {
-                  logout();
-                  setCurrentView('login');
-                }}
+                onClick={handleLogout}
                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors cursor-pointer"
                 title="Đăng xuất"
               >

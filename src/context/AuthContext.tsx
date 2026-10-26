@@ -6,14 +6,14 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   walletTransactions: GiaoDichVi[];
-  login: (email: string, pass: string) => Promise<{ success: boolean; message: string; role?: VaiTro }>;
+  login: (email: string, pass: string) => Promise<{ success: boolean; message: string; role?: VaiTro; user?: User; token?: string }>;
   register: (payload: {
     HoTen: string;
     Email: string;
     MatKhau: string;
     Sdt: string;
     VaiTro: 'SinhVien' | 'ChuTro';
-  }) => Promise<{ success: boolean; message: string; role?: VaiTro }>;
+  }) => Promise<{ success: boolean; message: string; role?: VaiTro; user?: User; token?: string }>;
   logout: () => void;
   updateProfile: (data: { HoTen?: string; Sdt?: string; MatKhauCu?: string; MatKhauMoi?: string }) => Promise<{ success: boolean; message: string }>;
   topupWallet: (amount: number) => Promise<{ success: boolean; message: string }>;
@@ -26,10 +26,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = 'hostelhub_token';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token') || localStorage.getItem(TOKEN_KEY));
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [walletTransactions, setWalletTransactions] = useState<GiaoDichVi[]>([]);
+
+  // Listen to storage and auth-change events across components or tabs
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const activeToken = localStorage.getItem('token') || localStorage.getItem(TOKEN_KEY);
+      setToken(activeToken);
+      try {
+        const storedUser = localStorage.getItem('user');
+        setUser(storedUser ? JSON.parse(storedUser) : null);
+      } catch {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('auth-change', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth-change', handleStorageChange);
+    };
+  }, []);
 
   const fetchCurrentUser = useCallback(async (authToken: string) => {
     try {
@@ -39,12 +67,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       if (res.ok && data.success) {
         setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
       } else if (res.status === 401) {
         // Only clear session if strictly 401 Unauthorized
         console.warn('Session expired, logging out');
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
         setToken(null);
         setUser(null);
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('auth-change'));
       }
     } catch {
       // Don't log user out on transient network error
@@ -88,10 +121,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
         setToken(data.token);
         setUser(data.user);
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('auth-change'));
         fetchWalletTransactions(data.token);
-        return { success: true, message: data.message, role: data.user.VaiTro };
+        return { success: true, message: data.message, role: data.user.VaiTro, user: data.user, token: data.token };
       } else {
         return { success: false, message: data.message || 'Đăng nhập thất bại.' };
       }
@@ -116,10 +153,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
         setToken(data.token);
         setUser(data.user);
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('auth-change'));
         fetchWalletTransactions(data.token);
-        return { success: true, message: data.message, role: data.user.VaiTro };
+        return { success: true, message: data.message, role: data.user.VaiTro, user: data.user, token: data.token };
       } else {
         return { success: false, message: data.message || 'Đăng ký thất bại.' };
       }
@@ -130,9 +171,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
     setWalletTransactions([]);
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('auth-change'));
   };
 
   const updateProfile = async (data: { HoTen?: string; Sdt?: string; MatKhauCu?: string; MatKhauMoi?: string }) => {
@@ -149,6 +194,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const resData = await res.json();
       if (res.ok && resData.success) {
         setUser(resData.user);
+        localStorage.setItem('user', JSON.stringify(resData.user));
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('auth-change'));
         return { success: true, message: resData.message };
       } else {
         return { success: false, message: resData.message || 'Không thể cập nhật hồ sơ.' };
@@ -181,10 +229,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const resData = await res.json();
       if (res.ok && resData.success) {
+        let updatedUser = user;
         if (resData.user) {
+          updatedUser = resData.user;
           setUser(resData.user);
         } else if (resData.newBalance !== undefined && user) {
-          setUser({ ...user, soDuVi: resData.newBalance });
+          updatedUser = { ...user, soDuVi: resData.newBalance };
+          setUser(updatedUser);
+        }
+        if (updatedUser) {
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          window.dispatchEvent(new Event('storage'));
+          window.dispatchEvent(new Event('auth-change'));
         }
         await fetchWalletTransactions(token);
         return { success: true, message: resData.message };
