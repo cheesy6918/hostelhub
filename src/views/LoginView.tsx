@@ -52,18 +52,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new Event('auth-change'));
 
-      setSuccessMsg('Đăng nhập thành công! Đang điều hướng theo vai trò...');
+      setSuccessMsg('Đăng nhập thành công! Đang điều hướng...');
       setTimeout(() => {
-        if (res.role === 'SinhVien') {
-          onNavigate('home');
-        } else if (res.role === 'ChuTro') {
-          onNavigate('landlord-rooms');
+        if (res.role === 'ChuTro') {
+          window.location.href = '/?view=landlord-rooms';
         } else if (res.role === 'Admin') {
-          onNavigate('admin-dashboard');
+          window.location.href = '/?view=admin-dashboard';
         } else {
-          onNavigate('home');
+          window.location.href = '/';
         }
-      }, 400);
+      }, 300);
     } else {
       setErrorMsg(res.message);
     }
