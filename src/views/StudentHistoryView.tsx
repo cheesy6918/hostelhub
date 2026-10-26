@@ -120,9 +120,27 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
     try {
       setLoading(true);
       const [appRes, depRes, txRes] = await Promise.all([
-        fetch('/api/appointments', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/deposits', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/wallet/transactions', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/appointments?_t=${Date.now()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        }),
+        fetch(`/api/deposits?_t=${Date.now()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        }),
+        fetch(`/api/wallet/transactions?_t=${Date.now()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        }),
       ]);
       const appData = await appRes.json();
       const depData = await depRes.json();

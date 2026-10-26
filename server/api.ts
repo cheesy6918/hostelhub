@@ -1067,146 +1067,167 @@ apiRouter.put('/inquiries/:id/status', requireAuth, async (req: Request, res: Re
 
 // GET /api/appointments - Danh sách lịch hẹn
 apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  const filter: { studentId?: string; landlordId?: string } = {};
+  try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
-  if (user.VaiTro === 'SinhVien') {
-    filter.studentId = user.Id;
-  } else if (user.VaiTro === 'ChuTro') {
-    filter.landlordId = user.Id;
+    const user = (req as any).user as NguoiDung;
+    const filter: { studentId?: string; landlordId?: string } = {};
+
+    if (user.VaiTro === 'SinhVien') {
+      filter.studentId = user.Id;
+    } else if (user.VaiTro === 'ChuTro') {
+      filter.landlordId = user.Id;
+    }
+
+    const list = await getAppointmentsFromDb(filter);
+
+    let result: LichHen[] = [];
+    if (user.VaiTro === 'SinhVien') {
+      const sId = String(user.Id).trim().toLowerCase();
+      result = list.filter(a => {
+        const aptSvId = String(a.IdSinhVien || (a as any).SinhVienId || (a as any).sinh_vien_id || '').trim().toLowerCase();
+        return aptSvId === sId;
+      });
+    } else if (user.VaiTro === 'ChuTro') {
+      const lId = String(user.Id).trim().toLowerCase();
+      result = list.filter(a => {
+        const aptCtId = String(a.ChuTroId || (a as any).IdChuTro || (a as any).chu_tro_id || '').trim().toLowerCase();
+        return aptCtId === lId;
+      });
+    } else {
+      result = list;
+    }
+
+    // Luôn sắp xếp lịch hẹn mới nhất lên đầu (theo NgayTao giảm dần)
+    result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
+
+    res.json({ success: true, count: result.length, data: result });
+  } catch (error: any) {
+    console.error('Lỗi khi tải danh sách lịch hẹn:', error);
+    res.status(500).json({ success: false, message: error?.message || 'Lỗi khi tải danh sách lịch hẹn' });
   }
-
-  const list = await getAppointmentsFromDb(filter);
-
-  let result: LichHen[] = [];
-  if (user.VaiTro === 'SinhVien') {
-    const sId = String(user.Id).trim().toLowerCase();
-    result = list.filter(a => {
-      const aptSvId = String(a.IdSinhVien || (a as any).SinhVienId || (a as any).sinh_vien_id || '').trim().toLowerCase();
-      return aptSvId === sId;
-    });
-  } else if (user.VaiTro === 'ChuTro') {
-    const lId = String(user.Id).trim().toLowerCase();
-    result = list.filter(a => {
-      const aptCtId = String(a.ChuTroId || (a as any).IdChuTro || (a as any).chu_tro_id || '').trim().toLowerCase();
-      return aptCtId === lId;
-    });
-  } else {
-    result = list;
-  }
-
-  // Luôn sắp xếp lịch hẹn mới nhất lên đầu (theo NgayTao giảm dần)
-  result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
-
-  res.json({ success: true, count: result.length, data: result });
 });
 
 // POST /api/appointments - Sinh viên đặt lịch hẹn xem phòng
 apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  const { IdPhong, ThoiGianHen, GhiChu } = req.body;
-  if (!IdPhong || !ThoiGianHen) {
-    res.status(400).json({ success: false, message: 'Vui lòng cung cấp mã phòng và thời gian hẹn.' });
-    return;
-  }
-  const room = await getRoomByIdFromDb(IdPhong);
-  if (!room) {
-    res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
-    return;
-  }
-  // Validate phòng hết phòng
-  if (room.TrangThai === 'Hết phòng') {
-    res.status(400).json({ success: false, message: 'Phòng này hiện đã được thuê hết' });
-    return;
-  }
-  // Validate thời gian trong quá khứ
-  const henDate = new Date(ThoiGianHen);
-  if (isNaN(henDate.getTime()) || henDate.getTime() <= Date.now()) {
-    res.status(400).json({ success: false, message: 'Thời gian hẹn không hợp lệ, vui lòng chọn lại' });
-    return;
-  }
-
-  // Chuẩn hóa dữ liệu chủ trọ, đảm bảo không bao giờ bị undefined/null gây lỗi SQL trên TiDB Cloud
-  let targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || '').trim();
-  let targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || '').trim();
-  let targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '').trim();
-
-  if (!targetChuTroId) {
-    targetChuTroId = 'usr_chutro';
-  }
-  if (!targetChuTroTen || !targetChuTroSdt) {
-    try {
-      const landlordUser = await getUserByIdFromDb(targetChuTroId);
-      if (landlordUser) {
-        if (!targetChuTroTen) targetChuTroTen = landlordUser.HoTen || '';
-        if (!targetChuTroSdt) targetChuTroSdt = landlordUser.Sdt || '';
-      }
-    } catch {
-      // ignore
+  try {
+    const user = (req as any).user as NguoiDung;
+    const { IdPhong, ThoiGianHen, GhiChu } = req.body;
+    if (!IdPhong || !ThoiGianHen) {
+      res.status(400).json({ success: false, message: 'Vui lòng cung cấp mã phòng và thời gian hẹn.' });
+      return;
     }
+    const room = await getRoomByIdFromDb(IdPhong);
+    if (!room) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
+      return;
+    }
+    // Validate phòng hết phòng
+    if (room.TrangThai === 'Hết phòng') {
+      res.status(400).json({ success: false, message: 'Phòng này hiện đã được thuê hết' });
+      return;
+    }
+    // Validate thời gian trong quá khứ
+    const henDate = new Date(ThoiGianHen);
+    if (isNaN(henDate.getTime()) || henDate.getTime() <= Date.now()) {
+      res.status(400).json({ success: false, message: 'Thời gian hẹn không hợp lệ, vui lòng chọn lại' });
+      return;
+    }
+
+    // Chuẩn hóa dữ liệu chủ trọ, đảm bảo không bao giờ bị undefined/null gây lỗi SQL trên TiDB Cloud
+    let targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || '').trim();
+    let targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || '').trim();
+    let targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '').trim();
+
+    if (!targetChuTroId) {
+      targetChuTroId = 'usr_chutro';
+    }
+    if (!targetChuTroTen || !targetChuTroSdt) {
+      try {
+        const landlordUser = await getUserByIdFromDb(targetChuTroId);
+        if (landlordUser) {
+          if (!targetChuTroTen) targetChuTroTen = landlordUser.HoTen || '';
+          if (!targetChuTroSdt) targetChuTroSdt = landlordUser.Sdt || '';
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!targetChuTroTen) targetChuTroTen = 'Trần Thị Bích (Chủ trọ Cầu Giấy)';
+    if (!targetChuTroSdt) targetChuTroSdt = '0987654321';
+
+    // Chuẩn hóa dữ liệu sinh viên
+    const studentId = String(user.Id || (user as any).id || '').trim();
+    const studentName = String(user.HoTen || (user as any).name || (user as any).ho_ten || 'Sinh viên').trim();
+    const studentPhone = String(user.Sdt || (user as any).phone || (user as any).sdt || '0912345678').trim();
+
+    // Chuẩn hóa tiêu đề & địa chỉ phòng
+    const roomTitle = String(room.TieuDe || (room as any).tieu_de || (room as any).title || 'Phòng trọ sinh viên').trim();
+    const roomAddress = String(
+      (room.DiaChi || (room as any).dia_chi || '') + 
+      (room.QuanHuyen ? ((room.DiaChi || (room as any).dia_chi) ? ', ' : '') + room.QuanHuyen : '') || 
+      'Hà Nội'
+    ).trim();
+
+    const newAppointment: LichHen = {
+      Id: 'hen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      IdSinhVien: studentId,
+      IdPhong: String(room.Id || IdPhong),
+      ThoiGianHen: henDate.toISOString(),
+      GhiChu: (GhiChu || '').trim(),
+      TrangThai: 'Chờ xác nhận',
+      TieuDePhong: roomTitle,
+      DiaChiPhong: roomAddress,
+      SinhVienTen: studentName,
+      SinhVienSdt: studentPhone,
+      ChuTroId: targetChuTroId,
+      ChuTroTen: targetChuTroTen,
+      ChuTroSdt: targetChuTroSdt,
+      NgayTao: new Date().toISOString(),
+    };
+
+    const savedAppointment = await createAppointmentInDb(newAppointment);
+
+    // Gửi thông báo đến chủ trọ
+    try {
+      if (targetChuTroId) {
+        await addNotification(
+          null,
+          targetChuTroId,
+          'Yêu cầu đặt lịch hẹn xem phòng mới!',
+          `Sinh viên ${studentName} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
+          'LichHen'
+        );
+      }
+
+      // Gửi thông báo xác nhận đã tạo lịch hẹn đến sinh viên
+      if (studentId) {
+        await addNotification(
+          null,
+          studentId,
+          'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
+          `Yêu cầu đặt lịch xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${targetChuTroTen}. Vui lòng chờ xác nhận.`,
+          'LichHen'
+        );
+      }
+    } catch (notifErr) {
+      console.warn('Lỗi gửi thông báo lịch hẹn:', notifErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Đặt lịch hẹn xem phòng thành công! Trạng thái: Chờ chủ trọ xác nhận',
+      appointment: savedAppointment,
+    });
+  } catch (error: any) {
+    console.error('Lỗi khi tạo lịch hẹn xem phòng:', error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Lỗi khi lưu lịch hẹn vào cơ sở dữ liệu TiDB Cloud. Vui lòng thử lại sau.'
+    });
   }
-  if (!targetChuTroTen) targetChuTroTen = 'Trần Thị Bích (Chủ trọ Cầu Giấy)';
-  if (!targetChuTroSdt) targetChuTroSdt = '0987654321';
-
-  // Chuẩn hóa dữ liệu sinh viên
-  const studentId = String(user.Id || (user as any).id || '').trim();
-  const studentName = String(user.HoTen || (user as any).name || (user as any).ho_ten || 'Sinh viên').trim();
-  const studentPhone = String(user.Sdt || (user as any).phone || (user as any).sdt || '0912345678').trim();
-
-  // Chuẩn hóa tiêu đề & địa chỉ phòng
-  const roomTitle = String(room.TieuDe || (room as any).tieu_de || (room as any).title || 'Phòng trọ sinh viên').trim();
-  const roomAddress = String(
-    (room.DiaChi || (room as any).dia_chi || '') + 
-    (room.QuanHuyen ? ((room.DiaChi || (room as any).dia_chi) ? ', ' : '') + room.QuanHuyen : '') || 
-    'Hà Nội'
-  ).trim();
-
-  const newAppointment: LichHen = {
-    Id: 'hen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-    IdSinhVien: studentId,
-    IdPhong: String(room.Id || IdPhong),
-    ThoiGianHen: henDate.toISOString(),
-    GhiChu: (GhiChu || '').trim(),
-    TrangThai: 'Chờ xác nhận',
-    TieuDePhong: roomTitle,
-    DiaChiPhong: roomAddress,
-    SinhVienTen: studentName,
-    SinhVienSdt: studentPhone,
-    ChuTroId: targetChuTroId,
-    ChuTroTen: targetChuTroTen,
-    ChuTroSdt: targetChuTroSdt,
-    NgayTao: new Date().toISOString(),
-  };
-
-  const savedAppointment = await createAppointmentInDb(newAppointment);
-
-  // Gửi thông báo đến chủ trọ
-  if (targetChuTroId) {
-    await addNotification(
-      null,
-      targetChuTroId,
-      'Yêu cầu đặt lịch hẹn xem phòng mới!',
-      `Sinh viên ${studentName} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
-      'LichHen'
-    );
-  }
-
-  // Gửi thông báo xác nhận đã tạo lịch hẹn đến sinh viên
-  if (studentId) {
-    await addNotification(
-      null,
-      studentId,
-      'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
-      `Yêu cầu đặt lịch xem phòng "${roomTitle}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${targetChuTroTen}. Vui lòng chờ xác nhận.`,
-      'LichHen'
-    );
-  }
-
-  res.status(201).json({
-    success: true,
-    message: 'Đặt lịch hẹn xem phòng thành công! Trạng thái: Chờ chủ trọ xác nhận',
-    appointment: savedAppointment,
-  });
 });
 
 // PUT /api/appointments/:id/cancel - Sinh viên hủy lịch hẹn (nếu chưa được xác nhận)

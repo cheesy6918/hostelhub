@@ -227,8 +227,12 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
     }
     try {
       setCheckingAppointment(true);
-      const res = await fetch('/api/appointments', {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`/api/appointments?_t=${Date.now()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
@@ -398,18 +402,18 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({ roomId, onBack, 
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && data.success && data.appointment) {
         setAppointmentSuccess(true);
-        if (data.appointment) {
-          setExistingAppointment(data.appointment);
-        } else {
-          fetchExistingAppointment();
-        }
+        setExistingAppointment(data.appointment);
       } else {
-        setAppointmentError(data.message || 'Không thể đặt lịch hẹn.');
+        const errMsg = data.message || `Lỗi từ máy chủ (${res.status}): Không thể lưu lịch hẹn vào cơ sở dữ liệu.`;
+        setAppointmentError(errMsg);
+        alert(`❌ Không thể đặt lịch hẹn:\n${errMsg}`);
       }
     } catch {
-      setAppointmentError('Lỗi kết nối máy chủ khi đặt lịch.');
+      const connErr = 'Lỗi kết nối máy chủ khi đặt lịch hẹn. Vui lòng thử lại sau.';
+      setAppointmentError(connErr);
+      alert(`❌ Lỗi kết nối:\n${connErr}`);
     } finally {
       setAppointmentLoading(false);
     }

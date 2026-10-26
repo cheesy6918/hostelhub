@@ -462,10 +462,16 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
       setLoading(true);
       // Chỉ fetch đúng các mục còn dùng: phòng, tin nhắn, lịch hẹn, đơn cọc (BỎ HẲN /api/rentals)
       const [resRooms, resInq, resApp, resDep] = await Promise.all([
-        fetch(`/api/rooms?landlordId=${currentLandlordId}`),
-        fetch('/api/inquiries', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/appointments', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/deposits', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/rooms?landlordId=${currentLandlordId}&_t=${Date.now()}`),
+        fetch(`/api/inquiries?_t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        }),
+        fetch(`/api/appointments?_t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        }),
+        fetch(`/api/deposits?_t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        }),
       ]);
 
       const [dataRooms, dataInq, dataApp, dataDep] = await Promise.all([

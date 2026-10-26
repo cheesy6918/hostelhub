@@ -760,6 +760,22 @@
   ],
   "appointments": [
     {
+      "Id": "hen_1792998393183_u99f",
+      "IdSinhVien": "usr_sinhvien",
+      "IdPhong": "room_1",
+      "ThoiGianHen": "2026-10-27T10:00:00.000Z",
+      "GhiChu": "Em qua xem phòng lúc 10h sáng",
+      "TrangThai": "Chờ xác nhận",
+      "TieuDePhong": "Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân",
+      "DiaChiPhong": "Số 88 Trần Đại Nghĩa, Phường Đồng Tâm, Hai Bà Trưng, Hà Nội",
+      "SinhVienTen": "Nguyễn Văn Sinh",
+      "SinhVienSdt": "0912345699",
+      "ChuTroId": "usr_chutro",
+      "ChuTroTen": "Trần Thị Bích",
+      "ChuTroSdt": "0987654321",
+      "NgayTao": "2026-10-26T07:06:33.183Z"
+    },
+    {
       "Id": "hen_1792991544681_vz6k",
       "IdSinhVien": "usr_sinhvien",
       "IdPhong": "room_4",
@@ -877,6 +893,24 @@
     }
   ],
   "notifications": [
+    {
+      "Id": "tb_1792998393248_mpxo",
+      "UserId": "usr_sinhvien",
+      "TieuDe": "Đã gửi yêu cầu đặt lịch hẹn xem phòng",
+      "NoiDung": "Yêu cầu đặt lịch xem phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\" vào lúc 10:00:00 27/10/2026 đã được gửi thành công đến chủ trọ Trần Thị Bích. Vui lòng chờ xác nhận.",
+      "Loai": "LichHen",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-26T07:06:33.248Z"
+    },
+    {
+      "Id": "tb_1792998393221_4gs9",
+      "UserId": "usr_chutro",
+      "TieuDe": "Yêu cầu đặt lịch hẹn xem phòng mới!",
+      "NoiDung": "Sinh viên Nguyễn Văn Sinh vừa gửi yêu cầu đặt lịch hẹn xem phòng \"Ký túc xá Sleepbox thông minh cao cấp, sát ĐH Kinh Tế Quốc Dân\" vào lúc 10:00:00 27/10/2026. Vui lòng kiểm tra và phản hồi.",
+      "Loai": "LichHen",
+      "TrangThai": "ChuaDoc",
+      "NgayTao": "2026-10-26T07:06:33.221Z"
+    },
     {
       "Id": "tb_1792994916032_d0u0",
       "UserId": "usr_sinhvien",

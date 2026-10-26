@@ -1033,36 +1033,65 @@ export function writeDb(data: DatabaseSchema): void {
 // Host: localhost | User: root | Password: '' | DB: hostelhub
 // ========================================================
 
-export const dbConfig = {
+export const dbConfig: mysql.PoolOptions = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
   database: process.env.DB_NAME || 'hostelhub',
-  port: Number(process.env.DB_PORT) || 3306,
+  port: Number(process.env.DB_PORT) || (process.env.DB_HOST && process.env.DB_HOST.includes('tidb') ? 4000 : 3306),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
+  ssl: (process.env.DB_SSL === 'false') ? undefined : {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+  },
 };
 
 // In AI Studio / Web container: direct TCP to external DB is blocked, use mock pool & in-memory JSON store
+// In Vercel Serverless / production with TiDB Cloud: connects directly over SSL with TLSv1.2
 let realPool: Pool | null = null;
 try {
-  if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+  if (process.env.DATABASE_URL) {
+    realPool = mysql.createPool({
+      uri: process.env.DATABASE_URL,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      ssl: (process.env.DB_SSL === 'false') ? undefined : {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2',
+      },
+    });
+  } else if (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
     realPool = mysql.createPool(dbConfig);
   }
-} catch {
-  // DB not connected — mock active
+} catch (poolErr) {
+  console.warn('[MySQL] Failed to initialize connection pool:', poolErr);
 }
 
-export const pool: Pool = (realPool || {
-  query: async () => [[]],
-  execute: async () => [[]],
-  getConnection: async () => ({
-    release: () => {},
-    query: async () => [[]],
-    execute: async () => [[]],
-  }),
-}) as unknown as Pool;
+export const pool: Pool = {
+  query: async (...args: any[]) => {
+    if (realPool) return (realPool as any).query(...args);
+    return [[]];
+  },
+  execute: async (...args: any[]) => {
+    if (realPool) return (realPool as any).execute(...args);
+    return [[]];
+  },
+  getConnection: async () => {
+    if (realPool) return realPool.getConnection();
+    return {
+      release: () => {},
+      query: async () => [[]],
+      execute: async () => [[]],
+    } as any;
+  },
+} as unknown as Pool;
 
 // Helper parse JSON safely
 function safeJsonParse<T>(val: any, fallback: T): T {
@@ -1091,7 +1120,8 @@ export async function isMySqlConnected(): Promise<boolean> {
     const conn = await realPool.getConnection();
     conn.release();
     return true;
-  } catch {
+  } catch (err: any) {
+    console.warn('[MySQL] Failed to connect to MySQL database:', err?.message || err);
     return false;
   }
 }
@@ -1869,8 +1899,9 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
   const isConn = await isMySqlConnected();
   if (isConn) {
     let inserted = false;
+    let lastError: any = null;
 
-    // Lần 1: Cấu trúc chuẩn theo database.sql (Id, IdSinhVien, IdPhong, ThoiGianHen...)
+    // Lần 1: Cấu trúc chuẩn 100% theo database.sql (Id, IdSinhVien, IdPhong, ThoiGianHen...)
     try {
       await pool.execute(
         `INSERT INTO appointments (
@@ -1898,6 +1929,7 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
       );
       inserted = true;
     } catch (err: any) {
+      lastError = err;
       console.warn('[MySQL] Primary INSERT appointments failed, attempting fallback variants:', err?.message || err);
 
       // Lần 2: Fallback nếu database dùng SinhVienId, PhongId
@@ -1929,6 +1961,7 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
           );
           inserted = true;
         } catch (err2: any) {
+          lastError = err2;
           console.warn('[MySQL] Fallback 2 INSERT appointments failed:', err2?.message || err2);
         }
       }
@@ -1962,6 +1995,7 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
           );
           inserted = true;
         } catch (err3: any) {
+          lastError = err3;
           console.warn('[MySQL] Fallback 3 (snake_case) INSERT appointments failed:', err3?.message || err3);
         }
       }
@@ -1993,9 +2027,16 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
           );
           inserted = true;
         } catch (err4: any) {
+          lastError = err4;
           console.error('[MySQL] FATAL: All SQL INSERT attempts for appointment failed:', err4);
         }
       }
+    }
+
+    // Ném lỗi ra ngoài nếu kết nối MySQL/TiDB Cloud nhưng không thể INSERT bản ghi vào DB
+    if (!inserted) {
+      console.error('[MySQL] Failed to insert appointment into TiDB Cloud:', lastError);
+      throw new Error(`Lỗi lưu lịch hẹn vào cơ sở dữ liệu TiDB Cloud: ${lastError?.message || 'Không thể thực thi câu lệnh SQL INSERT'}`);
     }
   }
 
