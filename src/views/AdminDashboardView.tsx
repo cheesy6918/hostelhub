@@ -2339,7 +2339,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                         title="Tải về file CSV danh sách phòng trọ cho Microsoft Excel"
                       >
                         <Download className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>📥 Xuất danh sách Phòng trọ (CSV)</span>
+                        <span>Xuất danh sách Phòng trọ (CSV)</span>
                       </button>
                     </div>
                   </div>
@@ -3062,7 +3062,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
                       title="Tải về file CSV danh sách người dùng cho Microsoft Excel"
                     >
                       <Download className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>📥 Xuất danh sách Người dùng (CSV)</span>
+                      <span>Xuất danh sách Người dùng (CSV)</span>
                     </button>
                   </div>
                 </div>
