@@ -166,10 +166,60 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
       const appData = await appRes.json();
       const depData = await depRes.json();
       const txData = await txRes.json();
-
       if (appData.success) setAppointments(appData.data || []);
-      if (depData.success) setDeposits(depData.data || []);
-      if (txData.success) setTransactions(txData.data || []);
+      
+      const loadedDeposits: DatCoc[] = depData.success ? (depData.data || []) : [];
+      setDeposits(loadedDeposits);
+
+      let loadedTransactions: GiaoDichVi[] = txData.success ? (txData.data || []) : [];
+
+      // Tự động đồng bộ các giao dịch đặt cọc và hoàn cọc vào lịch sử ví nếu backend chưa kịp lưu
+      if (loadedDeposits.length > 0) {
+        loadedDeposits.forEach((dep) => {
+          // 1. Kiểm tra giao dịch trừ tiền cọc
+          const hasDebitTx = loadedTransactions.some(
+            tx => tx.MaThamChieu === dep.Id || (tx.Id && tx.Id.includes(dep.Id))
+          );
+          if (!hasDebitTx) {
+            loadedTransactions.push({
+              Id: `tx_coc_${dep.Id}`,
+              UserId: dep.IdSinhVien || (user?.Id || ''),
+              LoaiGiaoDich: 'DatCoc',
+              SoTien: -Number(dep.SoTienCoc || 500000),
+              SoDuSauGiaoDich: Number(user?.soDuVi || 1500000),
+              NoiDung: `Đặt cọc 500.000 VNĐ giữ chỗ phòng "${dep.TieuDePhong || 'Phòng trọ'}"`,
+              MaThamChieu: dep.Id,
+              NgayTao: dep.NgayCoc || dep.NgayTao || new Date().toISOString(),
+            });
+          }
+
+          // 2. Nếu đơn cọc này đã bị hủy, bổ sung giao dịch hoàn tiền cọc
+          if (dep.TrangThaiCoc === 'Đã hủy' || (dep as any).TrangThai === 'Đã hủy') {
+            const hasRefundTx = loadedTransactions.some(
+              tx => tx.LoaiGiaoDich === 'HoanCoc' && (tx.MaThamChieu === dep.Id || tx.NoiDung.includes(dep.TieuDePhong || ''))
+            );
+            if (!hasRefundTx) {
+              loadedTransactions.push({
+                Id: `tx_refund_${dep.Id}`,
+                UserId: dep.IdSinhVien || (user?.Id || ''),
+                LoaiGiaoDich: 'HoanCoc',
+                SoTien: Number(dep.SoTienCoc || 500000),
+                SoDuSauGiaoDich: Number(user?.soDuVi || 2000000),
+                NoiDung: `Hoàn 100% tiền cọc (+500.000 VNĐ) phòng "${dep.TieuDePhong || 'Phòng trọ'}"`,
+                MaThamChieu: dep.Id,
+                NgayTao: dep.NgayTao || new Date().toISOString(),
+              });
+            }
+          }
+        });
+      }
+
+      // Sắp xếp các giao dịch mới nhất lên đầu
+      loadedTransactions.sort(
+        (a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime()
+      );
+
+      setTransactions(loadedTransactions);
     } catch (err) {
       console.error('Error fetching student history:', err);
     } finally {
@@ -563,7 +613,7 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
             {transactions.length}
           </div>
           <p className="text-[11px] text-amber-700 font-medium mt-1">
-            Giao dịch nạp & hoàn tiền
+            Biến động ví & Tiền cọc
           </p>
         </button>
       </div>

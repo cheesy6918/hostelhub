@@ -424,7 +424,36 @@ apiRouter.post('/auth/wallet/topup', requireAuth, handleWalletTopup);
 // GET /api/wallet/transactions & GET /api/auth/wallet/transactions - Lịch sử giao dịch ví
 const handleGetTransactions = async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const list = await getWalletTransactionsFromDb(user.Id);
+  const userId = String(user.Id || (user as any).id || '').trim().toLowerCase();
+  
+  // 1. Lấy danh sách giao dịch ví hiện có
+  let list = await getWalletTransactionsFromDb(user.Id);
+  
+  // 2. Bù các giao dịch đặt cọc nếu bị thiếu
+  const allDeposits = await getDepositsFromDb();
+  const userDeposits = allDeposits.filter(d => {
+    const sId = String(d.IdSinhVien || (d as any).SinhVienId || '').trim().toLowerCase();
+    return sId === userId;
+  });
+
+  for (const dep of userDeposits) {
+    const hasTx = list.some(tx => tx.MaThamChieu === dep.Id || (tx.Id && tx.Id.includes(dep.Id)));
+    if (!hasTx) {
+      const txDatCoc: GiaoDichVi = {
+        Id: 'tx_sync_' + dep.Id,
+        UserId: user.Id,
+        LoaiGiaoDich: 'DatCoc',
+        SoTien: -Number(dep.SoTienCoc || 500000),
+        SoDuSauGiaoDich: Number(user.soDuVi || 1500000),
+        NoiDung: `Đặt cọc 500.000 VNĐ giữ chỗ phòng "${dep.TieuDePhong || 'Phòng trọ'}"`,
+        MaThamChieu: dep.Id,
+        NgayTao: dep.NgayTao || dep.NgayCoc || new Date().toISOString(),
+      };
+      await createWalletTransactionInDb(txDatCoc);
+      list.push(txDatCoc);
+    }
+  }
+
   list.sort((a, b) => new Date(b.NgayTao).getTime() - new Date(a.NgayTao).getTime());
   res.json({ success: true, count: list.length, data: list });
 };
