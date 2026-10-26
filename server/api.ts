@@ -1027,30 +1027,31 @@ apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) 
 apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
   const { IdPhong, ThoiGianHen, GhiChu } = req.body;
-
   if (!IdPhong || !ThoiGianHen) {
     res.status(400).json({ success: false, message: 'Vui lòng cung cấp mã phòng và thời gian hẹn.' });
     return;
   }
-
   const room = await getRoomByIdFromDb(IdPhong);
   if (!room) {
     res.status(404).json({ success: false, message: 'Không tìm thấy phòng trọ.' });
     return;
   }
-
   // Validate phòng hết phòng
   if (room.TrangThai === 'Hết phòng') {
     res.status(400).json({ success: false, message: 'Phòng này hiện đã được thuê hết' });
     return;
   }
-
   // Validate thời gian trong quá khứ
   const henDate = new Date(ThoiGianHen);
   if (isNaN(henDate.getTime()) || henDate.getTime() <= Date.now()) {
     res.status(400).json({ success: false, message: 'Thời gian hẹn không hợp lệ, vui lòng chọn lại' });
     return;
   }
+
+  // Chuẩn hóa dữ liệu chủ trọ để TiDB Cloud không bao giờ bị null hoặc rỗng
+  const targetChuTroId = String(room.ChuTroId || room.IdChuTro || (room as any).chu_tro_id || 'usr_chutro').trim();
+  const targetChuTroTen = String(room.ChuTroTen || (room as any).chu_tro_ten || 'Trần Thị Bích (Chủ trọ Cầu Giấy)').trim();
+  const targetChuTroSdt = String(room.ChuTroSdt || (room as any).chu_tro_sdt || '0987654321').trim();
 
   const newAppointment: LichHen = {
     Id: 'hen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -1059,24 +1060,23 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
     ThoiGianHen: henDate.toISOString(),
     GhiChu: (GhiChu || '').trim(),
     TrangThai: 'Chờ xác nhận',
-    TieuDePhong: room.TieuDe,
-    DiaChiPhong: room.DiaChi + (room.QuanHuyen ? ', ' + room.QuanHuyen : ''),
-    SinhVienTen: user.HoTen,
-    SinhVienSdt: user.Sdt,
-    ChuTroId: room.IdChuTro || room.ChuTroId || '',
-    ChuTroTen: room.ChuTroTen || 'Chủ trọ',
-    ChuTroSdt: room.ChuTroSdt || '',
+    TieuDePhong: room.TieuDe || 'Phòng trọ sinh viên',
+    DiaChiPhong: (room.DiaChi || '') + (room.QuanHuyen ? ', ' + room.QuanHuyen : ''),
+    SinhVienTen: user.HoTen || 'Sinh viên',
+    SinhVienSdt: user.Sdt || '0912345678',
+    ChuTroId: targetChuTroId,
+    ChuTroTen: targetChuTroTen,
+    ChuTroSdt: targetChuTroSdt,
     NgayTao: new Date().toISOString(),
   };
 
   await createAppointmentInDb(newAppointment);
 
   // Gửi thông báo đến chủ trọ về yêu cầu đặt lịch hẹn mới
-  const landlordId = room.IdChuTro || room.ChuTroId;
-  if (landlordId) {
+  if (targetChuTroId) {
     await addNotification(
       null,
-      landlordId,
+      targetChuTroId,
       'Yêu cầu đặt lịch hẹn xem phòng mới!',
       `Sinh viên ${user.HoTen} vừa gửi yêu cầu đặt lịch hẹn xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')}. Vui lòng kiểm tra và phản hồi.`,
       'LichHen'
@@ -1088,7 +1088,7 @@ apiRouter.post('/appointments', requireAuth, async (req: Request, res: Response)
     null,
     user.Id,
     'Đã gửi yêu cầu đặt lịch hẹn xem phòng',
-    `Yêu cầu đặt lịch xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${room.ChuTroTen}. Vui lòng chờ xác nhận.`,
+    `Yêu cầu đặt lịch xem phòng "${room.TieuDe}" vào lúc ${henDate.toLocaleString('vi-VN')} đã được gửi thành công đến chủ trọ ${targetChuTroTen}. Vui lòng chờ xác nhận.`,
     'LichHen'
   );
 

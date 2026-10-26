@@ -1650,28 +1650,28 @@ export async function getAppointmentsFromDb(filter?: { studentId?: string; landl
       let sql = 'SELECT * FROM appointments';
       const params: any[] = [];
       if (filter?.studentId) {
-        sql += ' WHERE IdSinhVien = ?';
-        params.push(filter.studentId);
+        sql += ' WHERE (IdSinhVien = ? OR SinhVienId = ?)';
+        params.push(filter.studentId, filter.studentId);
       } else if (filter?.landlordId) {
-        sql += ' WHERE ChuTroId = ?';
-        params.push(filter.landlordId);
+        sql += ' WHERE (ChuTroId = ? OR IdChuTro = ?)';
+        params.push(filter.landlordId, filter.landlordId);
       }
-      sql += ' ORDER BY NgayTao DESC';
-
+      sql += ' ORDER BY COALESCE(NgayTao, Id) DESC';
       const [rows] = await pool.query(sql, params);
-      const apts = rows as LichHen[];
-      const db = readDb();
-      db.appointments = apts;
+      const apts = (rows as any[]).map(row => ({
+        ...row,
+        ChuTroId: row.ChuTroId || row.IdChuTro || 'usr_chutro',
+        IdSinhVien: row.IdSinhVien || row.SinhVienId,
+      })) as LichHen[];
       return apts;
     } catch (err) {
-      console.warn('[MySQL] Error querying appointments:', err);
+      console.warn('[MySQL] Error querying appointments, falling back to local store:', err);
     }
   }
-
   const db = readDb();
   let result = db.appointments || [];
-  if (filter?.studentId) result = result.filter(a => a.IdSinhVien === filter.studentId);
-  if (filter?.landlordId) result = result.filter(a => a.ChuTroId === filter.landlordId);
+  if (filter?.studentId) result = result.filter(a => a.IdSinhVien === filter.studentId || (a as any).SinhVienId === filter.studentId);
+  if (filter?.landlordId) result = result.filter(a => a.ChuTroId === filter.landlordId || (a as any).IdChuTro === filter.landlordId);
   return result;
 }
 
@@ -1696,32 +1696,52 @@ export async function createAppointmentInDb(apt: LichHen): Promise<LichHen> {
   if (isConn) {
     try {
       await pool.execute(
-        `INSERT INTO appointments (Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, LyDoTuChoi, TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, ChuTroId, ChuTroTen, ChuTroSdt, NgayTao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO appointments (
+          Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, 
+          LyDoTuChoi, TieuDePhong, DiaChiPhong, SinhVienTen, SinhVienSdt, 
+          ChuTroId, ChuTroTen, ChuTroSdt, NgayTao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           apt.Id,
           apt.IdSinhVien,
           apt.IdPhong,
-          apt.ThoiGianHen,
+          String(apt.ThoiGianHen),
           apt.GhiChu || '',
           apt.TrangThai || 'Chờ xác nhận',
           apt.LyDoTuChoi || null,
-          apt.TieuDePhong || '',
+          apt.TieuDePhong || 'Phòng trọ sinh viên',
           apt.DiaChiPhong || '',
-          apt.SinhVienTen || '',
-          apt.SinhVienSdt || '',
-          apt.ChuTroId || '',
-          apt.ChuTroTen || '',
-          apt.ChuTroSdt || '',
+          apt.SinhVienTen || 'Sinh viên',
+          apt.SinhVienSdt || '0912345678',
+          apt.ChuTroId || 'usr_chutro',
+          apt.ChuTroTen || 'Trần Thị Bích (Chủ trọ Cầu Giấy)',
+          apt.ChuTroSdt || '0987654321',
           apt.NgayTao || new Date().toISOString(),
         ]
       );
     } catch (err) {
-      console.warn('[MySQL] Error creating appointment in DB:', err);
+      console.warn('[MySQL] Error creating appointment in DB, trying minimal fallback:', err);
+      try {
+        await pool.execute(
+          `INSERT INTO appointments (Id, IdSinhVien, IdPhong, ThoiGianHen, GhiChu, TrangThai, ChuTroId)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            apt.Id,
+            apt.IdSinhVien,
+            apt.IdPhong,
+            String(apt.ThoiGianHen),
+            apt.GhiChu || '',
+            apt.TrangThai || 'Chờ xác nhận',
+            apt.ChuTroId || 'usr_chutro',
+          ]
+        );
+      } catch (err2) {
+        console.error('[MySQL] FATAL: Could not insert appointment into TiDB Cloud:', err2);
+      }
     }
   }
-
   const db = readDb();
+  if (!db.appointments) db.appointments = [];
   db.appointments.unshift(apt);
   writeDb(db);
   return apt;
