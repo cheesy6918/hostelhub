@@ -21,7 +21,7 @@ export interface NguoiDung {
 
 export type TrangThaiPhong = 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'ChoDuyet' | 'Chờ chủ trọ xác nhận cọc' | 'Đã cọc' | 'Từ chối';
 
-export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy';
+export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy' | 'Hết hạn' | 'QuaHan';
 export type TrangThaiDatCoc = 'Chờ xác nhận' | 'Đã tiếp nhận thành công' | 'Đã xác nhận' | 'Đã hủy';
 
 export interface ThongBao {
@@ -2093,6 +2093,89 @@ export async function updateAppointmentInDb(id: string, updates: Partial<LichHen
   return apt;
 }
 
+export async function deleteAppointmentInDb(id: string, userId?: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      if (userId) {
+        await pool.execute(
+          'DELETE FROM appointments WHERE Id = ? AND (IdSinhVien = ? OR SinhVienId = ?)',
+          [id, userId, userId]
+        );
+      } else {
+        await pool.execute('DELETE FROM appointments WHERE Id = ?', [id]);
+      }
+    } catch (err: any) {
+      console.warn('[MySQL] Error deleting appointment with PascalCase, trying snake_case:', err?.message || err);
+      try {
+        if (userId) {
+          await pool.execute(
+            'DELETE FROM appointments WHERE id = ? AND sinh_vien_id = ?',
+            [id, userId]
+          );
+        } else {
+          await pool.execute('DELETE FROM appointments WHERE id = ?', [id]);
+        }
+      } catch (err2) {
+        console.warn('[MySQL] Error deleting appointment in DB:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.appointments) db.appointments = [];
+  const initialLen = db.appointments.length;
+  db.appointments = db.appointments.filter(a => {
+    if (a.Id !== id) return true;
+    if (userId) {
+      const svId = String(a.IdSinhVien || (a as any).SinhVienId || (a as any).sinh_vien_id || '').trim().toLowerCase();
+      return svId !== String(userId).trim().toLowerCase();
+    }
+    return false;
+  });
+  writeDb(db);
+  return db.appointments.length < initialLen;
+}
+
+export async function bulkDeleteCancelledAppointmentsInDb(userId: string): Promise<number> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `DELETE FROM appointments 
+         WHERE (IdSinhVien = ? OR SinhVienId = ?) 
+           AND TrangThai IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi', 'Hết hạn', 'HetHan', 'QuaHan')`,
+        [userId, userId]
+      );
+    } catch (err: any) {
+      console.warn('[MySQL] Error bulk deleting appointments with PascalCase, trying snake_case:', err?.message || err);
+      try {
+        await pool.execute(
+          `DELETE FROM appointments 
+           WHERE (sinh_vien_id = ?) 
+             AND trang_thai IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi', 'Hết hạn', 'HetHan', 'QuaHan')`,
+          [userId]
+        );
+      } catch (err2) {
+        console.warn('[MySQL] Error bulk deleting appointments in DB:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.appointments) db.appointments = [];
+  const initialLen = db.appointments.length;
+  const targetStatuses = ['Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi', 'Hết hạn', 'HetHan', 'QuaHan'];
+  db.appointments = db.appointments.filter(a => {
+    const svId = String(a.IdSinhVien || (a as any).SinhVienId || (a as any).sinh_vien_id || '').trim().toLowerCase();
+    const isOwner = svId === String(userId).trim().toLowerCase();
+    const isCancelledOrExpired = targetStatuses.includes(a.TrangThai);
+    return !(isOwner && isCancelledOrExpired);
+  });
+  writeDb(db);
+  return initialLen - db.appointments.length;
+}
+
 // -------------------------------------------------------------
 // 5. DEPOSITS (ĐẶT CỌC GIỮ CHỖ)
 // -------------------------------------------------------------
@@ -2207,6 +2290,89 @@ export async function updateDepositInDb(id: string, updates: Partial<DatCoc>): P
   return dep;
 }
 
+export async function deleteDepositInDb(id: string, userId?: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      if (userId) {
+        await pool.execute(
+          'DELETE FROM deposits WHERE Id = ? AND (IdSinhVien = ? OR SinhVienId = ?)',
+          [id, userId, userId]
+        );
+      } else {
+        await pool.execute('DELETE FROM deposits WHERE Id = ?', [id]);
+      }
+    } catch (err: any) {
+      console.warn('[MySQL] Error deleting deposit with PascalCase, trying snake_case:', err?.message || err);
+      try {
+        if (userId) {
+          await pool.execute(
+            'DELETE FROM deposits WHERE id = ? AND sinh_vien_id = ?',
+            [id, userId]
+          );
+        } else {
+          await pool.execute('DELETE FROM deposits WHERE id = ?', [id]);
+        }
+      } catch (err2) {
+        console.warn('[MySQL] Error deleting deposit in DB:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.deposits) db.deposits = [];
+  const initialLen = db.deposits.length;
+  db.deposits = db.deposits.filter(d => {
+    if (d.Id !== id) return true;
+    if (userId) {
+      const svId = String(d.IdSinhVien || (d as any).SinhVienId || (d as any).sinh_vien_id || '').trim().toLowerCase();
+      return svId !== String(userId).trim().toLowerCase();
+    }
+    return false;
+  });
+  writeDb(db);
+  return db.deposits.length < initialLen;
+}
+
+export async function bulkDeleteCancelledDepositsInDb(userId: string): Promise<number> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute(
+        `DELETE FROM deposits 
+         WHERE (IdSinhVien = ? OR SinhVienId = ?) 
+           AND (TrangThaiCoc IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi') OR TrangThai IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi'))`,
+        [userId, userId]
+      );
+    } catch (err: any) {
+      console.warn('[MySQL] Error bulk deleting deposits with PascalCase, trying snake_case:', err?.message || err);
+      try {
+        await pool.execute(
+          `DELETE FROM deposits 
+           WHERE (sinh_vien_id = ?) 
+             AND (trang_thai_coc IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi') OR trang_thai IN ('Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi'))`,
+          [userId]
+        );
+      } catch (err2) {
+        console.warn('[MySQL] Error bulk deleting deposits in DB:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.deposits) db.deposits = [];
+  const initialLen = db.deposits.length;
+  const targetStatuses = ['Đã hủy', 'DaHuy', 'Từ chối', 'TuChoi'];
+  db.deposits = db.deposits.filter(d => {
+    const svId = String(d.IdSinhVien || (d as any).SinhVienId || (d as any).sinh_vien_id || '').trim().toLowerCase();
+    const isOwner = svId === String(userId).trim().toLowerCase();
+    const isCancelled = targetStatuses.includes(d.TrangThaiCoc) || targetStatuses.includes((d as any).TrangThai);
+    return !(isOwner && isCancelled);
+  });
+  writeDb(db);
+  return initialLen - db.deposits.length;
+}
+
 // -------------------------------------------------------------
 // 6. NOTIFICATIONS (THÔNG BÁO)
 // -------------------------------------------------------------
@@ -2223,35 +2389,95 @@ export async function getNotificationsFromDb(userId?: string): Promise<ThongBao[
       sql += ' ORDER BY NgayTao DESC';
 
       const [rows] = await pool.query(sql, params);
-      return rows as ThongBao[];
+      const notifs = (rows as any[]).map(r => ({
+        Id: String(r.Id || r.id || ''),
+        UserId: String(r.UserId || r.user_id || ''),
+        TieuDe: String(r.TieuDe || r.tieu_de || ''),
+        NoiDung: String(r.NoiDung || r.noi_dung || ''),
+        Loai: (r.Loai || r.loai || 'HeThong') as any,
+        TrangThai: (r.TrangThai || r.trang_thai || 'ChuaDoc') as any,
+        NgayTao: String(r.NgayTao || r.ngay_tao || new Date().toISOString()),
+      }));
+      // Đồng bộ vào bộ nhớ database cache
+      const db = readDb();
+      if (!db.notifications) db.notifications = [];
+      if (userId) {
+        db.notifications = [
+          ...notifs,
+          ...db.notifications.filter(n => n.UserId !== userId),
+        ];
+      } else {
+        db.notifications = notifs;
+      }
+      return notifs;
     } catch (err) {
       console.warn('[MySQL] Error querying notifications:', err);
     }
   }
 
   const db = readDb();
-  if (userId) return db.notifications.filter(n => n.UserId === userId);
-  return db.notifications || [];
+  let result = db.notifications || [];
+  if (userId) return result.filter(n => n.UserId === userId);
+  return result;
 }
 
 export async function createNotificationInDb(notif: ThongBao): Promise<ThongBao> {
+  const finalNotif: ThongBao = {
+    Id: notif.Id || ('tb_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+    UserId: String(notif.UserId || '').trim(),
+    TieuDe: String(notif.TieuDe || '').trim(),
+    NoiDung: String(notif.NoiDung || '').trim(),
+    Loai: notif.Loai || 'HeThong',
+    TrangThai: notif.TrangThai || 'ChuaDoc',
+    NgayTao: notif.NgayTao || new Date().toISOString(),
+  };
+
   const isConn = await isMySqlConnected();
   if (isConn) {
+    let inserted = false;
     try {
       await pool.execute(
         `INSERT INTO notifications (Id, UserId, TieuDe, NoiDung, Loai, TrangThai, NgayTao)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [notif.Id, notif.UserId, notif.TieuDe, notif.NoiDung, notif.Loai || 'HeThong', notif.TrangThai || 'ChuaDoc', notif.NgayTao]
+        [
+          finalNotif.Id,
+          finalNotif.UserId,
+          finalNotif.TieuDe,
+          finalNotif.NoiDung,
+          finalNotif.Loai,
+          finalNotif.TrangThai,
+          finalNotif.NgayTao,
+        ]
       );
-    } catch (err) {
-      console.warn('[MySQL] Error creating notification:', err);
+      inserted = true;
+    } catch (err: any) {
+      console.warn('[MySQL] Error creating notification with PascalCase, attempting snake_case fallback:', err?.message || err);
+      try {
+        await pool.execute(
+          `INSERT INTO notifications (id, user_id, tieu_de, noi_dung, loai, trang_thai, ngay_tao)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            finalNotif.Id,
+            finalNotif.UserId,
+            finalNotif.TieuDe,
+            finalNotif.NoiDung,
+            finalNotif.Loai,
+            finalNotif.TrangThai,
+            finalNotif.NgayTao,
+          ]
+        );
+        inserted = true;
+      } catch (err2: any) {
+        console.warn('[MySQL] Error creating notification with snake_case:', err2?.message || err2);
+      }
     }
   }
 
   const db = readDb();
-  db.notifications.unshift(notif);
+  if (!db.notifications) db.notifications = [];
+  db.notifications.unshift(finalNotif);
   writeDb(db);
-  return notif;
+  return finalNotif;
 }
 
 export async function markNotificationReadInDb(id: string): Promise<boolean> {
@@ -2260,11 +2486,16 @@ export async function markNotificationReadInDb(id: string): Promise<boolean> {
     try {
       await pool.execute("UPDATE notifications SET TrangThai = 'DaDoc' WHERE Id = ?", [id]);
     } catch (err) {
-      console.warn('[MySQL] Error marking notification as read:', err);
+      try {
+        await pool.execute("UPDATE notifications SET trang_thai = 'DaDoc' WHERE id = ?", [id]);
+      } catch (err2) {
+        console.warn('[MySQL] Error marking notification as read:', err2);
+      }
     }
   }
 
   const db = readDb();
+  if (!db.notifications) db.notifications = [];
   const n = db.notifications.find(x => x.Id === id);
   if (n) {
     n.TrangThai = 'DaDoc';
@@ -2280,14 +2511,62 @@ export async function markAllNotificationsReadInDb(userId: string): Promise<bool
     try {
       await pool.execute("UPDATE notifications SET TrangThai = 'DaDoc' WHERE UserId = ?", [userId]);
     } catch (err) {
-      console.warn('[MySQL] Error marking all notifications as read:', err);
+      try {
+        await pool.execute("UPDATE notifications SET trang_thai = 'DaDoc' WHERE user_id = ?", [userId]);
+      } catch (err2) {
+        console.warn('[MySQL] Error marking all notifications as read:', err2);
+      }
     }
   }
 
   const db = readDb();
+  if (!db.notifications) db.notifications = [];
   db.notifications.forEach(n => {
     if (n.UserId === userId) n.TrangThai = 'DaDoc';
   });
+  writeDb(db);
+  return true;
+}
+
+export async function deleteNotificationInDb(id: string, userId: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute('DELETE FROM notifications WHERE Id = ? AND UserId = ?', [id, userId]);
+    } catch (err) {
+      try {
+        await pool.execute('DELETE FROM notifications WHERE id = ? AND user_id = ?', [id, userId]);
+      } catch (err2) {
+        console.warn('[MySQL] Error deleting notification:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.notifications) db.notifications = [];
+  const initialLen = db.notifications.length;
+  db.notifications = db.notifications.filter(n => !(n.Id === id && n.UserId === userId));
+  writeDb(db);
+  return db.notifications.length < initialLen;
+}
+
+export async function clearReadNotificationsInDb(userId: string): Promise<boolean> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.execute("DELETE FROM notifications WHERE UserId = ? AND TrangThai = 'DaDoc'", [userId]);
+    } catch (err) {
+      try {
+        await pool.execute("DELETE FROM notifications WHERE user_id = ? AND trang_thai = 'DaDoc'", [userId]);
+      } catch (err2) {
+        console.warn('[MySQL] Error clearing read notifications:', err2);
+      }
+    }
+  }
+
+  const db = readDb();
+  if (!db.notifications) db.notifications = [];
+  db.notifications = db.notifications.filter(n => !(n.UserId === userId && n.TrangThai === 'DaDoc'));
   writeDb(db);
   return true;
 }

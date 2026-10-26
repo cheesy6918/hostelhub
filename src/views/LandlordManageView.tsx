@@ -859,7 +859,7 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-6 pt-6 border-t border-slate-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-6 pt-6 border-t border-slate-100">
               <div className="bg-slate-50 p-3.5 rounded-2xl">
                 <span className="text-xs text-slate-400 block">Tổng số lịch hẹn</span>
                 <span className="text-xl font-bold text-slate-900 tabular-nums">{appointments.length}</span>
@@ -874,6 +874,12 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
                 <span className="text-xs text-emerald-700 block">Đã xác nhận gặp</span>
                 <span className="text-xl font-bold text-emerald-800 tabular-nums">
                   {appointments.filter(a => a.TrangThai === 'Đã xác nhận').length}
+                </span>
+              </div>
+              <div className="bg-slate-100/80 p-3.5 rounded-2xl">
+                <span className="text-xs text-slate-500 block">Đã quá hạn / Hết hạn</span>
+                <span className="text-xl font-bold text-slate-700 tabular-nums">
+                  {appointments.filter(a => a.TrangThai === 'Hết hạn' || (a.TrangThai as any) === 'QuaHan').length}
                 </span>
               </div>
             </div>
@@ -1379,66 +1385,88 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {appointments.map((app) => (
-                <div key={app.Id} className="py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-900">{app.SinhVienTen || 'Sinh viên'}</span>
-                      {app.SinhVienSdt && (
-                        <a href={`tel:${app.SinhVienSdt}`} className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          <span>{app.SinhVienSdt}</span>
-                        </a>
-                      )}
-                      <span className="text-xs font-mono text-slate-400">#{app.Id}</span>
-                    </div>
-                    <p className="text-xs font-medium text-slate-700">Phòng: {app.TieuDePhong || 'Phòng trọ'}</p>
-                    <div className="flex items-center gap-1.5 text-xs text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg w-fit">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Hẹn lúc: {new Date(app.ThoiGianHen).toLocaleString('vi-VN')}</span>
-                    </div>
-                    {app.GhiChu && (
-                      <p className="text-xs text-slate-500 italic">Lời nhắn: "{app.GhiChu}"</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {app.TrangThai === 'Chờ xác nhận' ? (
-                      <>
-                        <button
-                          onClick={() => handleAppointmentStatus(app.Id, 'Đã xác nhận')}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs cursor-pointer active:scale-98 transition-all"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          Xác nhận lịch hẹn
-                        </button>
-                        <button
-                          onClick={() => handleOpenRejectModal('appointment', app.Id, app.SinhVienTen || 'Sinh viên', app.TieuDePhong || 'Phòng trọ')}
-                          className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer border border-rose-200 transition-all"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          Từ chối
-                        </button>
-                      </>
-                    ) : (
-                      <div className="text-right">
-                        <span
-                          className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${app.TrangThai === 'Đã xác nhận'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-rose-100 text-rose-800 border border-rose-300'
-                            }`}
-                        >
-                          {app.TrangThai === 'Đã xác nhận' ? '✓ Đã xác nhận' : '✕ Đã hủy'}
-                        </span>
-                        {app.LyDoTuChoi && (
-                          <p className="text-[11px] text-rose-600 font-medium italic mt-1 max-w-xs">
-                            Lý do: {app.LyDoTuChoi}
-                          </p>
+              {appointments.map((app) => {
+                const isExpired = app.TrangThai === 'Hết hạn' || (app.TrangThai as any) === 'QuaHan';
+                const isPending = app.TrangThai === 'Chờ xác nhận' && !isExpired;
+
+                return (
+                  <div
+                    key={app.Id}
+                    className={`py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all ${
+                      isExpired ? 'opacity-70 bg-slate-50/80 -mx-3 px-3 rounded-2xl border border-dashed border-slate-200' : ''
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900">{app.SinhVienTen || 'Sinh viên'}</span>
+                        {app.SinhVienSdt && (
+                          <a href={`tel:${app.SinhVienSdt}`} className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            <span>{app.SinhVienSdt}</span>
+                          </a>
                         )}
+                        <span className="text-xs font-mono text-slate-400">#{app.Id}</span>
                       </div>
-                    )}
+                      <p className="text-xs font-medium text-slate-700">Phòng: {app.TieuDePhong || 'Phòng trọ'}</p>
+                      <div className="flex items-center gap-1.5 text-xs text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg w-fit">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Hẹn lúc: {new Date(app.ThoiGianHen).toLocaleString('vi-VN')}</span>
+                      </div>
+                      {app.GhiChu && (
+                        <p className="text-xs text-slate-500 italic">Lời nhắn: "{app.GhiChu}"</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isPending ? (
+                        <>
+                          <button
+                            onClick={() => handleAppointmentStatus(app.Id, 'Đã xác nhận')}
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs cursor-pointer active:scale-98 transition-all"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Xác nhận lịch hẹn
+                          </button>
+                          <button
+                            onClick={() => handleOpenRejectModal('appointment', app.Id, app.SinhVienTen || 'Sinh viên', app.TieuDePhong || 'Phòng trọ')}
+                            className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer border border-rose-200 transition-all"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Từ chối
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-right space-y-1">
+                          <span
+                            className={`px-3 py-1 text-xs font-bold rounded-full inline-block ${
+                              app.TrangThai === 'Đã xác nhận'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : isExpired
+                                ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                                : 'bg-rose-100 text-rose-800 border border-rose-300'
+                            }`}
+                          >
+                            {app.TrangThai === 'Đã xác nhận'
+                              ? '✓ Đã xác nhận'
+                              : isExpired
+                              ? '🕒 Đã quá hạn / Hết hạn'
+                              : '✕ Đã hủy'}
+                          </span>
+                          {isExpired && (
+                            <p className="text-[11px] text-slate-500 italic max-w-xs">
+                              Quá 24h không phản hồi - Lịch hẹn đã tự động hết hạn.
+                            </p>
+                          )}
+                          {!isExpired && app.LyDoTuChoi && (
+                            <p className="text-[11px] text-rose-600 font-medium italic mt-1 max-w-xs">
+                              Lý do: {app.LyDoTuChoi}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -29,14 +29,20 @@ import {
   getAppointmentByIdFromDb,
   createAppointmentInDb,
   updateAppointmentInDb,
+  deleteAppointmentInDb,
+  bulkDeleteCancelledAppointmentsInDb,
   getDepositsFromDb,
   getDepositByIdFromDb,
   createDepositInDb,
   updateDepositInDb,
+  deleteDepositInDb,
+  bulkDeleteCancelledDepositsInDb,
   getNotificationsFromDb,
   createNotificationInDb,
   markNotificationReadInDb,
   markAllNotificationsReadInDb,
+  deleteNotificationInDb,
+  clearReadNotificationsInDb,
   getFavoritesFromDb,
   createFavoriteInDb,
   deleteFavoriteInDb,
@@ -1100,6 +1106,38 @@ apiRouter.get('/appointments', requireAuth, async (req: Request, res: Response) 
       result = list;
     }
 
+    // Tự động kiểm tra và chuyển các lịch hẹn quá 24 giờ chưa duyệt hoặc giờ hẹn đã qua sang trạng thái 'Hết hạn'
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+    for (const apt of result) {
+      if (apt.TrangThai === 'Chờ xác nhận') {
+        const createdTime = apt.NgayTao ? new Date(apt.NgayTao).getTime() : 0;
+        const henTime = apt.ThoiGianHen ? new Date(apt.ThoiGianHen).getTime() : 0;
+
+        const isCreatedPast24h = createdTime > 0 && (now - createdTime > TWENTY_FOUR_HOURS_MS);
+        const isHenTimePast = henTime > 0 && henTime < now;
+
+        if (isCreatedPast24h || isHenTimePast) {
+          const reason = isCreatedPast24h
+            ? 'Quá thời hạn 24 giờ chủ trọ không phản hồi'
+            : 'Thời gian hẹn đã trôi qua mà chưa được xác nhận';
+
+          apt.TrangThai = 'Hết hạn';
+          apt.LyDoTuChoi = apt.LyDoTuChoi || reason;
+
+          try {
+            await updateAppointmentInDb(apt.Id, {
+              TrangThai: 'Hết hạn',
+              LyDoTuChoi: apt.LyDoTuChoi,
+            });
+          } catch (updateErr) {
+            console.warn('[Auto-expire Appointment] Error updating in DB:', updateErr);
+          }
+        }
+      }
+    }
+
     // Luôn sắp xếp lịch hẹn mới nhất lên đầu (theo NgayTao giảm dần)
     result.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
 
@@ -1248,8 +1286,8 @@ apiRouter.put('/appointments/:id/cancel', requireAuth, async (req: Request, res:
     return;
   }
 
-  if (appointment.TrangThai === 'Đã hủy') {
-    res.status(400).json({ success: false, message: 'Lịch hẹn này đã được hủy trước đó.' });
+  if (appointment.TrangThai === 'Đã hủy' || appointment.TrangThai === 'Hết hạn' || (appointment.TrangThai as any) === 'QuaHan') {
+    res.status(400).json({ success: false, message: 'Lịch hẹn này đã được hủy hoặc đã hết hạn.' });
     return;
   }
 
@@ -1278,6 +1316,11 @@ apiRouter.put('/appointments/:id/status', requireAuth, async (req: Request, res:
   const appointment = await getAppointmentByIdFromDb(req.params.id);
   if (!appointment) {
     res.status(404).json({ success: false, message: 'Lịch hẹn không tồn tại.' });
+    return;
+  }
+
+  if (appointment.TrangThai === 'Hết hạn' || (appointment.TrangThai as any) === 'QuaHan') {
+    res.status(400).json({ success: false, message: 'Lịch hẹn này đã hết hạn do quá 24 giờ không phản hồi.' });
     return;
   }
 
@@ -1319,6 +1362,50 @@ apiRouter.put('/appointments/:id/status', requireAuth, async (req: Request, res:
   Object.assign(appointment, updates);
 
   res.json({ success: true, message: `Lịch hẹn đã chuyển sang trạng thái: ${status}`, appointment });
+});
+
+// DELETE /api/appointments/cancelled/all - Xóa hàng loạt lịch hẹn đã hủy hoặc hết hạn của sinh viên
+apiRouter.delete('/appointments/cancelled/all', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    const deletedCount = await bulkDeleteCancelledAppointmentsInDb(user.Id);
+    res.json({
+      success: true,
+      message: 'Đã xóa toàn bộ lịch sử đã hủy thành công',
+      count: deletedCount,
+    });
+  } catch (error: any) {
+    console.error('Lỗi khi xóa hàng loạt lịch hẹn đã hủy:', error);
+    res.status(500).json({ success: false, message: error?.message || 'Lỗi khi xóa hàng loạt lịch hẹn' });
+  }
+});
+
+// DELETE /api/appointments/:id - Xóa bản ghi lịch hẹn xem phòng
+apiRouter.delete('/appointments/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    const appointment = await getAppointmentByIdFromDb(req.params.id);
+
+    if (!appointment) {
+      res.status(404).json({ success: false, message: 'Lịch hẹn không tồn tại hoặc đã được xóa trước đó.' });
+      return;
+    }
+
+    const aptStudentId = String(appointment.IdSinhVien || (appointment as any).SinhVienId || (appointment as any).sinh_vien_id || '').trim().toLowerCase();
+    const aptChuTroId = String(appointment.ChuTroId || (appointment as any).IdChuTro || (appointment as any).chu_tro_id || '').trim().toLowerCase();
+    const currentUserId = String(user.Id).trim().toLowerCase();
+
+    if (user.VaiTro !== 'Admin' && aptStudentId !== currentUserId && aptChuTroId !== currentUserId) {
+      res.status(403).json({ success: false, message: 'Bạn không có quyền xóa bản ghi lịch hẹn này.' });
+      return;
+    }
+
+    await deleteAppointmentInDb(appointment.Id, user.VaiTro === 'Admin' ? undefined : user.Id);
+    res.json({ success: true, message: 'Đã xóa bản ghi thành công' });
+  } catch (error: any) {
+    console.error('Lỗi khi xóa lịch hẹn:', error);
+    res.status(500).json({ success: false, message: error?.message || 'Lỗi khi xóa lịch hẹn' });
+  }
 });
 
 // -------------------------------------------------------------
@@ -1451,15 +1538,25 @@ apiRouter.post('/deposits', requireAuth, async (req: Request, res: Response) => 
   await createDepositInDb(newDeposit);
 
   // Gửi thông báo đến chủ trọ
-  if (room.IdChuTro || room.ChuTroId) {
+  const chuTroId = room.IdChuTro || room.ChuTroId || '';
+  if (chuTroId) {
     await addNotification(
       null,
-      room.IdChuTro || room.ChuTroId || '',
-      'Có đơn đặt cọc mới!',
-      `Sinh viên ${user.HoTen} vừa đặt cọc 500.000 VNĐ giữ chỗ cho phòng "${room.TieuDe}". Vui lòng xử lý đơn trong mục Quản lý yêu cầu.`,
+      chuTroId,
+      'Có đơn đặt cọc giữ phòng mới!',
+      `Sinh viên ${user.HoTen} vừa đặt cọc 500.000 VNĐ giữ chỗ cho phòng "${room.TieuDe}". Vui lòng xử lý đơn trong mục Quản lý yêu cầu trong vòng 48h.`,
       'DatCoc'
     );
   }
+
+  // BỔ SUNG thông báo gửi cho CHÍNH SINH VIÊN
+  await addNotification(
+    null,
+    user.Id,
+    'Đặt cọc giữ phòng thành công!',
+    'Bạn đã thanh toán 500.000 VNĐ đặt cọc giữ chỗ phòng "' + room.TieuDe + '". Đơn đang chờ chủ trọ xác nhận trong 48h.',
+    'DatCoc'
+  );
 
   res.status(201).json({
     success: true,
@@ -1591,13 +1688,16 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     }
 
     // Gửi thông báo đến sinh viên
-    await addNotification(
-      null,
-      deposit.IdSinhVien,
-      'Đơn đặt cọc đã được tiếp nhận thành công!',
-      `Chủ trọ ${user.HoTen} đã tiếp nhận thành công đơn đặt cọc ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ cho phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được chuyển sang trạng thái "Đã cọc" và bảo lưu chỗ cho bạn.`,
-      'DatCoc'
-    );
+    const targetSinhVienId = deposit.IdSinhVien || (deposit as any).SinhVienId || '';
+    if (targetSinhVienId) {
+      await addNotification(
+        null,
+        targetSinhVienId,
+        'Đơn đặt cọc đã được tiếp nhận thành công!',
+        `Chủ trọ ${user.HoTen} đã tiếp nhận thành công đơn đặt cọc ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ cho phòng "${deposit.TieuDePhong || 'Phòng trọ'}". Phòng đã được chuyển sang trạng thái "Đã cọc" và bảo lưu chỗ cho bạn.`,
+        'DatCoc'
+      );
+    }
 
     res.json({
       success: true,
@@ -1611,7 +1711,8 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     deposit.LyDoTuChoi = rejectReason;
 
     // Tự động hoàn lại 100% tiền cọc vào ví sinh viên
-    const sinhVien = await getUserByIdFromDb(deposit.IdSinhVien);
+    const targetSinhVienId = deposit.IdSinhVien || (deposit as any).SinhVienId || '';
+    const sinhVien = targetSinhVienId ? await getUserByIdFromDb(targetSinhVienId) : null;
     if (sinhVien) {
       const svNewBal = (sinhVien.soDuVi || 0) + deposit.SoTienCoc;
       await updateUserInDb(sinhVien.Id, { soDuVi: svNewBal });
@@ -1635,13 +1736,15 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     }
 
     // Gửi thông báo hoàn tiền đến sinh viên
-    await addNotification(
-      null,
-      deposit.IdSinhVien,
-      'Đơn đặt cọc phòng bị từ chối - Đã hoàn tiền ví',
-      `Đơn cọc phòng "${deposit.TieuDePhong || 'Phòng trọ'}" đã bị từ chối. Lý do: "${rejectReason}". Toàn bộ ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ tiền cọc đã được hoàn trả 100% vào ví của bạn.`,
-      'DatCoc'
-    );
+    if (targetSinhVienId) {
+      await addNotification(
+        null,
+        targetSinhVienId,
+        'Đơn đặt cọc phòng bị từ chối - Đã hoàn tiền ví',
+        `Đơn cọc phòng "${deposit.TieuDePhong || 'Phòng trọ'}" đã bị từ chối. Lý do: "${rejectReason}". Toàn bộ ${deposit.SoTienCoc.toLocaleString('vi-VN')} VNĐ tiền cọc đã được hoàn trả 100% vào ví của bạn.`,
+        'DatCoc'
+      );
+    }
 
     res.json({
       success: true,
@@ -1650,6 +1753,59 @@ apiRouter.put('/deposits/:id/status', requireAuth, async (req: Request, res: Res
     });
   } else {
     res.status(400).json({ success: false, message: 'Trạng thái không hợp lệ.' });
+  }
+});
+
+// DELETE /api/deposits/cancelled/all - Xóa hàng loạt đơn cọc đã hủy / từ chối của sinh viên
+apiRouter.delete('/deposits/cancelled/all', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    const deletedCount = await bulkDeleteCancelledDepositsInDb(user.Id);
+    res.json({
+      success: true,
+      message: 'Đã xóa toàn bộ lịch sử đã hủy thành công',
+      count: deletedCount,
+    });
+  } catch (error: any) {
+    console.error('Lỗi khi xóa hàng loạt đơn cọc đã hủy:', error);
+    res.status(500).json({ success: false, message: error?.message || 'Lỗi khi xóa hàng loạt đơn cọc' });
+  }
+});
+
+// DELETE /api/deposits/:id - Xóa bản ghi đơn đặt cọc giữ chỗ
+apiRouter.delete('/deposits/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as NguoiDung;
+    const deposit = await getDepositByIdFromDb(req.params.id);
+
+    if (!deposit) {
+      res.status(404).json({ success: false, message: 'Đơn đặt cọc không tồn tại hoặc đã được xóa trước đó.' });
+      return;
+    }
+
+    const depStudentId = String(deposit.IdSinhVien || (deposit as any).SinhVienId || '').trim().toLowerCase();
+    const depChuTroId = String(deposit.ChuTroId || (deposit as any).IdChuTro || '').trim().toLowerCase();
+    const currentUserId = String(user.Id).trim().toLowerCase();
+
+    if (user.VaiTro !== 'Admin' && depStudentId !== currentUserId && depChuTroId !== currentUserId) {
+      res.status(403).json({ success: false, message: 'Bạn không có quyền xóa đơn cọc này.' });
+      return;
+    }
+
+    // Không cho phép xóa đơn cọc đang chờ xác nhận để tránh mất mát giao dịch đang xử lý
+    if (deposit.TrangThaiCoc === 'Chờ xác nhận') {
+      res.status(400).json({
+        success: false,
+        message: 'Không thể xóa đơn đặt cọc đang chờ xác nhận. Vui lòng hủy đơn cọc trước nếu muốn hoàn tiền.',
+      });
+      return;
+    }
+
+    await deleteDepositInDb(deposit.Id, user.VaiTro === 'Admin' ? undefined : user.Id);
+    res.json({ success: true, message: 'Đã xóa bản ghi thành công' });
+  } catch (error: any) {
+    console.error('Lỗi khi xóa đơn đặt cọc:', error);
+    res.status(500).json({ success: false, message: error?.message || 'Lỗi khi xóa đơn đặt cọc' });
   }
 });
 
@@ -1806,14 +1962,12 @@ apiRouter.post('/rooms/:roomId/reviews', requireAuth, async (req: Request, res: 
 // 6. THÔNG BÁO (NOTIFICATIONS API)
 // -------------------------------------------------------------
 
-apiRouter.get('/notifications', requireAuth, (req: Request, res: Response) => {
+apiRouter.get('/notifications', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.notifications) db.notifications = [];
+  const userNotifications = await getNotificationsFromDb(user.Id);
 
-  const userNotifications = db.notifications.filter(n => n.UserId === user.Id);
   // Sắp xếp mới nhất lên đầu
-  userNotifications.sort((a, b) => new Date(b.NgayTao).getTime() - new Date(a.NgayTao).getTime());
+  userNotifications.sort((a, b) => new Date(b.NgayTao || 0).getTime() - new Date(a.NgayTao || 0).getTime());
 
   const unreadCount = userNotifications.filter(n => n.TrangThai === 'ChuaDoc').length;
   const categoryCounts = {
@@ -1825,6 +1979,7 @@ apiRouter.get('/notifications', requireAuth, (req: Request, res: Response) => {
     heThong: userNotifications.filter(n => n.Loai === 'HeThong').length,
   };
 
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json({
     success: true,
     data: userNotifications,
@@ -1833,59 +1988,28 @@ apiRouter.get('/notifications', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-apiRouter.put('/notifications/:id/read', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.notifications) db.notifications = [];
-
-  const notif = db.notifications.find(n => n.Id === req.params.id && n.UserId === user.Id);
-  if (notif) {
-    notif.TrangThai = 'DaDoc';
-    writeDb(db);
-  }
-
+apiRouter.put('/notifications/:id/read', requireAuth, async (req: Request, res: Response) => {
+  await markNotificationReadInDb(req.params.id);
   res.json({ success: true, message: 'Đã đánh dấu đã đọc' });
 });
 
-apiRouter.put('/notifications/read-all', requireAuth, (req: Request, res: Response) => {
+apiRouter.put('/notifications/read-all', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.notifications) db.notifications = [];
-
-  db.notifications.forEach(n => {
-    if (n.UserId === user.Id) {
-      n.TrangThai = 'DaDoc';
-    }
-  });
-
-  writeDb(db);
+  await markAllNotificationsReadInDb(user.Id);
   res.json({ success: true, message: 'Đã đánh dấu tất cả là đã đọc' });
 });
 
 // DELETE /api/notifications/:id - Xóa 1 thông báo
-apiRouter.delete('/notifications/:id', requireAuth, (req: Request, res: Response) => {
+apiRouter.delete('/notifications/:id', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.notifications) db.notifications = [];
-
-  const index = db.notifications.findIndex(n => n.Id === req.params.id && n.UserId === user.Id);
-  if (index !== -1) {
-    db.notifications.splice(index, 1);
-    writeDb(db);
-  }
-
+  await deleteNotificationInDb(req.params.id, user.Id);
   res.json({ success: true, message: 'Đã xóa thông báo' });
 });
 
 // DELETE /api/notifications/clear-read - Xóa tất cả thông báo đã đọc
-apiRouter.delete('/notifications/clear-read', requireAuth, (req: Request, res: Response) => {
+apiRouter.delete('/notifications/clear-read', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as NguoiDung;
-  const db = readDb();
-  if (!db.notifications) db.notifications = [];
-
-  db.notifications = db.notifications.filter(n => !(n.UserId === user.Id && n.TrangThai === 'DaDoc'));
-  writeDb(db);
-
+  await clearReadNotificationsInDb(user.Id);
   res.json({ success: true, message: 'Đã dọn dẹp các thông báo đã đọc' });
 });
 

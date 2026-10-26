@@ -52,7 +52,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       const res = await fetch('/api/notifications', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+        },
       });
       const data = await res.json();
       if (data.success) {

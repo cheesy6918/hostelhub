@@ -14,7 +14,7 @@ export interface User {
 }
 
 export type TrangThaiPhong = 'Còn phòng' | 'Công khai' | 'Hết phòng' | 'Chờ duyệt' | 'ChoDuyet' | 'Chờ chủ trọ xác nhận cọc' | 'Đã cọc' | 'Từ chối';
-export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy';
+export type TrangThaiLichHen = 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã hủy' | 'Hết hạn' | 'QuaHan';
 export type TrangThaiDatCoc = 'Chờ xác nhận' | 'Đã tiếp nhận thành công' | 'Đã xác nhận' | 'Đã hủy';
 
 export interface ThongBao {
