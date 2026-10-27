@@ -3009,6 +3009,7 @@ async function ensureRoommatesTable() {
           MoTa TEXT,
           TienNghi TEXT,
           HinhAnh LONGTEXT,
+          VideoUrl TEXT,
           TacGiaTen VARCHAR(100),
           TacGiaSdt VARCHAR(50),
           NgayDang VARCHAR(50),
@@ -3018,6 +3019,10 @@ async function ensureRoommatesTable() {
       // Nâng cấp cột HinhAnh hiện có lên LONGTEXT để chứa trọn vẹn ảnh Base64
       try {
         await pool.query('ALTER TABLE roommates MODIFY COLUMN HinhAnh LONGTEXT');
+      } catch {}
+      // Tự động thêm cột VideoUrl vào bảng hiện có nếu chưa tồn tại
+      try {
+        await pool.query('ALTER TABLE roommates ADD COLUMN VideoUrl TEXT');
       } catch {}
     } catch (e) {
       console.warn('[DB] Bỏ qua kiểm tra bảng roommates:', e);
@@ -3137,6 +3142,7 @@ apiRouter.post('/roommates', requireAuth, async (req: Request, res: Response) =>
             newPost.MoTa,
             JSON.stringify(newPost.TienNghi),
             JSON.stringify(newPost.HinhAnh),
+            newPost.VideoUrl || null,
             user.HoTen,
             user.Sdt,
             newPost.NgayDang,
