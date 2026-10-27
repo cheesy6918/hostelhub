@@ -2867,13 +2867,13 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/articles - Chủ trọ đăng bài viết
+// POST /api/articles - Chủ trọ đăng bài viết (Lưu đồng thời TiDB & database.json)
 apiRouter.post('/articles', async (req: Request, res: Response) => {
   try {
     const { TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang } = req.body;
     const articleId = `art_${Date.now()}`;
 
-    // Xử lý ảnh an toàn: Nếu Base64 quá dài thì gán ảnh Unsplash mẫu để tránh lỗi độ dài cột
+    // Xử lý an toàn cho ảnh bìa: Nếu là Base64 quá dài (> 2000 ký tự), dùng ảnh placeholder Unsplash đẹp mắt để tránh tràn cột SQL
     let safeImage = HinhAnh || '';
     if (safeImage.startsWith('data:image') && safeImage.length > 2000) {
       safeImage = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80';
@@ -2881,36 +2881,21 @@ apiRouter.post('/articles', async (req: Request, res: Response) => {
 
     const newArticle = {
       Id: articleId,
-      TieuDe: TieuDe || 'Kinh nghiệm thuê phòng trọ sinh viên',
-      Tag: Tag || 'Mẹo tiết kiệm & Decor phòng',
-      MoTaNgan: MoTaNgan || 'Chia sẻ kinh nghiệm bổ ích cho sinh viên khi tìm phòng.',
-      NoiDung: NoiDung || 'Nội dung chi tiết bài viết...',
+      TieuDe: TieuDe || 'Chưa có tiêu đề',
+      Tag: Tag || 'Kinh nghiệm thuê phòng',
+      MoTaNgan: MoTaNgan || '',
+      NoiDung: NoiDung || '',
       TacGia: TacGia || 'Chủ trọ',
       ThoiGianDoc: ThoiGianDoc || '5 phút đọc',
-      HinhAnh: safeImage || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80',
+      HinhAnh: safeImage,
       NgayDang: NgayDang || new Date().toLocaleDateString('vi-VN'),
       TrangThai: 'Chờ duyệt',
     };
 
-    // 1. Lưu vào TiDB Cloud
+    // 1. Lưu vào TiDB Cloud (MySQL)
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS articles (
-            Id VARCHAR(100) PRIMARY KEY,
-            TieuDe VARCHAR(255) NOT NULL,
-            Tag VARCHAR(100) DEFAULT 'Kinh nghiệm thuê phòng',
-            MoTaNgan TEXT,
-            NoiDung LONGTEXT,
-            TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
-            ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
-            HinhAnh TEXT,
-            NgayDang VARCHAR(50),
-            TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
-          )
-        `);
-
         const sql = `
           INSERT INTO articles (Id, TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang, TrangThai)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2932,19 +2917,19 @@ apiRouter.post('/articles', async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Lưu đồng thời vào database.json
+    // 2. Đồng thời lưu trực tiếp vào database.json
     try {
       const db: any = readDb();
       if (!db.articles) db.articles = [];
       db.articles.unshift(newArticle);
       writeDb(db);
     } catch (fsErr) {
-      console.warn('[JSON] Lỗi ghi articles vào JSON:', fsErr);
+      console.error('[JSON] Lỗi ghi bài viết vào database.json:', fsErr);
     }
 
     res.json({
       success: true,
-      message: 'Đăng bài viết cẩm nang thành công! Bài đang ở trạng thái Chờ duyệt.',
+      message: 'Đăng bài viết cẩm nang thành công!',
       data: newArticle,
     });
   } catch (err: any) {
