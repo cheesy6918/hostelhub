@@ -24,16 +24,37 @@ export const GuideView: React.FC<GuideViewProps> = ({
   initialCategory,
   onBackToHome,
 }) => {
-  // 1. Quản lý danh sách bài viết lấy động từ CSDL qua API (Khởi tạo mặc định bằng ARTICLES_DATA)
-  const [articlesList, setArticlesList] = useState<Article[]>(ARTICLES_DATA);
+  // 1. Quản lý danh sách bài viết khởi tạo mặc định bằng ARTICLES_DATA
+  const [articlesList, setArticlesList] = useState<Article[]>(() => ARTICLES_DATA || []);
 
-  // Tải danh sách bài viết công khai từ API CSDL
+  // Tải danh sách bài viết từ API và gộp thông minh với danh sách bài mẫu mặc định
   useEffect(() => {
-    fetch('/api/articles')
+    fetch(`/api/articles?_t=${Date.now()}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setArticlesList(data.data);
+        if (data.success && Array.isArray(data.data)) {
+          const serverArticles: Article[] = data.data;
+          
+          // Ưu tiên bài mới từ server đặt lên đầu danh sách
+          const combined: Article[] = [...serverArticles];
+
+          // Gộp các bài mẫu mặc định từ ARTICLES_DATA nếu chưa tồn tại
+          (ARTICLES_DATA || []).forEach((defArticle: any) => {
+            const isExisted = combined.some(
+              (item: any) =>
+                String(item.Id ?? item.id ?? '') === String(defArticle.Id ?? defArticle.id ?? '') ||
+                (item.TieuDe && defArticle.TieuDe && item.TieuDe.trim().toLowerCase() === defArticle.TieuDe.trim().toLowerCase())
+            );
+
+            if (!isExisted) {
+              combined.push({
+                ...defArticle,
+                TrangThai: defArticle.TrangThai || 'Công khai',
+              });
+            }
+          });
+
+          setArticlesList(combined);
         }
       })
       .catch((err) => {
@@ -125,7 +146,7 @@ export const GuideView: React.FC<GuideViewProps> = ({
     );
   }
 
-  // Danh sách bài viết dạng lưới 3 cột (Blog Main Page)
+  // Danh sách bài viết dạng lưới (Blog Main Page)
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Nút Quay lại trang chủ */}

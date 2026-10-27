@@ -18,7 +18,7 @@ interface HomeLandingViewProps {
 
 export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate, onSelectRoom }) => {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
-  const [allGuides, setAllGuides] = useState<any[]>(ARTICLES_DATA);
+  const [allGuides, setAllGuides] = useState<any[]>(() => ARTICLES_DATA || []);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   
   // Phân trang: Cố định 3 trang, mỗi trang 3 mục
@@ -37,13 +37,31 @@ export const HomeLandingView: React.FC<HomeLandingViewProps> = ({ onNavigate, on
       .catch(() => { });
   }, []);
 
-  // 2. Lấy danh sách cẩm nang công khai từ API CSDL
+  // 2. Lấy danh sách cẩm nang từ API và gộp thông minh với bài mẫu
   useEffect(() => {
-    fetch('/api/articles')
+    fetch(`/api/articles?_t=${Date.now()}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setAllGuides(data.data);
+        if (data.success && Array.isArray(data.data)) {
+          const serverArticles = data.data;
+          const combined = [...serverArticles];
+
+          (ARTICLES_DATA || []).forEach((defArticle: any) => {
+            const isExisted = combined.some(
+              (item: any) =>
+                String(item.Id ?? item.id ?? '') === String(defArticle.Id ?? defArticle.id ?? '') ||
+                (item.TieuDe && defArticle.TieuDe && item.TieuDe.trim().toLowerCase() === defArticle.TieuDe.trim().toLowerCase())
+            );
+
+            if (!isExisted) {
+              combined.push({
+                ...defArticle,
+                TrangThai: defArticle.TrangThai || 'Công khai',
+              });
+            }
+          });
+
+          setAllGuides(combined);
         }
       })
       .catch((err) => {

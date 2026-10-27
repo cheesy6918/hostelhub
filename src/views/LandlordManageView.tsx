@@ -485,20 +485,37 @@ export const LandlordManageView: React.FC<LandlordManageViewProps> = ({
       if (dataInq.success) setInquiries(dataInq.data || []);
       if (dataApp.success) setAppointments(dataApp.data || []);
       if (dataDep.success) setDeposits(dataDep.data || []);
-      // Lấy danh sách cẩm nang từ API CSDL (ưu tiên bài viết thực tế)
+      // Lấy danh sách cẩm nang từ API CSDL và gộp thông minh với bài mẫu INITIAL_ARTICLES
       try {
-        const resArticles = await fetch('/api/articles', {
+        const resArticles = await fetch(`/api/articles?_t=${Date.now()}`, {
           headers: {
             'x-user-role': 'ChuTro',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
         const dataArticles = await resArticles.json();
-        if (dataArticles.success && Array.isArray(dataArticles.data) && dataArticles.data.length > 0) {
-          setArticles(dataArticles.data);
-        } else if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
-          setArticles(INITIAL_ARTICLES);
-        }
+        const serverArticles = (dataArticles && dataArticles.success && Array.isArray(dataArticles.data)) ? dataArticles.data : [];
+
+        // Đưa bài mới từ CSDL lên đầu danh sách
+        const combinedArticles = [...serverArticles];
+
+        // Gộp các bài mẫu mặc định nếu chưa tồn tại
+        (INITIAL_ARTICLES || []).forEach((defArticle: any) => {
+          const isExisted = combinedArticles.some(
+            (item: any) =>
+              String(item.Id ?? item.id ?? '') === String(defArticle.Id ?? defArticle.id ?? '') ||
+              (item.TieuDe && defArticle.TieuDe && item.TieuDe.trim().toLowerCase() === defArticle.TieuDe.trim().toLowerCase())
+          );
+
+          if (!isExisted) {
+            combinedArticles.push({
+              ...defArticle,
+              TrangThai: defArticle.TrangThai || 'Công khai',
+            });
+          }
+        });
+
+        setArticles(combinedArticles);
       } catch (artErr) {
         console.error('Lỗi tải danh sách bài viết cho Chủ trọ:', artErr);
         if (INITIAL_ARTICLES && INITIAL_ARTICLES.length > 0) {
