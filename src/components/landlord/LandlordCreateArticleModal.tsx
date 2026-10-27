@@ -13,7 +13,6 @@ const GUIDE_CATEGORIES = [
   'Kinh nghiệm thuê phòng',
   'Cảnh báo lừa đảo đặt cọc',
   'Mẹo tiết kiệm & Decor phòng',
-  'Nội quy & Hợp đồng',
 ];
 
 export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProps> = ({

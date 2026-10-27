@@ -142,86 +142,101 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
   }>({});
 
   const fetchAdminData = async () => {
-    if (!token) return;
+  if (!token) return;
+  try {
+    setLoading(true);
+    // Giữ lại phần gọi API lấy dữ liệu thống kê, user, phòng ban đầu
+    const [resStats, resUsers, resRooms] = await Promise.all([
+      fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/admin/rooms', { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    const [dataStats, dataUsers, dataRooms] = await Promise.all([
+      resStats.json(),
+      resUsers.json(),
+      resRooms.json(),
+    ]);
+    if (dataStats.success) setStats(dataStats.data);
+    if (dataUsers.success) setUsers(dataUsers.data || []);
+    if (dataRooms.success) setRooms(dataRooms.data || []);
+
+    // 1. Tải danh sách bài viết Cẩm nang (gộp bài CSDL và bài mẫu)
     try {
-      setLoading(true);
-      // Giữ lại phần gọi API lấy dữ liệu thống kê, user, phòng ban đầu
-      const [resStats, resUsers, resRooms] = await Promise.all([
-        fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/rooms', { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      const [dataStats, dataUsers, dataRooms] = await Promise.all([
-        resStats.json(),
-        resUsers.json(),
-        resRooms.json(),
-      ]);
-      if (dataStats.success) setStats(dataStats.data);
-      if (dataUsers.success) setUsers(dataUsers.data || []);
-      if (dataRooms.success) setRooms(dataRooms.data || []);
-
-      try {
-        const resArticles = await fetch('/api/articles', {
-          headers: {
-            'x-user-role': 'Admin',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        const dataArticles = await resArticles.json();
-        // Ưu tiên nạp dữ liệu từ Database TiDB
-        if (dataArticles.success && Array.isArray(dataArticles.data) && dataArticles.data.length > 0) {
-          setAdminArticles(dataArticles.data);
-        } else {
-          // Gán mặc định trạng thái 'Công khai' cho các bài viết mẫu ban đầu
-          const cleanArticles = (ARTICLES_DATA || [])
-            .filter((item: any) => item.HinhAnh && item.HinhAnh.startsWith('http'))
-            .map((item: any) => ({
-              ...item,
-              TrangThai: item.TrangThai || 'Công khai',
-            }));
-          setAdminArticles(cleanArticles);
-        }
-      } catch (err) {
-        console.error('Lỗi tải bài viết cho Admin:', err);
-        const cleanArticles = (ARTICLES_DATA || [])
-          .filter((item: any) => item.HinhAnh && item.HinhAnh.startsWith('http'))
-          .map((item: any) => ({
-            ...item,
-            TrangThai: item.TrangThai || 'Công khai',
-          }));
-        setAdminArticles(cleanArticles);
-      }
-
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }; // 👈 ĐÓNG HÀM fetchAdminData TẠI ĐÂY
-
-  // Admin duyệt bài viết -> Chuyển sang 'Công khai'
-  const handleApproveArticle = async (articleId: string | number) => {
-    try {
-      const res = await fetch(`/api/articles/${articleId}/status`, {
-        method: 'PATCH',
+      const resArticles = await fetch(`/api/articles?_t=${Date.now()}`, {
         headers: {
-          'Content-Type': 'application/json',
+          'x-user-role': 'Admin',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ TrangThai: 'Công khai' }),
+      });
+      const dataArticles = await resArticles.json();
+      const serverArticles = (dataArticles && dataArticles.success && Array.isArray(dataArticles.data)) ? dataArticles.data : [];
+
+      // Lấy bài mẫu làm gốc
+      const defaultArticles = (ARTICLES_DATA || [])
+        .filter((item: any) => item && item.HinhAnh && typeof item.HinhAnh === 'string' && item.HinhAnh.startsWith('http'))
+        .map((item: any) => ({
+          ...item,
+          TrangThai: item.TrangThai || 'Công khai',
+        }));
+
+      // Gộp bài từ máy chủ (ưu tiên bài mới tạo lên đầu)
+      const combinedArticles = [...serverArticles];
+      defaultArticles.forEach(def => {
+        if (!combinedArticles.some(a => String(a.Id) === String(def.Id))) {
+          combinedArticles.push(def);
+        }
       });
 
-      if (res.ok) {
-        setAdminArticles((prev) =>
-          prev.map((a: any) => (String(a.Id) === String(articleId) ? { ...a, TrangThai: 'Công khai' } : a))
-        );
-        setActionNotice('Đã phê duyệt và công khai bài viết cẩm nang thành công!');
-        setTimeout(() => setActionNotice(''), 4000);
+      setAdminArticles(combinedArticles);
+    } catch (err) {
+      console.error('Lỗi tải bài viết cho Admin:', err);
+    }
+
+    // 2. Tải danh sách Tin ở ghép trực tiếp từ API Backend
+    try {
+      const resRoommates = await fetch(`/api/roommates?_t=${Date.now()}`, {
+        headers: {
+          'x-user-role': 'Admin',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const dataRoommates = await resRoommates.json();
+      if (dataRoommates && dataRoommates.success && Array.isArray(dataRoommates.data)) {
+        setRoommatePosts(dataRoommates.data);
       }
     } catch (err) {
-      console.error('Lỗi duyệt bài viết:', err);
+      console.error('Lỗi tải tin ở ghép cho Admin:', err);
     }
-  };
+  } catch {
+    // ignore
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Admin duyệt bài viết -> Chuyển sang 'Công khai'
+const handleApproveArticle = async (articleId: string | number) => {
+  try {
+    const res = await fetch(`/api/articles/${articleId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ TrangThai: 'Công khai' }),
+    });
+
+    if (res.ok) {
+      setAdminArticles((prev) =>
+        prev.map((a: any) => (String(a.Id) === String(articleId) ? { ...a, TrangThai: 'Công khai' } : a))
+      );
+      setActionNotice('Đã phê duyệt và công khai bài viết cẩm nang thành công!');
+      setTimeout(() => setActionNotice(''), 4000);
+    }
+  } catch (err) {
+    console.error('Lỗi duyệt bài viết:', err);
+  }
+};
 
   // Admin từ chối bài viết -> Chuyển sang 'Từ chối'
   const handleRejectArticle = async (articleId: string | number) => {
@@ -568,42 +583,45 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     }
   };
 
-  // Admin duyệt bài đăng ở ghép -> Cập nhật trực tiếp vào mockRoommates & lưu localStorage
-  const handleApproveRoommate = (id: string) => {
-    // 1. Cập nhật trực tiếp vào mảng dùng chung để trang Sinh viên nhận được ngay
-    const target = mockRoommates.find((item) => item.Id === id);
-    if (target) {
-      target.TrangThaiDuyet = 'Đã duyệt';
+  // Admin duyệt bài đăng ở ghép -> Gọi API máy chủ
+  const handleApproveRoommate = async (id: string) => {
+    try {
+      const res = await fetch(`/api/roommates/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ TrangThaiDuyet: 'Đã duyệt' }),
+      });
+      if (res.ok) {
+        setRoommatePosts((prev) =>
+          prev.map((item) => (item.Id === id ? { ...item, TrangThaiDuyet: 'Đã duyệt' } : item))
+        );
+        setActionNotice('Đã phê duyệt tin tìm bạn ở ghép thành công!');
+        setTimeout(() => setActionNotice(''), 3500);
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ');
     }
-
-    // 2. Cập nhật state hiển thị của Admin
-    setRoommatePosts([...mockRoommates]);
-
-    // 3. Lưu lại vào localStorage để không bị mất khi đăng xuất hoặc F5
-    localStorage.setItem('hostelhub_roommates', JSON.stringify(mockRoommates));
-
-    setActionNotice('Đã phê duyệt tin tìm bạn ở ghép thành công!');
-    setTimeout(() => setActionNotice(''), 3500);
   };
 
-  // Admin từ chối hoặc gỡ bài đăng ở ghép
-  const handleDeleteRoommate = (id: string, title: string) => {
+  // Admin từ chối hoặc gỡ bài đăng ở ghép -> Gọi API máy chủ
+  const handleDeleteRoommate = async (id: string, title: string) => {
     if (!confirm(`[Quản trị viên] Bạn có chắc muốn gỡ bỏ tin ở ghép "${title}" khỏi hệ thống?`)) return;
-
-    // 1. Xóa trực tiếp trong mockRoommates
-    const idx = mockRoommates.findIndex((item) => item.Id === id);
-    if (idx !== -1) {
-      mockRoommates.splice(idx, 1);
+    try {
+      const res = await fetch(`/api/roommates/${id}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (res.ok) {
+        setRoommatePosts((prev) => prev.filter((item) => item.Id !== id));
+        setActionNotice(`Đã gỡ bỏ bài đăng "${title}" thành công.`);
+        setTimeout(() => setActionNotice(''), 3500);
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ');
     }
-
-    // 2. Cập nhật state Admin
-    setRoommatePosts([...mockRoommates]);
-
-    // 3. Cập nhật localStorage
-    localStorage.setItem('hostelhub_roommates', JSON.stringify(mockRoommates));
-
-    setActionNotice(`Đã gỡ bỏ bài đăng "${title}" thành công.`);
-    setTimeout(() => setActionNotice(''), 3500);
   };
 
   // Khóa / Mở khóa tài khoản

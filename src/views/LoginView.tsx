@@ -223,7 +223,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
               onClick={() => handleQuickLogin('SinhVien')}
               className="px-2.5 py-2 text-xs font-medium bg-white hover:bg-blue-600 hover:text-white text-blue-800 rounded-xl border border-blue-200 shadow-xs transition-all flex flex-col items-center gap-0.5 group cursor-pointer"
             >
-              <span className="font-semibold">🎓 Sinh viên</span>
+              <span className="font-semibold">Sinh viên</span>
               <span className="text-[10px] text-slate-500 group-hover:text-blue-100 font-mono">123456</span>
             </button>
             <button
@@ -231,7 +231,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
               onClick={() => handleQuickLogin('ChuTro')}
               className="px-2.5 py-2 text-xs font-medium bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 rounded-xl border border-emerald-200 shadow-xs transition-all flex flex-col items-center gap-0.5 group cursor-pointer"
             >
-              <span className="font-semibold">🏢 Chủ trọ</span>
+              <span className="font-semibold">Chủ trọ</span>
               <span className="text-[10px] text-slate-500 group-hover:text-emerald-100 font-mono">123456</span>
             </button>
             <button
@@ -239,7 +239,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate }) => {
               onClick={() => handleQuickLogin('Admin')}
               className="px-2.5 py-2 text-xs font-medium bg-white hover:bg-purple-600 hover:text-white text-purple-800 rounded-xl border border-purple-200 shadow-xs transition-all flex flex-col items-center gap-0.5 group cursor-pointer"
             >
-              <span className="font-semibold">⚡ Admin</span>
+              <span className="font-semibold">Admin</span>
               <span className="text-[10px] text-slate-500 group-hover:text-purple-100 font-mono">admin123</span>
             </button>
           </div>
