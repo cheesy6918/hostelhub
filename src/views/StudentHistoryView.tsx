@@ -1239,7 +1239,7 @@ export const StudentHistoryView: React.FC<StudentHistoryViewProps> = ({ onViewRo
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>{topupLoading ? 'Đang nạp...' : '+ Nạp tiền'}</span>
+                <span>{topupLoading ? 'Đang nạp...' : 'Nạp tiền'}</span>
               </button>
             </div>
           </div>

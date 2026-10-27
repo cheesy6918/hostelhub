@@ -281,6 +281,114 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+// Bộ nhớ tạm lưu mã OTP (hết hạn sau 5 phút)
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
+
+// POST /api/auth/forgot-password: Tạo và gửi mã OTP
+apiRouter.post('/auth/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, message: 'Vui lòng cung cấp địa chỉ Email.' });
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Kiểm tra tài khoản có tồn tại không
+    let user = await getUserByEmailFromDb(cleanEmail);
+    if (!user) {
+      const db = readDb();
+      user = (db.users || []).find(u => u.Email.toLowerCase() === cleanEmail) || null;
+    }
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Email này chưa được đăng ký trong hệ thống.' });
+      return;
+    }
+
+    // 2. Tạo mã OTP ngẫu nhiên 6 chữ số
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otpStore.set(cleanEmail, {
+      otp,
+      expiresAt: Date.now() + 5 * 60 * 1000, // Hiệu lực 5 phút
+    });
+
+    res.json({
+      success: true,
+      message: 'Mã xác thực OTP đã được tạo thành công!',
+      otp, // Trả về OTP để hiển thị tiện lợi cho người dùng thử nghiệm
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Lỗi xử lý yêu cầu' });
+  }
+});
+
+// POST /api/auth/reset-password: Xác thực OTP và đổi mật khẩu mới
+apiRouter.post('/auth/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      res.status(400).json({ success: false, message: 'Vui lòng điền đầy đủ thông tin.' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ success: false, message: 'Mật khẩu mới phải có tối thiểu 6 ký tự.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const record = otpStore.get(cleanEmail);
+
+    if (!record || record.otp !== otp.trim()) {
+      res.status(400).json({ success: false, message: 'Mã OTP không chính xác hoặc đã hết hạn.' });
+      return;
+    }
+
+    if (Date.now() > record.expiresAt) {
+      otpStore.delete(cleanEmail);
+      res.status(400).json({ success: false, message: 'Mã OTP đã hết thời hạn 5 phút. Vui lòng lấy mã mới.' });
+      return;
+    }
+
+    // 1. Tìm tài khoản
+    let user = await getUserByEmailFromDb(cleanEmail);
+    if (!user) {
+      const db = readDb();
+      user = (db.users || []).find(u => u.Email.toLowerCase() === cleanEmail) || null;
+    }
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
+      return;
+    }
+
+    // 2. Mã hóa mật khẩu mới
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPass = bcrypt.hashSync(newPassword, salt);
+
+    // 3. Cập nhật vào TiDB Cloud
+    await updateUserInDb(user.Id, { MatKhau: hashedPass });
+
+    // 4. Đồng bộ lại database.json
+    try {
+      const db = readDb();
+      const localU = (db.users || []).find(u => u.Id === user!.Id);
+      if (localU) {
+        localU.MatKhau = hashedPass;
+        writeDb(db);
+      }
+    } catch {}
+
+    otpStore.delete(cleanEmail);
+    res.json({
+      success: true,
+      message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới ngay bây giờ.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Lỗi đặt lại mật khẩu' });
+  }
+});
+
 // GET /api/auth/me
 apiRouter.get('/auth/me', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
