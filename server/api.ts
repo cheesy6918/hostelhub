@@ -850,8 +850,12 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
     // TieuDe, DiaChiChiTiet, QuanHuyen, LoaiPhong, DienTich, GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, TrangThai
     const isConn = await isMySqlConnected();
     if (isConn) {
+      // Đảm bảo bảng rooms luôn có cột VideoUrl
       try {
-        // Truyền cả IdChuTro và ChuTroId để đảm bảo không bị lỗi NOT NULL
+        await pool.query('ALTER TABLE rooms ADD COLUMN VideoUrl TEXT');
+      } catch {}
+
+      try {
         await pool.execute(
           `INSERT INTO rooms (
             Id, TieuDe, DiaChi, QuanHuyen, LoaiPhong, DienTich, 
@@ -871,8 +875,8 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             gia_nuoc,
             tien_ich,
             hinh_anh,
-            landlordId, // IdChuTro
-            landlordId, // ChuTroId
+            landlordId,
+            landlordId,
             'ChoDuyet',
             description,
             houseRules,
@@ -884,7 +888,7 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
           ]
         );
       } catch (sqlErr: any) {
-        console.warn('[MySQL] INSERT có VideoUrl lỗi, thử câu lệnh cơ bản:', sqlErr?.message);
+        console.warn('[MySQL] Lệnh INSERT rooms có VideoUrl gặp lỗi, thử câu lệnh cơ bản:', sqlErr?.message);
         try {
           await pool.execute(
             `INSERT INTO rooms (
@@ -905,8 +909,8 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
               gia_nuoc,
               tien_ich,
               hinh_anh,
-              landlordId, // IdChuTro
-              landlordId, // ChuTroId
+              landlordId,
+              landlordId,
               'ChoDuyet',
               description,
               houseRules,
@@ -917,7 +921,7 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             ]
           );
         } catch (fallbackErr: any) {
-          console.error('[MySQL] Lỗi nghiêm trọng khi INSERT phòng:', fallbackErr);
+          console.error('[MySQL] Lỗi nghiêm trọng khi INSERT rooms:', fallbackErr);
           throw fallbackErr;
         }
       }
