@@ -2788,11 +2788,15 @@ async function ensureArticlesTable() {
           NoiDung LONGTEXT,
           TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
           ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
-          HinhAnh TEXT,
+          HinhAnh LONGTEXT,
           NgayDang VARCHAR(50),
           TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
         )
       `);
+      // Đảm bảo nâng cấp cột HinhAnh lên LONGTEXT nếu bảng đã tạo từ trước
+      try {
+        await pool.query('ALTER TABLE articles MODIFY COLUMN HinhAnh LONGTEXT');
+      } catch {}
     } catch (e) {
       console.warn('[DB] Bỏ qua kiểm tra bảng articles:', e);
     }
@@ -2805,12 +2809,11 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-
     await ensureArticlesTable();
-    const userRole = req.headers['x-user-role'];
+
     let articles: any[] = [];
 
-    // 1. Lấy từ TiDB Cloud trước
+    // 1. Lấy trực tiếp toàn bộ bài viết từ TiDB Cloud
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
@@ -2823,27 +2826,25 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Lấy thêm từ database.json nếu TiDB chưa có bản ghi đó
-    const db: any = readDb();
-    const localArticles = Array.isArray(db.articles) ? db.articles : [];
-    localArticles.forEach((loc: any) => {
-      if (!articles.some((a) => String(a.Id) === String(loc.Id))) {
-        articles.push(loc);
-      }
-    });
+    // 2. Lấy thêm từ database.json nếu có bài chưa đồng bộ
+    try {
+      const db: any = readDb();
+      const localArticles = Array.isArray(db.articles) ? db.articles : [];
+      localArticles.forEach((loc: any) => {
+        if (!articles.some((a) => String(a.Id) === String(loc.Id))) {
+          articles.push(loc);
+        }
+      });
+    } catch {}
 
-    // 3. Phân quyền hiển thị: Admin và Chủ trọ được xem tất cả (kể cả Chờ duyệt)
-    if (userRole !== 'Admin' && userRole !== 'ChuTro') {
-      articles = articles.filter((a: any) => a.TrangThai === 'Công khai' || a.TrangThai === 'Đã duyệt');
-    }
-
-    // Sắp xếp bài mới nhất lên đầu
+    // Sắp xếp bài mới nhất lên đầu (Id giảm dần)
     articles.sort((a: any, b: any) => {
       const idA = String(a.Id || '').replace(/\D/g, '');
       const idB = String(b.Id || '').replace(/\D/g, '');
       return Number(idB) - Number(idA);
     });
 
+    // Trả về toàn bộ danh sách, để frontend tự lọc theo vai trò (tránh backend lọc mất bài Chờ duyệt của Admin)
     res.json({
       success: true,
       count: articles.length,
@@ -2864,11 +2865,7 @@ apiRouter.post('/articles', async (req: Request, res: Response) => {
     const { TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang } = req.body;
     const articleId = `art_${Date.now()}`;
 
-    // Xử lý an toàn cho ảnh bìa: Nếu là Base64 quá dài (> 2000 ký tự), dùng ảnh placeholder đẹp mắt
-    let safeImage = HinhAnh || '';
-    if (safeImage.startsWith('data:image') && safeImage.length > 2000) {
-      safeImage = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80';
-    }
+    const safeImage = HinhAnh || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80';
 
     const newArticle = {
       Id: articleId,
@@ -3056,11 +3053,6 @@ apiRouter.get('/roommates', async (req: Request, res: Response) => {
         posts.push(loc);
       }
     });
-
-    // 3. Phân quyền: Admin xem toàn bộ, người dùng thường chỉ xem bài 'Đã duyệt'
-    if (userRole !== 'Admin') {
-      posts = posts.filter((p: any) => p.TrangThaiDuyet === 'Đã duyệt' || !p.TrangThaiDuyet);
-    }
 
     res.json({ success: true, count: posts.length, data: posts });
   } catch (err: any) {

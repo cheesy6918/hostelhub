@@ -160,7 +160,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     if (dataUsers.success) setUsers(dataUsers.data || []);
     if (dataRooms.success) setRooms(dataRooms.data || []);
 
-    // 1. Tải danh sách Cẩm nang (Ưu tiên bài mới từ CSDL + Gộp bài mẫu ARTICLES_DATA)
+    // 1. Tải danh sách Cẩm nang (Ưu tiên bài mới từ CSDL + Gộp bài mẫu ARTICLES_DATA không trùng lặp)
     try {
       const resArticles = await fetch(`/api/articles?_t=${Date.now()}`, {
         headers: {
@@ -178,10 +178,29 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
           TrangThai: item.TrangThai || 'Công khai',
         }));
 
-      // Gộp: bài mới trên CSDL đứng đầu, bài mẫu đứng sau nếu không trùng ID
-      const combinedArticles = [...serverArticles];
+      // Đưa bài mới từ CSDL lên đầu, chuẩn hóa trạng thái để so khớp chính xác
+      const normalizedServer = serverArticles.map((a: any) => {
+        const rawStatus = (a.TrangThai || '').trim().toLowerCase();
+        let finalStatus = a.TrangThai || 'Chờ duyệt';
+        if (rawStatus === 'choduyet' || rawStatus === 'chờ duyệt' || !rawStatus) {
+          finalStatus = 'Chờ duyệt';
+        } else if (rawStatus === 'congkhai' || rawStatus === 'công khai' || rawStatus === 'daduyet' || rawStatus === 'đã duyệt') {
+          finalStatus = 'Công khai';
+        } else if (rawStatus === 'tuchoi' || rawStatus === 'từ chối') {
+          finalStatus = 'Từ chối';
+        }
+        return {
+          ...a,
+          TrangThai: finalStatus,
+        };
+      });
+
+      const combinedArticles = [...normalizedServer];
       defaultArticles.forEach(def => {
-        if (!combinedArticles.some(a => String(a.Id) === String(def.Id))) {
+        const alreadyExists = combinedArticles.some(
+          a => String(a.Id) === String(def.Id) || (a.TieuDe && a.TieuDe.trim().toLowerCase() === def.TieuDe.trim().toLowerCase())
+        );
+        if (!alreadyExists) {
           combinedArticles.push(def);
         }
       });
@@ -2769,9 +2788,10 @@ const handleApproveArticle = async (articleId: string | number) => {
                 {/* Danh sách bài viết cần duyệt */}
                 {(() => {
                   const displayedArticles = adminArticles.filter((item) => {
-                    const isPending = item.TrangThai === 'Chờ duyệt' || !item.TrangThai;
+                    const statusStr = (item.TrangThai || '').trim().toLowerCase();
+                    const isPending = statusStr === 'chờ duyệt' || statusStr === 'choduyet' || !statusStr;
                     if (articleStatusFilter === 'pending') return isPending;
-                    if (articleStatusFilter === 'approved') return item.TrangThai === 'Công khai';
+                    if (articleStatusFilter === 'approved') return statusStr === 'công khai' || statusStr === 'congkhai' || statusStr === 'đã duyệt';
                     return true;
                   });
 

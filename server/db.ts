@@ -3007,11 +3007,13 @@ export async function getArticlesFromDb(userRole?: string): Promise<any[]> {
           NoiDung LONGTEXT,
           TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
           ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
-          HinhAnh TEXT,
+          HinhAnh LONGTEXT,
           NgayDang VARCHAR(50),
           TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
         )
       `);
+      try { await pool.query('ALTER TABLE articles MODIFY COLUMN HinhAnh LONGTEXT'); } catch {}
+
       const [rows]: any = await pool.query('SELECT * FROM articles ORDER BY Id DESC');
       if (Array.isArray(rows)) {
         if (userRole === 'Admin' || userRole === 'ChuTro') return rows;
@@ -3047,13 +3049,17 @@ export async function getRoommatesFromDb(userRole?: string): Promise<any[]> {
           DoiTuongGhep VARCHAR(50) DEFAULT 'Tất cả',
           MoTa TEXT,
           TienNghi TEXT,
-          HinhAnh TEXT,
+          HinhAnh LONGTEXT,
+          VideoUrl TEXT,
           TacGiaTen VARCHAR(100),
           TacGiaSdt VARCHAR(50),
           NgayDang VARCHAR(50),
           TrangThaiDuyet VARCHAR(50) DEFAULT 'Chờ duyệt'
         )
       `);
+      try { await pool.query('ALTER TABLE roommates MODIFY COLUMN HinhAnh LONGTEXT'); } catch {}
+      try { await pool.query('ALTER TABLE roommates ADD COLUMN VideoUrl TEXT'); } catch {}
+
       const [rows]: any = await pool.query('SELECT * FROM roommates ORDER BY Id DESC');
       if (Array.isArray(rows)) {
         let list = rows.map((r: any) => ({
@@ -3062,6 +3068,7 @@ export async function getRoommatesFromDb(userRole?: string): Promise<any[]> {
           DienTich: Number(r.DienTich) || 20,
           TienNghi: safeJsonParse<string[]>(r.TienNghi, []),
           HinhAnh: safeJsonParse<string[]>(r.HinhAnh, []),
+          VideoUrl: r.VideoUrl || undefined,
           TacGia: {
             Ten: r.TacGiaTen || 'Sinh viên',
             Sdt: r.TacGiaSdt || '',
@@ -3085,7 +3092,3 @@ export async function getRoommatesFromDb(userRole?: string): Promise<any[]> {
   }
   return list;
 }
-
-
-
-

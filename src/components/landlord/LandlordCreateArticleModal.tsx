@@ -36,19 +36,54 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
 
   if (!isOpen) return null;
 
-  // Xử lý khi chọn ảnh từ thư mục máy tính
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Hàm nén ảnh máy tính trước khi chuyển sang Base64 để tránh quá tải payload Vercel
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1000;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  // Xử lý khi chọn ảnh từ thư mục máy tính có nén ảnh
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Vui lòng chọn ảnh có dung lượng dưới 5MB!');
-        return;
+      try {
+        const compressedBase64 = await compressImage(file);
+        setHinhAnh(compressedBase64);
+      } catch (err) {
+        console.error('Lỗi nén ảnh cẩm nang:', err);
+        alert('Không thể đọc file ảnh này, vui lòng thử lại.');
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setHinhAnh(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -92,7 +127,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
         TacGia: user?.HoTen || 'Chủ trọ HostelHub',
         ThoiGianDoc: '4 phút đọc',
         NgayDang: new Date().toLocaleDateString('vi-VN'),
-        TrangThai: 'Chờ duyệt', // 👈 Bổ sung rõ ràng để Admin lọc chính xác
+        TrangThai: 'Chờ duyệt',
         HinhAnh:
           hinhAnh.trim() ||
           'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80',
@@ -102,7 +137,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': user?.VaiTro || 'ChuTro', // 👈 Bổ sung role xác định chủ trọ đăng bài
+          'x-user-role': 'ChuTro',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(newArticle),
