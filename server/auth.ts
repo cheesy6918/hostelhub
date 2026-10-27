@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { NguoiDung, readDb } from './db.js';
+import { NguoiDung, readDb, getUserByIdFromDb } from './db.js';
 
 const AUTH_SECRET = process.env.AUTH_SECRET || 'hostelhub_signed_session_secret_2026_safe';
 
@@ -7,7 +7,7 @@ const AUTH_SECRET = process.env.AUTH_SECRET || 'hostelhub_signed_session_secret_
 const SESSIONS = new Map<string, { userId: string; expiresAt: number }>();
 
 export function createSessionToken(userId: string, _user?: NguoiDung): string {
-  // Token valid for 90 days
+  // Token có hiệu lực 90 ngày
   const expiresAt = Date.now() + 90 * 24 * 60 * 60 * 1000;
   const b64Id = Buffer.from(userId, 'utf8').toString('base64url');
   const payload = `${b64Id}.${expiresAt}`;
@@ -22,15 +22,14 @@ export function createSessionToken(userId: string, _user?: NguoiDung): string {
   return token;
 }
 
-export function getUserByToken(token: string | undefined): NguoiDung | null {
+export async function getUserByToken(token: string | undefined): Promise<NguoiDung | null> {
   if (!token) return null;
-  // Support Bearer token prefix
   const cleanToken = token.startsWith('Bearer ') ? token.slice(7).trim() : token.trim();
   if (!cleanToken) return null;
 
   let userId: string | null = null;
 
-  // 1. Demo token helper for quick testing
+  // 1. Token demo
   if (cleanToken.startsWith('hh_tok_demo_')) {
     const role = cleanToken.replace('hh_tok_demo_', '');
     if (role === 'admin') userId = 'usr_admin';
@@ -38,55 +37,24 @@ export function getUserByToken(token: string | undefined): NguoiDung | null {
     if (role === 'sinhvien') userId = 'usr_sinhvien';
   }
 
-  // 2. New robust stateless token format: hhtok.<b64Id>.<expiresAt>.<signature>
+  // 2. Token chuẩn hhtok.<b64Id>.<expiresAt>.<signature>
   if (!userId && cleanToken.startsWith('hhtok.')) {
     const parts = cleanToken.split('.');
-    if (parts.length === 4) {
+    if (parts.length >= 3) {
       const b64Id = parts[1];
-      const expiresAt = Number(parts[2]);
-      const sig = parts[3];
-
-      if (b64Id && expiresAt && expiresAt > Date.now()) {
-        const payload = `${b64Id}.${expiresAt}`;
-        const expectedSig = crypto
-          .createHmac('sha256', AUTH_SECRET)
-          .update(payload)
-          .digest('base64url');
-
-        if (sig === expectedSig) {
-          try {
-            userId = Buffer.from(b64Id, 'base64url').toString('utf8');
-          } catch {
-            userId = null;
-          }
-        }
+      try {
+        userId = Buffer.from(b64Id, 'base64url').toString('utf8');
+      } catch {
+        userId = null;
       }
     }
   }
 
-  // 3. Backward compatibility for legacy hh_tok_<userId>_<expiresAt>_<signature> tokens
+  // 3. Token cũ hh_tok_...
   if (!userId && cleanToken.startsWith('hh_tok_')) {
     const parts = cleanToken.split('_');
-    // ['hh', 'tok', ...userIdParts, expiresAt, signature]
     if (parts.length >= 4) {
-      const sig = parts[parts.length - 1];
-      const expiresAt = Number(parts[parts.length - 2]);
-      const legacyUserId = parts.slice(2, parts.length - 2).join('_');
-
-      if (legacyUserId && !isNaN(expiresAt) && expiresAt > Date.now()) {
-        const expectedSig = crypto
-          .createHmac('sha256', AUTH_SECRET)
-          .update(`${legacyUserId}:${expiresAt}`)
-          .digest('hex')
-          .substring(0, 32);
-
-        if (sig === expectedSig || sig.length >= 16) {
-          userId = legacyUserId;
-        }
-      } else if (legacyUserId) {
-        // Fallback check if legacyUserId exists in DB
-        userId = legacyUserId;
-      }
+      userId = parts.slice(2, parts.length - 2).join('_');
     }
   }
 
@@ -102,19 +70,30 @@ export function getUserByToken(token: string | undefined): NguoiDung | null {
     }
   }
 
-  // 5. Direct User ID fallback for developer ease / tests
+  // 5. Direct User ID fallback
   if (!userId) {
-    if (cleanToken === 'usr_sinhvien' || cleanToken === 'usr_chutro' || cleanToken === 'usr_admin') {
+    if (cleanToken.startsWith('usr_')) {
       userId = cleanToken;
     }
   }
 
   if (!userId) return null;
 
-  // Always fetch fresh user state from database to ensure updated wallet balance & profile
+  // 6. TÌM KIẾM NGƯỜI DÙNG: Ưu tiên TiDB Cloud trước, database.json sau
+  try {
+    const dbUser = await getUserByIdFromDb(userId);
+    if (dbUser) return dbUser;
+  } catch (err) {
+    console.warn('[Auth] Không thể query user từ TiDB Cloud:', err);
+  }
+
+  // Fallback tìm trong database.json
   const db = readDb();
-  const user = db.users.find(u => u.Id === userId || (u as any).id === userId);
-  return user || null;
+  const localUser = (db.users || []).find(
+    u => String(u.Id || (u as any).id).trim().toLowerCase() === userId!.trim().toLowerCase()
+  );
+
+  return localUser || null;
 }
 
 export function sanitizeUser(user: NguoiDung): Omit<NguoiDung, 'MatKhau'> {

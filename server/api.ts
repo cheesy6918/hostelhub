@@ -94,9 +94,9 @@ async function addNotification(
 }
 
 // Middleware to extract authenticated user
-export function requireAuth(req: Request, res: Response, next: () => void) {
+export async function requireAuth(req: Request, res: Response, next: () => void) {
   const authHeader = req.headers.authorization;
-  const user = getUserByToken(authHeader);
+  const user = await getUserByToken(authHeader);
   if (!user) {
     res.status(401).json({ success: false, message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.' });
     return;
@@ -392,15 +392,12 @@ apiRouter.post('/auth/reset-password', async (req: Request, res: Response) => {
 // GET /api/auth/me
 apiRouter.get('/auth/me', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
-  const user = getUserByToken(authHeader);
-
+  const user = await getUserByToken(authHeader);
   if (!user) {
     res.status(401).json({ success: false, message: 'Chưa đăng nhập hoặc phiên hết hạn.' });
     return;
   }
-
   const latestUser = await getUserByIdFromDb(user.Id);
-
   res.json({
     success: true,
     user: sanitizeUser(latestUser || user),
@@ -2025,7 +2022,7 @@ apiRouter.get('/rooms/:roomId/can-review', async (req: Request, res: Response) =
   let effectiveUserId = queryUserId;
   if (!effectiveUserId) {
     const authHeader = req.headers.authorization;
-    const authUser = getUserByToken(authHeader);
+    const authUser = await getUserByToken(authHeader);
     if (authUser) {
       effectiveUserId = authUser.Id;
     }
@@ -2775,10 +2772,8 @@ apiRouter.delete('/favorites', requireAuth, (req: Request, res: Response) => {
 apiRouter.post('/chat', async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
-    const authUser = getUserByToken(authHeader);
-
+    const authUser = await getUserByToken(authHeader); //  ĐÃ THÊM AWAIT
     const { messages, userRole, userName } = req.body;
-
     const effectiveRole = authUser ? authUser.VaiTro : (userRole || null);
     const effectiveName = authUser ? authUser.HoTen : (userName || 'Khách');
 
