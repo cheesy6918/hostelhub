@@ -3058,6 +3058,7 @@ apiRouter.get('/roommates', async (req: Request, res: Response) => {
             MoTa: r.MoTa,
             TienNghi: typeof r.TienNghi === 'string' ? JSON.parse(r.TienNghi || '[]') : r.TienNghi,
             HinhAnh: typeof r.HinhAnh === 'string' ? JSON.parse(r.HinhAnh || '[]') : r.HinhAnh,
+            VideoUrl: r.VideoUrl || undefined, // 👈 Thêm dòng này để trả link video về cho giao diện
             TacGia: {
               Ten: r.TacGiaTen || 'Sinh viên',
               Sdt: r.TacGiaSdt || '',
@@ -3129,8 +3130,11 @@ apiRouter.post('/roommates', requireAuth, async (req: Request, res: Response) =>
     if (isConn) {
       try {
         await pool.query(
-          `INSERT INTO roommates (Id, TieuDe, QuanHuyen, DiaChi, GiaThue, DienTich, DoiTuongGhep, MoTa, TienNghi, HinhAnh, TacGiaTen, TacGiaSdt, NgayDang, TrangThaiDuyet)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO roommates (
+            Id, TieuDe, QuanHuyen, DiaChi, GiaThue, DienTich, 
+            DoiTuongGhep, MoTa, TienNghi, HinhAnh, VideoUrl, 
+            TacGiaTen, TacGiaSdt, NgayDang, TrangThaiDuyet
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newPost.Id,
             newPost.TieuDe,
