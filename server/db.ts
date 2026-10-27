@@ -1160,6 +1160,7 @@ export function parseRoomRow(row: any): PhongTro {
     TienIch: safeJsonParse<string[]>(row.TienIch !== undefined ? row.TienIch : row.tien_ich, []),
     HinhAnh: safeJsonParse<string[]>(row.HinhAnh !== undefined ? row.HinhAnh : row.hinh_anh, []),
     DanhGia: safeJsonParse<ReviewItem[]>(row.DanhGia !== undefined ? row.DanhGia : row.danh_gia, []),
+    VideoUrl: row.VideoUrl || row.video_url || row.videoUrl || undefined, // Đảm bảo trả VideoUrl ra ngoài cho Admin
   };
 }
 

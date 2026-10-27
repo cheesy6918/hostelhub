@@ -992,13 +992,23 @@ apiRouter.put('/rooms/:id', requireAuth, async (req: Request, res: Response) => 
       return;
     }
 
+    // Lấy chuẩn xác link video dù client gửi key là VideoUrl, videoUrl hay video_url
+    const rawVideo = req.body.VideoUrl !== undefined 
+      ? req.body.VideoUrl 
+      : (req.body.videoUrl !== undefined ? req.body.videoUrl : req.body.video_url);
+
     // Preserve essential identity properties while updating editable ones
     const updatedData: Partial<PhongTro> = {
       ...req.body,
       Id: existingRoom.Id,
       IdChuTro: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
       ChuTroId: existingRoom.IdChuTro || existingRoom.ChuTroId || user.Id,
+      VideoUrl: rawVideo ? String(rawVideo).trim() : null,
     };
+
+    // Xóa các key thừa để tránh lỗi SQL
+    delete (updatedData as any).videoUrl;
+    delete (updatedData as any).video_url;
 
     const updated = await updateRoomInDb(roomId, updatedData);
 
