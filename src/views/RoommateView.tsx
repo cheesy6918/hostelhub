@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   MapPin, 
   ChevronRight, 
@@ -12,7 +12,8 @@ import {
   X,
   Clock,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { mockRoommates, TinOGhep } from '../utils/roommatesData';
@@ -51,10 +52,18 @@ const AREA_RANGES = [
 export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
   const { user } = useAuth();
 
-  // Đọc danh sách mới nhất đã được Admin duyệt từ localStorage (nếu có)
-  const savedRoommates = localStorage.getItem('hostelhub_roommates');
-  const allPosts: TinOGhep[] = savedRoommates ? JSON.parse(savedRoommates) : mockRoommates;
+  // State lưu danh sách bài đăng đồng bộ từ CSDL máy chủ
+  const [allPosts, setAllPosts] = useState<TinOGhep[]>(() => {
+    const saved = localStorage.getItem('hostelhub_roommates');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return mockRoommates || [];
+  });
 
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<TinOGhep | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Tất cả');
@@ -64,28 +73,42 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 4;
 
-  // Modal Đăng tin & Toast thông báo
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' } | null>(null);
-
-  // Form đăng tin mới
-  const [formData, setFormData] = useState({
-    title: '',
-    district: 'Cầu Giấy',
-    address: '',
-    price: '',
-    area: '',
-    gender: 'Tất cả' as 'Nam' | 'Nữ' | 'Tất cả',
-    description: '',
-    phone: '',
-    zalo: '',
-    imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
-  });
 
   const showToast = (message: string, type: 'success' | 'warning') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  // Tải danh sách bài ở ghép đã được duyệt từ máy chủ Backend TiDB Cloud
+  const fetchApprovedRoommates = async () => {
+    try {
+      setLoadingPosts(true);
+      const res = await fetch(`/api/roommates?_t=${Date.now()}`);
+      const data = await res.json();
+      
+      const serverPosts: TinOGhep[] = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+
+      // Gộp bài từ máy chủ với bài mẫu mockRoommates (ưu tiên bài máy chủ)
+      const combined = [...serverPosts];
+      (mockRoommates || []).forEach(mock => {
+        if (!combined.some(p => String(p.Id) === String(mock.Id))) {
+          combined.push(mock);
+        }
+      });
+
+      setAllPosts(combined);
+      localStorage.setItem('hostelhub_roommates', JSON.stringify(combined));
+    } catch (err) {
+      console.warn('Lỗi tải bài ở ghép từ máy chủ, dùng bài lưu tạm:', err);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApprovedRoommates();
+  }, []);
 
   const handleOpenCreateModal = () => {
     if (!user) {
@@ -95,38 +118,11 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
       }, 1200);
       return;
     }
-    // Mở trang tạo bài riêng
     setIsCreatingPost(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmitPost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title || !formData.price || !formData.area || !formData.address) {
-      showToast('Vui lòng điền đầy đủ các thông tin cơ bản!', 'warning');
-      return;
-    }
-
-    // Đóng modal & hiển thị trạng thái chờ duyệt
-    setIsModalOpen(false);
-    showToast('Tin đăng của bạn đã được gửi thành công và đang chờ ban quản trị duyệt!', 'success');
-
-    // Reset form
-    setFormData({
-      title: '',
-      district: 'Cầu Giấy',
-      address: '',
-      price: '',
-      area: '',
-      gender: 'Tất cả',
-      description: '',
-      phone: '',
-      zalo: '',
-      imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80'
-    });
-  };
-
-  // Nếu người dùng bấm đăng tin -> Hiển thị trang riêng RoommateCreatePostView
+  // Trang tạo bài đăng
   if (isCreatingPost) {
     return (
       <RoommateCreatePostView
@@ -136,6 +132,7 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
         }}
         onSuccess={() => {
           setIsCreatingPost(false);
+          fetchApprovedRoommates();
           showToast('Tin đăng tìm ở ghép của bạn đã được gửi thành công và đang chờ ban quản trị duyệt!', 'success');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -143,12 +140,12 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
     );
   }
   
-  // Xem chi tiết bài viết
+  // Trang chi tiết bài đăng
   if (selectedPost) {
     return (
       <RoommateDetailView
         post={selectedPost}
-        allPosts={mockRoommates}
+        allPosts={allPosts}
         onBack={() => {
           setSelectedPost(null);
           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -166,7 +163,6 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
     );
   }
 
-  // Logic sắp xếp bài mới
   const getRecencyScore = (timeStr: string) => {
     if (!timeStr) return 99;
     const lower = timeStr.toLowerCase();
@@ -178,8 +174,8 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
     return 10;
   };
 
+  // Lọc chỉ hiển thị những bài ĐÃ ĐƯỢC DUYỆT (hoặc bài mẫu không có cờ từ chối)
   const filteredList = allPosts.filter((post) => {
-    // Chỉ hiển thị bài đã duyệt (ẩn bài chờ duyệt và từ chối)
     if (post.TrangThaiDuyet === 'Chờ duyệt' || post.TrangThaiDuyet === 'Từ chối') {
       return false;
     }
@@ -237,7 +233,7 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         
-        {/* 1. Header Banner & NÚT ĐĂNG TIN */}
+        {/* 1. Header Banner */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -249,7 +245,6 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
               </p>
             </div>
 
-            {/* NÚT ĐĂNG TIN MỚI */}
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -260,7 +255,7 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
             </button>
           </div>
 
-          {/* Danh sách 8 Quận trọng điểm */}
+          {/* Danh sách Quận */}
           <div className="pt-3 border-t border-slate-100">
             <span className="text-xs font-bold text-slate-700 block mb-3">
               Khu vực trọng điểm sinh viên:
@@ -305,7 +300,7 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
         {/* 2. Bố cục 2 cột chính */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* CỘT TRÁI (8/12) */}
+          {/* CỘT TRÁI */}
           <div className="lg:col-span-8 space-y-4">
             
             <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
@@ -366,7 +361,7 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
                   >
                     <div className="w-full sm:w-56 h-48 sm:h-auto shrink-0 relative rounded-xl overflow-hidden bg-slate-100">
                       <img
-                        src={post.HinhAnh[0]}
+                        src={post.HinhAnh?.[0] || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80'}
                         alt={post.TieuDe}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -407,29 +402,33 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
                       <div className="pt-3 border-t border-slate-100 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                            {post.TacGia.Ten[0]}
+                            {post.TacGia?.Ten?.[0] || 'S'}
                           </div>
-                          <span className="text-xs font-semibold text-slate-700">{post.TacGia.Ten}</span>
-                          <span className="text-[11px] text-slate-400">• {post.NgayCapNhat}</span>
+                          <span className="text-xs font-semibold text-slate-700">{post.TacGia?.Ten || 'Sinh viên'}</span>
+                          <span className="text-[11px] text-slate-400">• {post.NgayCapNhat || 'Vừa xong'}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <a
-                            href={`https://zalo.me/${post.TacGia.Zalo}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>Zalo</span>
-                          </a>
-                          <a
-                            href={`tel:${post.TacGia.Sdt}`}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                            <span>Gọi điện</span>
-                          </a>
+                          {post.TacGia?.Zalo && (
+                            <a
+                              href={`https://zalo.me/${post.TacGia.Zalo}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>Zalo</span>
+                            </a>
+                          )}
+                          {post.TacGia?.Sdt && (
+                            <a
+                              href={`tel:${post.TacGia.Sdt}`}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>Gọi điện</span>
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -508,10 +507,8 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
             )}
           </div>
 
-          {/* CỘT PHẢI (4/12) */}
+          {/* CỘT PHẢI */}
           <div className="lg:col-span-4 space-y-6">
-            
-            {/* Box 1: Khoảng giá */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-blue-600" />
@@ -555,7 +552,6 @@ export const RoommateView: React.FC<RoommateViewProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            {/* Box 2: Diện tích */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Maximize2 className="w-4 h-4 text-blue-600" />
