@@ -160,7 +160,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
     if (dataUsers.success) setUsers(dataUsers.data || []);
     if (dataRooms.success) setRooms(dataRooms.data || []);
 
-    // 1. Tải danh sách bài viết Cẩm nang chuẩn xác cho Admin
+    // 1. Tải danh sách Cẩm nang (Ưu tiên bài mới từ CSDL + Gộp bài mẫu ARTICLES_DATA)
     try {
       const resArticles = await fetch(`/api/articles?_t=${Date.now()}`, {
         headers: {
@@ -171,24 +171,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
       const dataArticles = await resArticles.json();
       const serverArticles = (dataArticles && dataArticles.success && Array.isArray(dataArticles.data)) ? dataArticles.data : [];
 
-      if (serverArticles.length > 0) {
-        // Có dữ liệu từ CSDL (chứa cả bài mới đăng của Chủ trọ)
-        setAdminArticles(serverArticles);
-      } else {
-        // Chỉ dùng bài mẫu khi CSDL chưa có dữ liệu
-        const defaultArticles = (ARTICLES_DATA || [])
-          .filter((item: any) => item && item.HinhAnh && typeof item.HinhAnh === 'string' && item.HinhAnh.startsWith('http'))
-          .map((item: any) => ({
-            ...item,
-            TrangThai: item.TrangThai || 'Công khai',
-          }));
-        setAdminArticles(defaultArticles);
-      }
+      const defaultArticles = (ARTICLES_DATA || [])
+        .filter((item: any) => item && item.HinhAnh && typeof item.HinhAnh === 'string' && item.HinhAnh.startsWith('http'))
+        .map((item: any) => ({
+          ...item,
+          TrangThai: item.TrangThai || 'Công khai',
+        }));
+
+      // Gộp: bài mới trên CSDL đứng đầu, bài mẫu đứng sau nếu không trùng ID
+      const combinedArticles = [...serverArticles];
+      defaultArticles.forEach(def => {
+        if (!combinedArticles.some(a => String(a.Id) === String(def.Id))) {
+          combinedArticles.push(def);
+        }
+      });
+      setAdminArticles(combinedArticles);
     } catch (err) {
       console.error('Lỗi tải bài viết cho Admin:', err);
     }
 
-    // 2. Tải danh sách Tin ở ghép trực tiếp từ API Backend cho Admin
+    // 2. Tải danh sách Tin ở ghép (Ưu tiên bài mới từ CSDL + Gộp bài mẫu mockRoommates)
     try {
       const resRoommates = await fetch(`/api/roommates?_t=${Date.now()}`, {
         headers: {
@@ -197,12 +199,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onViewRo
         },
       });
       const dataRoommates = await resRoommates.json();
-      if (dataRoommates && dataRoommates.success && Array.isArray(dataRoommates.data) && dataRoommates.data.length > 0) {
-        setRoommatePosts(dataRoommates.data);
-      } else {
-        // Fallback đọc từ mockRoommates nếu máy chủ chưa có dữ liệu
-        setRoommatePosts(mockRoommates || []);
-      }
+      const serverRoommates = (dataRoommates && dataRoommates.success && Array.isArray(dataRoommates.data)) ? dataRoommates.data : [];
+
+      // Gộp: tin mới đăng trên CSDL đứng đầu, tin mẫu mockRoommates đứng sau
+      const combinedRoommates = [...serverRoommates];
+      (mockRoommates || []).forEach(mock => {
+        if (!combinedRoommates.some(p => String(p.Id) === String(mock.Id))) {
+          combinedRoommates.push(mock);
+        }
+      });
+      setRoommatePosts(combinedRoommates);
     } catch (err) {
       console.error('Lỗi tải tin ở ghép cho Admin:', err);
     }

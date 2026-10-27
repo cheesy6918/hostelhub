@@ -137,7 +137,7 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
 
     // Xử lý mảng ảnh an toàn, nếu base64 quá nặng thì thay bằng ảnh placeholder đẹp mắt
     const safeImages = images.map((img) => {
-      if (typeof img === 'string' && img.startsWith('data:image') && img.length > 3000) {
+      if (typeof img === 'string' && img.startsWith('data:image') && img.length > 2500) {
         return 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80';
       }
       return img;
@@ -154,6 +154,7 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
       TienNghi: selectedAmenities,
       HinhAnh: safeImages,
       VideoUrl: videoUrl.trim() || undefined,
+      TrangThaiDuyet: 'Chờ duyệt', // Gửi rõ ràng để Admin lọc chính xác tab Chờ duyệt
     };
 
     try {
@@ -173,8 +174,8 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
         throw new Error(data.message || 'Lỗi khi gửi bài đăng lên máy chủ');
       }
 
-      // 2. Đồng bộ cục bộ vào mockRoommates & localStorage để phản hồi tức thì trên máy sinh viên
-      const createdItem = data.data || {
+      // 2. Tạo đối tượng hoàn chỉnh để phản hồi tức thì
+      const createdItem: TinOGhep = data.data || {
         ...newPostPayload,
         Id: `oghep_${Date.now()}`,
         TacGia: {
@@ -183,11 +184,18 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
           Zalo: user?.Sdt || '',
           TrangThai: 'Đang online',
         },
+        NgayCapNhat: 'Vừa xong',
         NgayDang: `Hôm nay, ${new Date().toLocaleDateString('vi-VN')}`,
+        NgayHetHan: 'Sau 30 ngày',
         TrangThaiDuyet: 'Chờ duyệt',
       };
 
-      mockRoommates.unshift(createdItem);
+      // 3. Bảo toàn các bài mẫu cũ, thêm bài mới lên đầu
+      if (!mockRoommates.some(p => String(p.Id) === String(createdItem.Id))) {
+        mockRoommates.unshift(createdItem);
+      }
+
+      // 4. Đồng bộ an toàn vào localStorage không làm mất bài cũ
       const saved = localStorage.getItem('hostelhub_roommates');
       let currentList: TinOGhep[] = [];
       if (saved) {
@@ -199,7 +207,10 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
       } else {
         currentList = [...mockRoommates];
       }
-      currentList.unshift(createdItem);
+
+      if (!currentList.some(p => String(p.Id) === String(createdItem.Id))) {
+        currentList.unshift(createdItem);
+      }
       localStorage.setItem('hostelhub_roommates', JSON.stringify(currentList));
 
       onSuccess();
