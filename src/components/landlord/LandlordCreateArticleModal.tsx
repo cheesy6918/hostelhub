@@ -92,6 +92,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
         TacGia: user?.HoTen || 'Chủ trọ HostelHub',
         ThoiGianDoc: '4 phút đọc',
         NgayDang: new Date().toLocaleDateString('vi-VN'),
+        TrangThai: 'Chờ duyệt', // 👈 Bổ sung rõ ràng để Admin lọc chính xác
         HinhAnh:
           hinhAnh.trim() ||
           'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80',
@@ -101,6 +102,7 @@ export const LandlordCreateArticleModal: React.FC<LandlordCreateArticleModalProp
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-role': user?.VaiTro || 'ChuTro', // 👈 Bổ sung role xác định chủ trọ đăng bài
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(newArticle),

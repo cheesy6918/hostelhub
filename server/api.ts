@@ -2800,10 +2800,39 @@ apiRouter.post('/chat', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // 11. CẨM NANG & KINH NGHIỆM THUÊ TRỌ (LƯU VÀ HIỂN THỊ CHUẨN XÁC)
 // -------------------------------------------------------------
+// Helper tự động đảm bảo bảng articles tồn tại trên TiDB Cloud
+async function ensureArticlesTable() {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS articles (
+          Id VARCHAR(100) PRIMARY KEY,
+          TieuDe VARCHAR(255) NOT NULL,
+          Tag VARCHAR(100) DEFAULT 'Kinh nghiệm thuê phòng',
+          MoTaNgan TEXT,
+          NoiDung LONGTEXT,
+          TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
+          ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
+          HinhAnh TEXT,
+          NgayDang VARCHAR(50),
+          TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
+        )
+      `);
+    } catch (e) {
+      console.warn('[DB] Bỏ qua kiểm tra bảng articles:', e);
+    }
+  }
+}
 
 // GET /api/articles - Lấy danh sách cẩm nang
 apiRouter.get('/articles', async (req: Request, res: Response) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    await ensureArticlesTable();
     const userRole = req.headers['x-user-role'];
     let articles: any[] = [];
 
@@ -2811,22 +2840,6 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
-        // Tự động tạo bảng articles nếu chưa tồn tại
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS articles (
-            Id VARCHAR(100) PRIMARY KEY,
-            TieuDe VARCHAR(255) NOT NULL,
-            Tag VARCHAR(100) DEFAULT 'Kinh nghiệm thuê phòng',
-            MoTaNgan TEXT,
-            NoiDung LONGTEXT,
-            TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
-            ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
-            HinhAnh TEXT,
-            NgayDang VARCHAR(50),
-            TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
-          )
-        `);
-
         const [rows]: any = await pool.query('SELECT * FROM articles ORDER BY Id DESC');
         if (Array.isArray(rows) && rows.length > 0) {
           articles = rows;
@@ -2836,11 +2849,14 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Fallback sang database.json nếu TiDB chưa có dữ liệu
-    if (articles.length === 0) {
-      const db: any = readDb();
-      articles = Array.isArray(db.articles) ? [...db.articles] : [];
-    }
+    // 2. Lấy thêm từ database.json nếu TiDB chưa có bản ghi đó
+    const db: any = readDb();
+    const localArticles = Array.isArray(db.articles) ? db.articles : [];
+    localArticles.forEach((loc: any) => {
+      if (!articles.some((a) => String(a.Id) === String(loc.Id))) {
+        articles.push(loc);
+      }
+    });
 
     // 3. Phân quyền hiển thị: Admin và Chủ trọ được xem tất cả (kể cả Chờ duyệt)
     if (userRole !== 'Admin' && userRole !== 'ChuTro') {
@@ -2867,13 +2883,14 @@ apiRouter.get('/articles', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/articles - Chủ trọ đăng bài viết (Lưu đồng thời TiDB & database.json)
+// POST /api/articles - Chủ trọ đăng bài viết
 apiRouter.post('/articles', async (req: Request, res: Response) => {
   try {
+    await ensureArticlesTable();
     const { TieuDe, Tag, MoTaNgan, NoiDung, TacGia, ThoiGianDoc, HinhAnh, NgayDang } = req.body;
     const articleId = `art_${Date.now()}`;
 
-    // Xử lý an toàn cho ảnh bìa: Nếu là Base64 quá dài (> 2000 ký tự), dùng ảnh placeholder Unsplash đẹp mắt để tránh tràn cột SQL
+    // Xử lý an toàn cho ảnh bìa: Nếu là Base64 quá dài (> 2000 ký tự), dùng ảnh placeholder đẹp mắt
     let safeImage = HinhAnh || '';
     if (safeImage.startsWith('data:image') && safeImage.length > 2000) {
       safeImage = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80';
@@ -2881,13 +2898,13 @@ apiRouter.post('/articles', async (req: Request, res: Response) => {
 
     const newArticle = {
       Id: articleId,
-      TieuDe: TieuDe || 'Chưa có tiêu đề',
-      Tag: Tag || 'Kinh nghiệm thuê phòng',
-      MoTaNgan: MoTaNgan || '',
-      NoiDung: NoiDung || '',
+      TieuDe: TieuDe || 'Kinh nghiệm thuê phòng trọ sinh viên',
+      Tag: Tag || 'Mẹo tiết kiệm & Decor phòng',
+      MoTaNgan: MoTaNgan || 'Chia sẻ kinh nghiệm bổ ích cho sinh viên khi tìm phòng.',
+      NoiDung: NoiDung || 'Nội dung chi tiết bài viết...',
       TacGia: TacGia || 'Chủ trọ',
       ThoiGianDoc: ThoiGianDoc || '5 phút đọc',
-      HinhAnh: safeImage,
+      HinhAnh: safeImage || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80',
       NgayDang: NgayDang || new Date().toLocaleDateString('vi-VN'),
       TrangThai: 'Chờ duyệt',
     };
@@ -2924,12 +2941,12 @@ apiRouter.post('/articles', async (req: Request, res: Response) => {
       db.articles.unshift(newArticle);
       writeDb(db);
     } catch (fsErr) {
-      console.error('[JSON] Lỗi ghi bài viết vào database.json:', fsErr);
+      console.warn('[JSON] Lỗi ghi bài viết vào database.json:', fsErr);
     }
 
     res.json({
       success: true,
-      message: 'Đăng bài viết cẩm nang thành công!',
+      message: 'Đăng bài viết cẩm nang thành công! Bài đang ở trạng thái Chờ duyệt.',
       data: newArticle,
     });
   } catch (err: any) {
@@ -2955,7 +2972,7 @@ apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
     try {
       const db: any = readDb();
       if (db.articles && Array.isArray(db.articles)) {
-        const item = db.articles.find((a: any) => a.Id === id);
+        const item = db.articles.find((a: any) => String(a.Id) === String(id));
         if (item) {
           item.TrangThai = TrangThai;
           writeDb(db);
@@ -2973,23 +2990,90 @@ apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
-// 12. TÌM BẠN Ở GHÉP (ROOMMATES API)
+// 12. TÌM BẠN Ở GHÉP (ROOMMATES API - LƯU VÀ ĐỌC TỪ TIDB CLOUD)
 // -------------------------------------------------------------
+// Helper tự động đảm bảo bảng roommates tồn tại trên TiDB Cloud
+async function ensureRoommatesTable() {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS roommates (
+          Id VARCHAR(100) PRIMARY KEY,
+          TieuDe VARCHAR(255) NOT NULL,
+          QuanHuyen VARCHAR(100),
+          DiaChi VARCHAR(255),
+          GiaThue INT DEFAULT 1500000,
+          DienTich INT DEFAULT 20,
+          DoiTuongGhep VARCHAR(50) DEFAULT 'Tất cả',
+          MoTa TEXT,
+          TienNghi TEXT,
+          HinhAnh TEXT,
+          TacGiaTen VARCHAR(100),
+          TacGiaSdt VARCHAR(50),
+          NgayDang VARCHAR(50),
+          TrangThaiDuyet VARCHAR(50) DEFAULT 'Chờ duyệt'
+        )
+      `);
+    } catch (e) {
+      console.warn('[DB] Bỏ qua kiểm tra bảng roommates:', e);
+    }
+  }
+}
 
 // GET /api/roommates - Lấy danh sách tin ở ghép
-// GET /api/roommates - Lấy danh sách tin ở ghép (Chống cache trên Vercel)
 apiRouter.get('/roommates', async (req: Request, res: Response) => {
   try {
-    // 1. Tắt triệt để cache của trình duyệt và Vercel CDN
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
+    await ensureRoommatesTable();
     const userRole = req.headers['x-user-role'];
-    const db: any = readDb();
-    let posts = Array.isArray(db.roommates) ? [...db.roommates] : [];
+    let posts: any[] = [];
 
-    // Nếu không phải Admin thì chỉ lấy bài đã duyệt
+    // 1. Lấy từ TiDB Cloud
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        const [rows]: any = await pool.query('SELECT * FROM roommates ORDER BY Id DESC');
+        if (Array.isArray(rows) && rows.length > 0) {
+          posts = rows.map((r: any) => ({
+            Id: r.Id,
+            TieuDe: r.TieuDe,
+            QuanHuyen: r.QuanHuyen,
+            DiaChi: r.DiaChi,
+            GiaThue: Number(r.GiaThue) || 1500000,
+            DienTich: Number(r.DienTich) || 20,
+            DoiTuongGhep: r.DoiTuongGhep,
+            MoTa: r.MoTa,
+            TienNghi: typeof r.TienNghi === 'string' ? JSON.parse(r.TienNghi || '[]') : r.TienNghi,
+            HinhAnh: typeof r.HinhAnh === 'string' ? JSON.parse(r.HinhAnh || '[]') : r.HinhAnh,
+            TacGia: {
+              Ten: r.TacGiaTen || 'Sinh viên',
+              Sdt: r.TacGiaSdt || '',
+              Zalo: r.TacGiaSdt || '',
+              TrangThai: 'Đang online',
+            },
+            NgayDang: r.NgayDang,
+            TrangThaiDuyet: r.TrangThaiDuyet || 'Chờ duyệt',
+          }));
+        }
+      } catch (sqlErr) {
+        console.warn('[MySQL] Lỗi query roommates:', sqlErr);
+      }
+    }
+
+    // 2. Lấy thêm từ database.json nếu TiDB chưa có
+    const db: any = readDb();
+    const localPosts = Array.isArray(db.roommates) ? db.roommates : [];
+    localPosts.forEach((loc: any) => {
+      if (!posts.some((p) => String(p.Id) === String(loc.Id))) {
+        posts.push(loc);
+      }
+    });
+
+    // 3. Phân quyền: Admin xem toàn bộ, người dùng thường chỉ xem bài 'Đã duyệt'
     if (userRole !== 'Admin') {
       posts = posts.filter((p: any) => p.TrangThaiDuyet === 'Đã duyệt' || !p.TrangThaiDuyet);
     }
@@ -3003,16 +3087,18 @@ apiRouter.get('/roommates', async (req: Request, res: Response) => {
 // POST /api/roommates - Sinh viên đăng tin tìm bạn ở ghép
 apiRouter.post('/roommates', requireAuth, async (req: Request, res: Response) => {
   try {
+    await ensureRoommatesTable();
     const user = (req as any).user as NguoiDung;
     const { TieuDe, QuanHuyen, DiaChi, GiaThue, DienTich, DoiTuongGhep, MoTa, TienNghi, HinhAnh, VideoUrl } = req.body;
+    const postId = `oghep_${Date.now()}`;
 
     const newPost = {
-      Id: `oghep_${Date.now()}`,
+      Id: postId,
       TieuDe: (TieuDe || '').trim(),
       QuanHuyen: QuanHuyen || 'Cầu Giấy',
       DiaChi: (DiaChi || '').trim(),
       GiaThue: Number(GiaThue) || 1500000,
-      DienTich: Number(DienTich) || 25,
+      DienTich: Number(DienTich) || 20,
       DoiTuongGhep: DoiTuongGhep || 'Tất cả',
       MoTa: (MoTa || '').trim(),
       TienNghi: Array.isArray(TienNghi) ? TienNghi : [],
@@ -3029,10 +3115,42 @@ apiRouter.post('/roommates', requireAuth, async (req: Request, res: Response) =>
       TrangThaiDuyet: 'Chờ duyệt',
     };
 
-    const db: any = readDb();
-    if (!db.roommates) db.roommates = [];
-    db.roommates.unshift(newPost);
-    writeDb(db);
+    // 1. Lưu vào TiDB Cloud
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        await pool.query(
+          `INSERT INTO roommates (Id, TieuDe, QuanHuyen, DiaChi, GiaThue, DienTich, DoiTuongGhep, MoTa, TienNghi, HinhAnh, TacGiaTen, TacGiaSdt, NgayDang, TrangThaiDuyet)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newPost.Id,
+            newPost.TieuDe,
+            newPost.QuanHuyen,
+            newPost.DiaChi,
+            newPost.GiaThue,
+            newPost.DienTich,
+            newPost.DoiTuongGhep,
+            newPost.MoTa,
+            JSON.stringify(newPost.TienNghi),
+            JSON.stringify(newPost.HinhAnh),
+            user.HoTen,
+            user.Sdt,
+            newPost.NgayDang,
+            'Chờ duyệt',
+          ]
+        );
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi insert roommate vào TiDB:', sqlErr);
+      }
+    }
+
+    // 2. Lưu vào database.json
+    try {
+      const db: any = readDb();
+      if (!db.roommates) db.roommates = [];
+      db.roommates.unshift(newPost);
+      writeDb(db);
+    } catch {}
 
     res.status(201).json({
       success: true,
@@ -3052,26 +3170,32 @@ apiRouter.patch('/roommates/:id/status', requireAuth, async (req: Request, res: 
       res.status(403).json({ success: false, message: 'Chỉ Admin mới có quyền duyệt tin ở ghép.' });
       return;
     }
-
     const { id } = req.params;
     const { TrangThaiDuyet } = req.body; // 'Đã duyệt' | 'Từ chối'
 
-    const db: any = readDb();
-    if (!db.roommates) db.roommates = [];
-    const item = db.roommates.find((p: any) => p.Id === id);
-
-    if (!item) {
-      res.status(404).json({ success: false, message: 'Không tìm thấy tin đăng.' });
-      return;
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        await pool.query('UPDATE roommates SET TrangThaiDuyet = ? WHERE Id = ?', [TrangThaiDuyet, id]);
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi update roommate status:', sqlErr);
+      }
     }
 
-    item.TrangThaiDuyet = TrangThaiDuyet;
-    writeDb(db);
+    try {
+      const db: any = readDb();
+      if (db.roommates) {
+        const item = db.roommates.find((p: any) => String(p.Id) === String(id));
+        if (item) {
+          item.TrangThaiDuyet = TrangThaiDuyet;
+          writeDb(db);
+        }
+      }
+    } catch {}
 
     res.json({
       success: true,
       message: `Đã cập nhật trạng thái tin thành: ${TrangThaiDuyet}`,
-      data: item,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message || 'Lỗi cập nhật trạng thái' });
@@ -3086,11 +3210,24 @@ apiRouter.delete('/roommates/:id', requireAuth, async (req: Request, res: Respon
       res.status(403).json({ success: false, message: 'Chỉ Admin mới có quyền gỡ tin đăng.' });
       return;
     }
+    const { id } = req.params;
 
-    const db: any = readDb();
-    if (!db.roommates) db.roommates = [];
-    db.roommates = db.roommates.filter((p: any) => p.Id !== req.params.id);
-    writeDb(db);
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        await pool.query('DELETE FROM roommates WHERE Id = ?', [id]);
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi delete roommate khỏi TiDB:', sqlErr);
+      }
+    }
+
+    try {
+      const db: any = readDb();
+      if (db.roommates) {
+        db.roommates = db.roommates.filter((p: any) => String(p.Id) !== String(id));
+        writeDb(db);
+      }
+    } catch {}
 
     res.json({ success: true, message: 'Đã gỡ bài đăng vi phạm khỏi hệ thống.' });
   } catch (err: any) {

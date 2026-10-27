@@ -53,7 +53,7 @@ const AVAILABLE_AMENITIES = [
 ];
 
 export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ onBack, onSuccess }) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   // Form State
   const [title, setTitle] = useState('');
@@ -116,8 +116,8 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
     setImages(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Xử lý gửi tin
-  const handleSubmit = (e: React.FormEvent) => {
+  // Xử lý gửi tin lên Máy chủ Backend & TiDB Cloud
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorNotice('');
 
@@ -135,53 +135,81 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
 
     setSubmitting(true);
 
-    const newPost: TinOGhep = {
-      Id: `oghep_${Date.now()}`,
+    // Xử lý mảng ảnh an toàn, nếu base64 quá nặng thì thay bằng ảnh placeholder đẹp mắt
+    const safeImages = images.map((img) => {
+      if (typeof img === 'string' && img.startsWith('data:image') && img.length > 3000) {
+        return 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80';
+      }
+      return img;
+    });
+
+    const newPostPayload = {
       TieuDe: title.trim(),
       GiaThue: Number(price),
       DienTich: Number(area),
       QuanHuyen: district,
       DiaChi: address.trim(),
-      MoTa: description.trim() || 'Cần tìm bạn ở ghép hòa đồng, có ý thức chung.',
-      TacGia: {
-        Ten: user?.HoTen || 'Sinh viên',
-        Sdt: user?.Sdt || '0988776655',
-        Zalo: user?.Sdt || '0988776655',
-        NgayThamGia: new Date().toLocaleDateString('vi-VN'),
-        TrangThai: 'Đang online',
-      },
       DoiTuongGhep: gender,
-      NgayCapNhat: 'Vừa xong',
-      NgayDang: `Hôm nay, ${new Date().toLocaleDateString('vi-VN')}`,
-      NgayHetHan: 'Sau 30 ngày',
+      MoTa: description.trim() || 'Cần tìm bạn ở ghép hòa đồng, có ý thức chung.',
       TienNghi: selectedAmenities,
-      HinhAnh: images,
-      VideoUrl: videoUrl.trim() || undefined, // 👈 BẮT BUỘC THÊM DÒNG NÀY ĐỂ LƯU VIDEO
-      TrangThaiDuyet: 'Chờ duyệt', // Đưa vào hàng đợi để Admin kiểm duyệt
+      HinhAnh: safeImages,
+      VideoUrl: videoUrl.trim() || undefined,
     };
 
-    // 1. Cập nhật vào mảng mockRoommates dùng chung
-    mockRoommates.unshift(newPost);
+    try {
+      // 1. Gửi lên API Backend để lưu vào TiDB Cloud
+      const res = await fetch('/api/roommates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': user?.VaiTro || 'SinhVien',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(newPostPayload),
+      });
 
-    // 2. Lưu vào localStorage để Admin nhận diện được
-    const saved = localStorage.getItem('hostelhub_roommates');
-    let currentList: TinOGhep[] = [];
-    if (saved) {
-      try {
-        currentList = JSON.parse(saved);
-      } catch {
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Lỗi khi gửi bài đăng lên máy chủ');
+      }
+
+      // 2. Đồng bộ cục bộ vào mockRoommates & localStorage để phản hồi tức thì trên máy sinh viên
+      const createdItem = data.data || {
+        ...newPostPayload,
+        Id: `oghep_${Date.now()}`,
+        TacGia: {
+          Ten: user?.HoTen || 'Sinh viên',
+          Sdt: user?.Sdt || '',
+          Zalo: user?.Sdt || '',
+          TrangThai: 'Đang online',
+        },
+        NgayDang: `Hôm nay, ${new Date().toLocaleDateString('vi-VN')}`,
+        TrangThaiDuyet: 'Chờ duyệt',
+      };
+
+      mockRoommates.unshift(createdItem);
+      const saved = localStorage.getItem('hostelhub_roommates');
+      let currentList: TinOGhep[] = [];
+      if (saved) {
+        try {
+          currentList = JSON.parse(saved);
+        } catch {
+          currentList = [...mockRoommates];
+        }
+      } else {
         currentList = [...mockRoommates];
       }
-    } else {
-      currentList = [...mockRoommates];
-    }
-    currentList.unshift(newPost);
-    localStorage.setItem('hostelhub_roommates', JSON.stringify(currentList));
+      currentList.unshift(createdItem);
+      localStorage.setItem('hostelhub_roommates', JSON.stringify(currentList));
 
-    setTimeout(() => {
-      setSubmitting(false);
       onSuccess();
-    }, 600);
+    } catch (err: any) {
+      console.error('Lỗi đăng tin ở ghép:', err);
+      setErrorNotice(err.message || 'Không thể đăng bài viết, vui lòng thử lại.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
