@@ -851,16 +851,17 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
+        // 1. Thử lệnh chuẩn dùng DiaChi và có kèm VideoUrl
         await pool.execute(
           `INSERT INTO rooms (
-            Id, TieuDe, DiaChiChiTiet, QuanHuyen, LoaiPhong, DienTich, 
+            Id, TieuDe, DiaChi, QuanHuyen, LoaiPhong, DienTich, 
             GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, 
-            TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia, VideoUrl
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             roomId,
             title,
-            address, // DiaChiChiTiet
+            address,
             district,
             roomType,
             dien_tich,
@@ -870,17 +871,19 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             tien_ich,
             hinh_anh,
             landlordId,
-            'ChoDuyet', // Trạng thái mặc định khi tạo mới
+            'ChoDuyet',
             description,
             houseRules,
             landlordName,
             landlordPhone,
             currentDate,
             danh_gia,
+            videoUrlStr || null,
           ]
         );
       } catch (sqlErr: any) {
-        // Fallback 1: Nếu cơ sở dữ liệu dùng tên cột DiaChi
+        console.warn('[MySQL] Lệnh INSERT có VideoUrl lỗi, thử câu lệnh cơ bản:', sqlErr?.message);
+        // 2. Dự phòng: Câu lệnh INSERT chuẩn 19 cột cơ bản của bảng rooms (không dùng snake_case tieu_de)
         try {
           await pool.execute(
             `INSERT INTO rooms (
@@ -891,7 +894,7 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             [
               roomId,
               title,
-              address, // DiaChi
+              address,
               district,
               roomType,
               dien_tich,
@@ -911,40 +914,8 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             ]
           );
         } catch (fallbackErr: any) {
-          // Fallback 2: Nếu dùng snake_case
-          if (fallbackErr.code === 'ER_BAD_FIELD_ERROR' || sqlErr.code === 'ER_BAD_FIELD_ERROR') {
-            await pool.execute(
-              `INSERT INTO rooms (
-                id, tieu_de, dia_chi, quan_huyen, loai_phong, dien_tich, 
-                gia_thue, gia_dien, gia_nuoc, tien_ich, hinh_anh, chu_tro_id, 
-                trang_thai, mo_ta, noi_quy, chu_tro_ten, chu_tro_sdt, ngay_dang, danh_gia
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                roomId,
-                title,
-                address,
-                district,
-                roomType,
-                dien_tich,
-                gia_thue,
-                gia_dien,
-                gia_nuoc,
-                tien_ich,
-                hinh_anh,
-                landlordId,
-                'ChoDuyet',
-                description,
-                houseRules,
-                landlordName,
-                landlordPhone,
-                currentDate,
-                danh_gia,
-              ]
-            );
-          } else {
-            console.error("Lỗi đăng tin phòng MySQL:", fallbackErr);
-            throw fallbackErr;
-          }
+          console.error('[MySQL] Lỗi nghiêm trọng khi INSERT phòng:', fallbackErr);
+          throw fallbackErr;
         }
       }
     }
