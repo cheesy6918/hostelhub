@@ -303,7 +303,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                  <span>🧪 Yêu cầu đặt chỗ mới</span>
+                  <span>Yêu cầu đặt chỗ mới</span>
                 </button>
                 <button
                   onClick={() => handleTestTrigger('deposit-request')}
@@ -311,7 +311,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>🧪 Có đơn đặt cọc mới (500k)</span>
+                  <span>Có đơn đặt cọc mới (500k)</span>
                 </button>
                 <button
                   onClick={() => handleTestTrigger('room-approved')}
@@ -319,7 +319,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Building2 className="w-3.5 h-3.5 text-amber-600" />
-                  <span>🧪 Tin đăng được phê duyệt</span>
+                  <span>Tin đăng được phê duyệt</span>
                 </button>
               </>
             )}
