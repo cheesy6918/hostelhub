@@ -2991,6 +2991,101 @@ export async function createWalletTransactionInDb(tx: GiaoDichVi): Promise<GiaoD
   return tx;
 }
 
+// -------------------------------------------------------------
+// 11. ARTICLES (CẨM NANG & KINH NGHIỆM)
+// -------------------------------------------------------------
+export async function getArticlesFromDb(userRole?: string): Promise<any[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS articles (
+          Id VARCHAR(100) PRIMARY KEY,
+          TieuDe VARCHAR(255) NOT NULL,
+          Tag VARCHAR(100) DEFAULT 'Kinh nghiệm thuê phòng',
+          MoTaNgan TEXT,
+          NoiDung LONGTEXT,
+          TacGia VARCHAR(100) DEFAULT 'Chủ trọ',
+          ThoiGianDoc VARCHAR(50) DEFAULT '5 phút đọc',
+          HinhAnh TEXT,
+          NgayDang VARCHAR(50),
+          TrangThai VARCHAR(50) DEFAULT 'Chờ duyệt'
+        )
+      `);
+      const [rows]: any = await pool.query('SELECT * FROM articles ORDER BY Id DESC');
+      if (Array.isArray(rows)) {
+        if (userRole === 'Admin' || userRole === 'ChuTro') return rows;
+        return rows.filter((a: any) => a.TrangThai === 'Công khai' || a.TrangThai === 'Đã duyệt');
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error querying articles:', err);
+    }
+  }
+  const db = readDb();
+  let list = db.articles || [];
+  if (userRole !== 'Admin' && userRole !== 'ChuTro') {
+    list = list.filter((a: any) => a.TrangThai === 'Công khai' || a.TrangThai === 'Đã duyệt');
+  }
+  return list;
+}
+
+// -------------------------------------------------------------
+// 12. ROOMMATES (TÌM BẠN Ở GHÉP)
+// -------------------------------------------------------------
+export async function getRoommatesFromDb(userRole?: string): Promise<any[]> {
+  const isConn = await isMySqlConnected();
+  if (isConn) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS roommates (
+          Id VARCHAR(100) PRIMARY KEY,
+          TieuDe VARCHAR(255) NOT NULL,
+          QuanHuyen VARCHAR(100),
+          DiaChi VARCHAR(255),
+          GiaThue INT DEFAULT 1500000,
+          DienTich INT DEFAULT 20,
+          DoiTuongGhep VARCHAR(50) DEFAULT 'Tất cả',
+          MoTa TEXT,
+          TienNghi TEXT,
+          HinhAnh TEXT,
+          TacGiaTen VARCHAR(100),
+          TacGiaSdt VARCHAR(50),
+          NgayDang VARCHAR(50),
+          TrangThaiDuyet VARCHAR(50) DEFAULT 'Chờ duyệt'
+        )
+      `);
+      const [rows]: any = await pool.query('SELECT * FROM roommates ORDER BY Id DESC');
+      if (Array.isArray(rows)) {
+        let list = rows.map((r: any) => ({
+          ...r,
+          GiaThue: Number(r.GiaThue) || 1500000,
+          DienTich: Number(r.DienTich) || 20,
+          TienNghi: safeJsonParse<string[]>(r.TienNghi, []),
+          HinhAnh: safeJsonParse<string[]>(r.HinhAnh, []),
+          TacGia: {
+            Ten: r.TacGiaTen || 'Sinh viên',
+            Sdt: r.TacGiaSdt || '',
+            Zalo: r.TacGiaSdt || '',
+            TrangThai: 'Đang online',
+          },
+        }));
+        if (userRole !== 'Admin') {
+          list = list.filter((p: any) => p.TrangThaiDuyet === 'Đã duyệt' || !p.TrangThaiDuyet);
+        }
+        return list;
+      }
+    } catch (err) {
+      console.warn('[MySQL] Error querying roommates:', err);
+    }
+  }
+  const db = readDb();
+  let list = db.roommates || [];
+  if (userRole !== 'Admin') {
+    list = list.filter((p: any) => p.TrangThaiDuyet === 'Đã duyệt' || !p.TrangThaiDuyet);
+  }
+  return list;
+}
+
 
 
 
