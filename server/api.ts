@@ -851,13 +851,14 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
-        // 1. Thử lệnh chuẩn dùng DiaChi và có kèm VideoUrl
+        // Truyền cả IdChuTro và ChuTroId để đảm bảo không bị lỗi NOT NULL
         await pool.execute(
           `INSERT INTO rooms (
             Id, TieuDe, DiaChi, QuanHuyen, LoaiPhong, DienTich, 
-            GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, 
+            GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, 
+            IdChuTro, ChuTroId, 
             TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia, VideoUrl
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             roomId,
             title,
@@ -870,7 +871,8 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
             gia_nuoc,
             tien_ich,
             hinh_anh,
-            landlordId,
+            landlordId, // IdChuTro
+            landlordId, // ChuTroId
             'ChoDuyet',
             description,
             houseRules,
@@ -882,15 +884,15 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
           ]
         );
       } catch (sqlErr: any) {
-        console.warn('[MySQL] Lệnh INSERT có VideoUrl lỗi, thử câu lệnh cơ bản:', sqlErr?.message);
-        // 2. Dự phòng: Câu lệnh INSERT chuẩn 19 cột cơ bản của bảng rooms (không dùng snake_case tieu_de)
+        console.warn('[MySQL] INSERT có VideoUrl lỗi, thử câu lệnh cơ bản:', sqlErr?.message);
         try {
           await pool.execute(
             `INSERT INTO rooms (
               Id, TieuDe, DiaChi, QuanHuyen, LoaiPhong, DienTich, 
-              GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, ChuTroId, 
+              GiaThue, GiaDien, GiaNuoc, TienIch, HinhAnh, 
+              IdChuTro, ChuTroId, 
               TrangThai, MoTa, NoiQuy, ChuTroTen, ChuTroSdt, NgayDang, DanhGia
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               roomId,
               title,
@@ -903,7 +905,8 @@ apiRouter.post('/rooms', requireAuth, async (req: Request, res: Response) => {
               gia_nuoc,
               tien_ich,
               hinh_anh,
-              landlordId,
+              landlordId, // IdChuTro
+              landlordId, // ChuTroId
               'ChoDuyet',
               description,
               houseRules,
