@@ -127,19 +127,57 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Hàm tự động nén ảnh trước khi chuyển Base64 để chống lỗi Failed to fetch (Payload Too Large)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setImages((prev) => [...prev, event.target!.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
+    // Nếu đang là 2 ảnh Unsplash mẫu ban đầu thì xóa đi để nhường chỗ cho ảnh thật
+    const isOnlyPresetImages = images.every((url) => url.includes('unsplash.com'));
+
+    const uploadPromises = Array.from(files).map((file) => compressImage(file));
+    try {
+      const compressedResults = await Promise.all(uploadPromises);
+      setImages((prev) => (isOnlyPresetImages ? compressedResults : [...prev, ...compressedResults]));
+    } catch (err) {
+      console.error('Lỗi khi nén ảnh:', err);
+      alert('Không thể xử lý ảnh, vui lòng thử lại ảnh khác.');
     }
   };
 
@@ -194,6 +232,8 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
       const numGiaNuoc = typeof giaNuoc === 'number' ? giaNuoc : (Number(String(giaNuoc).replace(/[^\d]/g, '')) || 30000);
       const numDienTich = Number(dienTich) || 20;
 
+      const cleanImages = images.filter((img) => img && typeof img === 'string' && img.trim() !== '');
+
       const payload = {
         TieuDe: tieuDe.trim(),
         DiaChiChiTiet: diaChi.trim(),
@@ -205,7 +245,9 @@ export const LandlordCreateRoomView: React.FC<LandlordCreateRoomViewProps> = ({ 
         GiaDien: numGiaDien,
         GiaNuoc: numGiaNuoc,
         TienIch: selectedAmenities,
-        HinhAnh: images,
+        HinhAnh: cleanImages.length > 0 ? cleanImages : [
+          'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80'
+        ],
         MoTa: moTa.trim(),
         NoiQuy: noiQuy.trim(),
         IdChuTro: landlordId,
