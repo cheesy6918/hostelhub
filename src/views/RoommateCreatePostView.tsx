@@ -152,9 +152,9 @@ export const RoommateCreatePostView: React.FC<RoommateCreatePostViewProps> = ({ 
       DoiTuongGhep: gender,
       MoTa: description.trim() || 'Cần tìm bạn ở ghép hòa đồng, có ý thức chung.',
       TienNghi: selectedAmenities,
-      HinhAnh: safeImages,
+      HinhAnh: images, // 👈 Gửi trực tiếp mảng ảnh người dùng upload từ máy tính
       VideoUrl: videoUrl.trim() || undefined,
-      TrangThaiDuyet: 'Chờ duyệt', // Gửi rõ ràng để Admin lọc chính xác tab Chờ duyệt
+      TrangThaiDuyet: 'Chờ duyệt',
     };
 
     try {

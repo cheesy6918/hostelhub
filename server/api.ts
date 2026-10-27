@@ -3008,13 +3008,17 @@ async function ensureRoommatesTable() {
           DoiTuongGhep VARCHAR(50) DEFAULT 'Tất cả',
           MoTa TEXT,
           TienNghi TEXT,
-          HinhAnh TEXT,
+          HinhAnh LONGTEXT,
           TacGiaTen VARCHAR(100),
           TacGiaSdt VARCHAR(50),
           NgayDang VARCHAR(50),
           TrangThaiDuyet VARCHAR(50) DEFAULT 'Chờ duyệt'
         )
       `);
+      // Nâng cấp cột HinhAnh hiện có lên LONGTEXT để chứa trọn vẹn ảnh Base64
+      try {
+        await pool.query('ALTER TABLE roommates MODIFY COLUMN HinhAnh LONGTEXT');
+      } catch {}
     } catch (e) {
       console.warn('[DB] Bỏ qua kiểm tra bảng roommates:', e);
     }
