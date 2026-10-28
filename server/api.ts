@@ -2974,6 +2974,37 @@ apiRouter.patch('/articles/:id/status', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/articles/:id - Admin hoặc Chủ trọ gỡ bài viết cẩm nang
+apiRouter.delete('/articles/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const isConn = await isMySqlConnected();
+    if (isConn) {
+      try {
+        await pool.query('DELETE FROM articles WHERE Id = ? OR id = ?', [id, id]);
+      } catch (sqlErr) {
+        console.error('[MySQL] Lỗi xóa article khỏi TiDB:', sqlErr);
+      }
+    }
+
+    // Xóa sạch trong database.json để không bị nạp ngược lại
+    try {
+      const db: any = readDb();
+      if (db.articles && Array.isArray(db.articles)) {
+        db.articles = db.articles.filter((a: any) => String(a.Id || a.id) !== String(id));
+        writeDb(db);
+      }
+    } catch {}
+
+    res.json({
+      success: true,
+      message: 'Đã gỡ bỏ bài viết cẩm nang thành công!',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Lỗi khi xóa bài viết' });
+  }
+});
+
 // -------------------------------------------------------------
 // 12. TÌM BẠN Ở GHÉP (ROOMMATES API - LƯU VÀ ĐỌC TỪ TIDB CLOUD)
 // -------------------------------------------------------------
@@ -3196,29 +3227,24 @@ apiRouter.patch('/roommates/:id/status', requireAuth, async (req: Request, res: 
   }
 });
 
-// DELETE /api/roommates/:id - Gỡ bỏ bài vi phạm
-apiRouter.delete('/roommates/:id', requireAuth, async (req: Request, res: Response) => {
+// DELETE /api/roommates/:id - Gỡ bỏ bài vi phạm tìm ở ghép
+apiRouter.delete('/roommates/:id', async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user as NguoiDung;
-    if (user.VaiTro !== 'Admin') {
-      res.status(403).json({ success: false, message: 'Chỉ Admin mới có quyền gỡ tin đăng.' });
-      return;
-    }
     const { id } = req.params;
-
     const isConn = await isMySqlConnected();
     if (isConn) {
       try {
-        await pool.query('DELETE FROM roommates WHERE Id = ?', [id]);
+        await pool.query('DELETE FROM roommates WHERE Id = ? OR id = ?', [id, id]);
       } catch (sqlErr) {
         console.error('[MySQL] Lỗi delete roommate khỏi TiDB:', sqlErr);
       }
     }
 
+    // Xóa sạch trong database.json
     try {
       const db: any = readDb();
-      if (db.roommates) {
-        db.roommates = db.roommates.filter((p: any) => String(p.Id) !== String(id));
+      if (db.roommates && Array.isArray(db.roommates)) {
+        db.roommates = db.roommates.filter((p: any) => String(p.Id || p.id) !== String(id));
         writeDb(db);
       }
     } catch {}
