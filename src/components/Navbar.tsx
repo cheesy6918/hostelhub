@@ -163,6 +163,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                         : 'group-hover:text-blue-600'
                     }`}
                   >
+                    <span>test</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
+                  </button>
+                  
+                  <button
+                    onClick={() => setCurrentView('find-rooms-public')}
+                    className={`flex items-center gap-1 cursor-pointer transition-colors ${
+                      currentView === 'find-rooms-public' || currentView === 'district-rooms'
+                        ? 'text-blue-600 font-bold'
+                        : 'group-hover:text-blue-600'
+                    }`}
+                  >
                     <span>Tìm phòng trọ</span>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:rotate-180" />
                   </button>
